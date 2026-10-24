@@ -63,7 +63,7 @@ try {
       const separator=workspace.getByRole('separator',{name:'Resize featured stream'}),rect=await separator.boundingBox();
       await page.mouse.move(rect.x+rect.width/2,rect.y+30);await page.mouse.down();await page.mouse.move(rect.x-70,rect.y+30,{steps:8});await page.mouse.up();
       await workspace.getByRole('button',{name:'Quiet view',exact:true}).click();
-      const quietHidden=!(await workspace.locator('.multi-channel-summary').isVisible());
+      const quietHidden=!(await workspace.locator('.multi-tile-identity span').first().isVisible());
       await workspace.getByRole('button',{name:'Quiet view',exact:true}).click();
       await page.waitForTimeout(300);
       const metrics=await page.evaluate(()=>{
@@ -80,8 +80,8 @@ try {
       });
       const layout={featuredSize:Number(await separator.getAttribute('aria-valuenow')),quietHidden,chatTabs:await workspace.locator('#multi-chat-tabs button').count()};
       console.log('INLINE MULTIVIEW',JSON.stringify({...metrics,...controls,...layout}));
-      await writeFile(path.join(root,'artifacts/live-inline-validation-v6.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
-      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v6.png')});
+      await writeFile(path.join(root,'artifacts/live-inline-validation-v7.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
+      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v7.png')});
       for(const width of [1280,1024,390]) {
         await page.setViewportSize({width,height:900});await page.waitForTimeout(600);
         console.log('Inline viewport',await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,active:!!document.getElementById('kr-multi-root')})));

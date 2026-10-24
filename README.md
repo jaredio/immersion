@@ -1,4 +1,4 @@
-﻿# Immersion
+# Immersion
 
 A sleek dark theme and built-in multistream experience for Kick.
 
@@ -10,7 +10,7 @@ A sleek dark theme and built-in multistream experience for Kick.
 - Modern sidebars, search, tooltips, and chat styling.
 - Alt+K channel switcher with profile pictures and live status.
 - Drag channels from the sidebar into multiview.
-- Resizable layouts, quick chat tabs, and separate player controls.
+- Resizable layouts, quick chat tabs, and compact player controls with an options menu.
 - Saved viewing sessions and a distraction-free Quiet view.
 
 ## Install

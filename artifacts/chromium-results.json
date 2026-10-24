@@ -2,7 +2,7 @@
   {
     "engine": "chromium",
     "passed": true,
-    "version": "0.6.0",
+    "version": "0.7.0",
     "mode": "installed unpacked extension",
     "checks": [
       "sidebar drag/drop",
@@ -15,7 +15,10 @@
       "double-click focus",
       "quiet view",
       "chat tabs",
-      "saved custom split"
+      "saved custom split",
+      "natural video height with three streams",
+      "popover actions over native video",
+      "no redundant banner or cards"
     ]
   }
 ]

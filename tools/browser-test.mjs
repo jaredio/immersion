@@ -184,7 +184,8 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.evaluate(()=>document.getElementById('video-player')===window.originalVideo && window.originalVideo.parentElement===window.originalPlayer),true);
     assert.equal(await page.locator('.stream-info').isVisible(),false,'single-channel info is hidden in multiview');
     assert.equal(await page.locator('main .below').isVisible(),false,'the original channel bio panels are hidden');
-    assert.equal(await multi.locator('.multi-summary-channel').count(),2);
+    assert.equal(await multi.locator('.multi-summary-channel').count(),0);
+    assert.doesNotMatch(await multi.textContent(),/Watching together|Drag channels here to add streams/);
     await page.waitForFunction(()=>{
       const native=window.originalPlayer.getBoundingClientRect(),target=document.getElementById('kr-multi-root').shadowRoot.querySelector('[data-channel="nightshift"] .multi-player').getBoundingClientRect();
       return Math.abs(native.left-target.left)<2&&Math.abs(native.top-target.top)<2&&Math.abs(native.width-target.width)<2&&Math.abs(native.height-target.height)<2;
@@ -236,8 +237,9 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.waitForTimeout(180);
     assert.equal(await multi.getByRole('button',{name:'Listen to nightshift',exact:true}).getAttribute('aria-pressed'),'true');
     assert.ok(await auroraPlayer.evaluate(()=>window.controlMessages)<70,'audio switching stays bounded');
-    await multi.getByRole('button', { name: 'Focus aurora', exact: true }).click();
-    await multi.getByRole('button', { name: 'Move left aurora', exact: true }).click();
+    const streamAction=async(slug,action)=>{await multi.getByRole('button',{name:`Options for ${slug}`,exact:true}).click();await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).click();};
+    await streamAction('aurora','Focus');
+    await streamAction('aurora','Move left');
     assert.equal(await auroraPlayer.evaluate(() => window.playerSentinel), 71, 'layout and reordering do not reload players');
     const featured=multi.locator('.multi-tile[data-channel="aurora"]');
     const featuredBefore=await featured.evaluate(el=>el.getBoundingClientRect().width);
@@ -253,9 +255,9 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await featured.locator('.multi-tile-header').dblclick({position:{x:12,y:12}});
     assert.equal(await multi.locator('#multi-grid').getAttribute('data-layout'),'focus');
     const quiet=multi.getByRole('button',{name:'Quiet view',exact:true});await quiet.click();
-    assert.equal(await multi.locator('.multi-channel-summary').isVisible(),false);
+    assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),false);
     assert.equal(await multi.getByRole('button',{name:'Listen to aurora',exact:true}).isVisible(),true);
-    await quiet.click();assert.equal(await multi.locator('.multi-channel-summary').isVisible(),true);
+    await quiet.click();assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),true);
     assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'resize, focus and quiet view retain the player');
     await multi.getByRole('button', { name: 'Show aurora chat', exact: true }).click();
     assert.match(await page.locator('#kr-multi-chat iframe').getAttribute('src'), /\/popout\/aurora\/chat$/);
@@ -264,7 +266,28 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.evaluate(()=>document.getElementById('channel-chatroom')===window.originalChat),true,'switching back preserves the native chat connection');
     await multi.getByRole('textbox', { name: 'Layout name', exact: true }).fill('Evening duo');
     await multi.getByRole('button', { name: 'Save', exact: true }).click();
-    for (const slug of ['pixelgarden', 'third', 'fourth', 'fifth']) await addStream(slug);
+    await addStream('pixelgarden');
+    const geometry=await featured.evaluate(card=>{
+      const header=card.querySelector('.multi-tile-header').getBoundingClientRect(),player=card.querySelector('.multi-player').getBoundingClientRect(),controls=card.querySelector('.multi-tile-controls').getBoundingClientRect();
+      return {excess:card.getBoundingClientRect().height-header.height-player.height-controls.height,ratio:player.width/player.height};
+    });
+    assert.ok(geometry.excess<5,'a featured tile never stretches to the combined height of its neighbours');
+    assert.ok(Math.abs(geometry.ratio-16/9)<.03,'video keeps its natural aspect ratio');
+    await page.screenshot({path:path.join(root,`artifacts/${engine}-focus-three-v7.png`)});
+    await streamAction('nightshift','Focus');
+    assert.equal(await multi.locator('.multi-tile[data-channel="nightshift"]').getAttribute('data-featured'),'true','native-player options can actually receive clicks');
+    await streamAction('aurora','Focus');
+    for(const width of [1280,1024,820]){
+      await page.setViewportSize({width,height:900});
+      const overflow=await multi.locator('.multi-tile-controls').evaluateAll(bars=>bars.some(bar=>[...bar.children].some(child=>child.getBoundingClientRect().right>bar.getBoundingClientRect().right+1)));
+      assert.equal(overflow,false,`three-stream player controls fit at ${width}px`);
+    }
+    await page.setViewportSize({width:1600,height:1000});
+    await multi.getByRole('button',{name:'Options for nightshift',exact:true}).click();
+    assert.equal(await multi.getByRole('button',{name:'Remove nightshift',exact:true}).isVisible(),true,'native player cannot cover the options popover');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=>!document.querySelector('#kr-multi-root').shadowRoot.querySelector('.multi-action-menu:popover-open'));
+    for (const slug of ['third','fourth','fifth']) await addStream(slug);
     await addStream('seventh');
     assert.equal(await multi.locator('.multi-tile').count(), 6);
     assert.equal(await multi.locator('.multi-player iframe').count(), 5);
@@ -282,7 +305,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     }
     await page.setViewportSize({width:1600,height:1000});
     await multi.getByRole('button',{name:'Manage',exact:true}).click();
-    await page.screenshot({ path: path.join(root, `artifacts/${engine}-immersion-multiview-v6.png`) });
+    await page.screenshot({ path: path.join(root, `artifacts/${engine}-immersion-multiview-v7.png`) });
     await multi.getByRole('button', { name: 'Close multiview', exact: true }).click();
     await page.waitForFunction(() => !document.getElementById('kr-multi-root'));
     assert.equal(await page.evaluate(()=>document.getElementById('video-player')===window.originalVideo && getComputedStyle(window.originalPlayer).position==='relative'),true);
@@ -295,7 +318,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.locator('[data-testid="sidebar-recommended-channel-1"]').dragTo(page.locator('main'),{targetPosition:{x:160,y:100}});
     await multi.waitFor({state:'visible'});
     assert.equal(await multi.locator('.multi-tile').count(),2);
-    await multi.getByRole('button',{name:'Remove pixelgarden',exact:true}).click();
+    await streamAction('pixelgarden','Remove');
     await page.waitForFunction(()=>!document.getElementById('kr-multi-root'));
 
     const chat = page.locator('[data-testid="chat-input"]');
@@ -361,7 +384,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.6.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split'] });
+    report.push({ engine, passed: true, version:'0.7.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','popover actions over native video','no redundant banner or cards'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } finally { await context.close(); if (browser) await browser.close(); }
 }
