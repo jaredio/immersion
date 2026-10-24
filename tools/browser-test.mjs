@@ -134,11 +134,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.screenshot({ path: path.join(root, `artifacts/${engine}-settings.png`) });
     await settings.getByRole('button', { name: 'Close settings' }).click();
 
-    const filter = page.locator('#kr-sidebar-filter').getByRole('searchbox');
-    await filter.fill('night');
-    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"]').isVisible(), false);
-    assert.equal(await page.locator('[data-testid="sidebar-following-channel-2"]').isVisible(), true);
-    await filter.fill('');
+    assert.equal(await page.locator('#kr-sidebar-filter').count(),0,'the sidebar search and label are removed');
 
     await page.keyboard.press('Alt+k');
     const palette = page.locator('#kr-root #switch-dialog');
@@ -372,13 +368,12 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.evaluate(() => {
       document.documentElement.removeAttribute('data-kr-enabled');
       document.getElementById('kr-root').remove();
-      document.getElementById('kr-sidebar-filter').remove();
     });
-    await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true' && document.getElementById('kr-root') && document.getElementById('kr-sidebar-filter'));
+    await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true' && document.getElementById('kr-root'));
     await button.click();
     await settings.locator('#enabled').uncheck();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'false');
-    assert.equal(await page.locator('#kr-sidebar-filter').isVisible(), false);
+    assert.equal(await page.locator('#kr-sidebar-filter').count(),0);
     // Disable is reversible with no reload and does not remove native nodes.
     assert.equal(await page.locator('#chatroom-messages [data-index]').count(), 500);
     await settings.getByRole('button', { name: 'Reset', exact: true }).click();
@@ -416,7 +411,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.8.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','channel metadata and safe social previews','tile edge resizing','tab title restoration','no redundant multistream banner'] });
+    report.push({ engine, passed: true, version:'0.8.1', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','channel metadata and safe social previews','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } finally { await context.close(); if (browser) await browser.close(); }
 }

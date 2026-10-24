@@ -2,7 +2,7 @@
   {
     "engine": "chromium",
     "passed": true,
-    "version": "0.8.0",
+    "version": "0.8.1",
     "mode": "installed unpacked extension",
     "checks": [
       "sidebar drag/drop",
@@ -28,7 +28,7 @@
   {
     "engine": "firefox",
     "passed": true,
-    "version": "0.8.0",
+    "version": "0.8.1",
     "mode": "Firefox engine with extension API shim",
     "checks": [
       "sidebar drag/drop",

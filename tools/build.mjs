@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const base = {
   manifest_version: 3,
   name: 'Immersion',
-  version: '0.8.0',
+  version: '0.8.1',
   description: 'A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.',
   permissions: ['storage'],
   icons: { 16: 'icons/16.png', 48: 'icons/48.png', 128: 'icons/128.png' },

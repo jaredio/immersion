@@ -4,8 +4,8 @@
   if (!api?.storage || document.getElementById('kr-root')) return;
   let root = document.documentElement;
   let settings = normalize();
-  let host, shadow, settingsDialog, palette, updateForm, filterHost, sidebar, multi;
-  let filter = '', channels = [], shown = [], selected = 0;
+  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi;
+  let channels = [], shown = [], selected = 0;
   let refreshTimer, writeTimer, routeTimer, routeTimeout, previousFocus;
   let dockPosition = '';
   let currentPath = location.pathname;
@@ -15,7 +15,6 @@
   const abort = new AbortController();
   const sidebarObserver = new MutationObserver(() => scheduleRefresh());
   const observedSidebar = new ResizeObserver(entries => {
-    if (filterHost && entries[0]) filterHost.hidden = entries[0].contentRect.width < 160 || !settings.enabled;
     if (host) placeToolbar();
   });
 
@@ -32,7 +31,6 @@
       shadow.querySelector('.toolbar').classList.toggle('off', !settings.enabled);
       updateForm?.(settings);
     }
-    if (filterHost) filterHost.hidden = !settings.enabled || sidebar?.getBoundingClientRect().width < 160;
     updateSidebarRows();
     if (!settings.enabled) { endDrag(); multi?.close(); }
   }
@@ -258,11 +256,9 @@
         for (const img of row.querySelectorAll('img')) if (img.getAttribute('draggable') !== 'false') img.setAttribute('draggable','false');
       } else restoreDraggable(row);
       const slug = channelSlug(row.href, location.origin);
-      const filtered = settings.enabled && filter && !row.textContent.toLowerCase().includes(filter) && !slug?.includes(filter);
       const pinned = settings.pinned.includes(slug);
       const live = describeChannel(row).live;
       if (row.dataset.krLive !== live) row.dataset.krLive = live;
-      if (row.dataset.krFiltered !== String(Boolean(filtered))) row.dataset.krFiltered = String(Boolean(filtered));
       if (row.dataset.krPinned !== String(pinned)) row.dataset.krPinned = String(pinned);
       if (row.dataset.testid?.startsWith('sidebar-recommended-channel-')) {
         const section = row.closest('section');
@@ -270,27 +266,15 @@
         if (section && !section.querySelector('[data-testid^="sidebar-following-channel-"]')) section.dataset.krSection = 'recommended';
       }
     }
-    if (filterHost) filterHost.shadowRoot.querySelector('#filter-count').textContent = filter ? `${[...rows].filter(r => r.dataset.krFiltered !== 'true').length} matches` : 'YOUR CHANNELS';
   }
 
-  function mountFilter() {
+  function mountSidebar() {
     const next = document.getElementById('sidebar-wrapper');
-    if (next === sidebar && filterHost?.isConnected) return;
-    observedSidebar.disconnect(); sidebarObserver.disconnect(); filterHost?.remove(); sidebar = next;
+    if (next === sidebar && sidebar?.isConnected) return;
+    observedSidebar.disconnect(); sidebarObserver.disconnect(); sidebar = next;
     if (!sidebar) return;
-    filterHost = document.createElement('div'); filterHost.id = 'kr-sidebar-filter';
-    const sr = shadowRoot(filterHost);
-    const wrap = document.createElement('div'); wrap.className = 'sidebar-filter';
-    wrap.innerHTML = '<input type="search" placeholder="Filter channels…" aria-label="Filter sidebar channels"><p><span id="filter-count">YOUR CHANNELS</span><span>ALT K ↵</span></p>';
-    sr.append(wrap); wrap.querySelector('input').value = filter;
-    for(const type of ['keydown','kick-refined-keydown'])sr.addEventListener(type,event=>{handleShortcut(event);event.stopPropagation();});
-    for(const type of ['keyup','keypress'])sr.addEventListener(type,event=>event.stopPropagation());
-    wrap.querySelector('input').addEventListener('input', e => { filter = e.target.value.trim().toLowerCase(); updateSidebarRows(); });
-    const navigation = sidebar.querySelector(':scope > ul');
-    if (navigation) navigation.after(filterHost); else sidebar.prepend(filterHost);
     observedSidebar.observe(sidebar);
     sidebarObserver.observe(sidebar, { subtree: true, attributes: true, attributeFilter: ['src', 'class', 'data-live', 'data-status'] });
-    filterHost.hidden = !settings.enabled || sidebar.getBoundingClientRect().width < 160;
   }
 
   function stopTransition() {
@@ -360,7 +344,7 @@
     root = document.documentElement;
     // A late Next/React document hydration can remove extension-owned attributes.
     if (root.dataset.krEnabled !== String(settings.enabled)) apply();
-    checkRoute(); mount(); placeToolbar(); mountFilter(); updateSidebarRows(); markSearchFields();
+    checkRoute(); mount(); placeToolbar(); mountSidebar(); updateSidebarRows(); markSearchFields();
     multi.refresh();
     if (palette.open) { collectChannels(); renderResults(); }
   }

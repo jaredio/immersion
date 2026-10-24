@@ -83,10 +83,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .channel-detail { font-size: 10px; color: #8e8e99; margin-top: 3px; }
 .pin { margin-left: auto; color: var(--accent); }
 .empty { padding: 30px 16px; text-align: center; font-size: 12px; color: #8e8e99; }
-.sidebar-filter { padding: 10px 12px 8px; }
-.sidebar-filter input { width: 100%; color: #e4e4e7; border: 1px solid #ffffff0a; border-radius: 8px; background: #ffffff04; padding: 9px 10px; font-size: 11px; transition: background-color 120ms, border-color 120ms; }
-.sidebar-filter input:hover { background: #ffffff07; border-color: #ffffff12; }
-.sidebar-filter p { font-size: 9px; color: #71717d; margin: 7px 2px 0; display: flex; justify-content: space-between; }
 .popup { width: 370px; }
 .popup a { color: var(--accent); text-decoration: none; }
 .notice { padding: 0 22px 12px; color: #b8a2ff; font-size: 11px; min-height: 0; }
