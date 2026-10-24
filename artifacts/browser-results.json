@@ -1,0 +1,40 @@
+[
+  {
+    "engine": "chromium",
+    "passed": true,
+    "version": "0.6.0",
+    "mode": "installed unpacked extension",
+    "checks": [
+      "sidebar drag/drop",
+      "native player/chat preservation",
+      "responsive layout",
+      "reply contrast and keyboard isolation",
+      "audio feedback regressions",
+      "playback and volume controls",
+      "pointer and keyboard resizing",
+      "double-click focus",
+      "quiet view",
+      "chat tabs",
+      "saved custom split"
+    ]
+  },
+  {
+    "engine": "firefox",
+    "passed": true,
+    "mode": "Firefox engine with extension API shim",
+    "version": "0.6.0",
+    "checks": [
+      "sidebar drag/drop",
+      "native player/chat preservation",
+      "responsive layout",
+      "reply contrast and keyboard isolation",
+      "audio feedback regressions",
+      "playback and volume controls",
+      "pointer and keyboard resizing",
+      "double-click focus",
+      "quiet view",
+      "chat tabs",
+      "saved custom split"
+    ]
+  }
+]

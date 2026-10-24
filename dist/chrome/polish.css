@@ -1,0 +1,162 @@
+/* Second design pass. Keep native button sizes, event handlers, tooltips and cards. */
+#kr-multi-root { display:block;position:relative;flex:0 0 auto;width:100%;min-width:0; }
+main[data-kr-multi-active="true"] > [data-kr-single-info="true"] { display:none !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-kr-dragging="true"] { opacity:.5; }
+html[data-kr-enabled="true"] body button:not(:is(#chatroom-messages button,[data-testid^="video-player-"],[data-testid^="ad-"])) {
+  border-radius: 8px;
+  font-weight: 550;
+  letter-spacing: -.01em;
+  box-shadow: none;
+  transform: none !important;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease !important;
+}
+html[data-kr-enabled="true"] body :is(button,a[role="button"]):focus-visible {
+  outline: 2px solid rgba(var(--kr-accent-rgb),.65) !important;
+  outline-offset: 3px !important;
+}
+html[data-kr-enabled="true"] :is(.bg-secondary-base,.bg-neutral-bg-default) {
+  background-color: #ffffff07 !important;
+  border-color: #ffffff0e !important;
+  color: #d4d4db;
+}
+html[data-kr-enabled="true"] :is(button,a).bg-primary-base {
+  background: var(--kr-accent) !important;
+  color: #101113 !important;
+}
+html[data-kr-enabled="true"] :is(button,a).bg-primary-base:hover { background: color-mix(in srgb, var(--kr-accent) 88%, white) !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper > ul :is(a,button) { height: 40px; font-size: 12px !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper [data-testid^="sidebar-"] svg { width: 17px; height: 17px; }
+html[data-kr-enabled="true"] #sidebar-wrapper section { gap: 3px; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] { border-radius: 9px !important; height: 51px; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] img { outline-color: #ffffff0e; outline-offset: 2px; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"]:hover { background: #ffffff04 !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"][data-state="active"] { background: rgba(var(--kr-accent-rgb),.045) !important; box-shadow: none !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-kr-live="live"] img { outline-color: var(--kr-accent); }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-kr-live="live"] .ring-kick-voltGreen-150 { box-shadow: none !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper :is(.bg-kick-voltGreen-150,.bg-brand-bg-default) { background-color: var(--kr-accent) !important; }
+html[data-kr-enabled="true"] .ring-kick-voltGreen-150 { --tw-ring-color: var(--kr-accent) !important; }
+html[data-kr-enabled="true"] .border-kick-voltGreen-150 { border-color: var(--kr-accent) !important; }
+html[data-kr-enabled="true"] main :is(h1,h2) { font-weight: 600; }
+html[data-kr-enabled="true"] #chatroom-messages [data-index] button[data-prevent-expand] { font-weight: 600 !important; letter-spacing: -.015em; }
+
+/* Original KICK mark, recast as a compact monochrome wordmark. No bitmap assets. */
+html[data-kr-enabled="true"] nav a[title="Home"][href="/"] {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: #ffffff03;
+  border: 1px solid #ffffff08;
+  color: #e9e9ef !important;
+  transition: background-color 120ms, border-color 120ms;
+}
+html[data-kr-enabled="true"] nav a[title="Home"][href="/"]:hover { background: rgba(var(--kr-accent-rgb),.05); border-color: rgba(var(--kr-accent-rgb),.16); color: var(--kr-accent) !important; }
+html[data-kr-enabled="true"] nav a[title="Home"][href="/"] svg { width: 65px; height: 21px; color: inherit !important; }
+html[data-kr-enabled="true"] nav a[title="Home"][href="/"] :is(path,rect)[fill]:not([fill="none"]) { fill: currentColor !important; }
+html[data-kr-enabled="true"] nav a[title="Home"][href="/"] img { height: 20px; width: auto; filter: grayscale(1) brightness(2); }
+html[data-kr-enabled="true"] nav a[title="Home"][href="/"]:hover img { filter: grayscale(.5) brightness(1.25); }
+
+/* Marked from the actual search input's nearest border-bearing field container.
+ * Styling the editor alone leaves an awkward second border and displaced icon. */
+html[data-kr-enabled="true"] [data-kr-search-field] {
+  background: #ffffff04 !important;
+  border: 1px solid #ffffff0e !important;
+  border-radius: 10px !important;
+  min-height: 38px;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: border-color 120ms, background-color 120ms !important;
+}
+html[data-kr-enabled="true"] [data-kr-search-field]:hover { border-color: #ffffff1c !important; background: #ffffff06 !important; }
+html[data-kr-enabled="true"] [data-kr-search-field]:focus-within { border-color: rgba(var(--kr-accent-rgb),.38) !important; background: #151519 !important; }
+html[data-kr-enabled="true"] [data-kr-search-field] :is(input,[role="combobox"]) {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: inherit !important;
+  color: #e4e4eb !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  min-height: 36px;
+  outline: none !important;
+  box-shadow: none !important;
+}
+html[data-kr-enabled="true"] [data-kr-search-field] input::placeholder { color: #71717f !important; }
+html[data-kr-enabled="true"] [data-kr-search-field] svg { color: #787887; width: 16px; height: 16px; }
+html[data-kr-enabled="true"] [data-kr-search-field] > :is(button,div) { box-shadow: none !important; }
+html[data-kr-enabled="true"] nav div:has(> form > div > [data-kr-search-field]) { width: clamp(260px, 25vw, 400px) !important; max-width: 100%; }
+
+/* Radix puts its accessible tooltip text in a hidden span. Theme the visible
+ * content surface, leaving that accessible node and Popper positioning intact. */
+html[data-kr-enabled="true"] .z-tooltip[data-state][data-side],
+html[data-kr-enabled="true"] [data-radix-popper-content-wrapper] > [data-side]:has([role="tooltip"]) {
+  color: #dcdce4 !important;
+  background: #1b1b21 !important;
+  border: 1px solid #ffffff13 !important;
+  border-radius: 8px !important;
+  padding: 7px 10px !important;
+  max-width: min(310px, calc(100vw - 24px));
+  font-family: inherit;
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  font-weight: 450 !important;
+  letter-spacing: .005em;
+  box-shadow: 0 6px 22px #0005 !important;
+  backdrop-filter: none !important;
+  animation: none !important;
+  will-change: auto !important;
+}
+html[data-kr-enabled="true"] .z-tooltip .fill-white { fill: #1b1b21 !important; }
+/* Reply previews retain inverse/dark text from Kick's original white tooltip. */
+html[data-kr-enabled="true"] .z-tooltip:has(.text-neutralInverse-fg-default) {
+  --edge-color-neutralInverse-fg-default: #e8e8f0;
+  --edge-color-neutral-fg-default: #b2b2c0;
+  background: #19191f !important; color: #e8e8f0 !important;
+  padding: 10px 12px !important; border-color: rgba(var(--kr-accent-rgb),.19) !important; border-radius: 10px !important;
+}
+html[data-kr-enabled="true"] .z-tooltip :is(.text-neutralInverse-fg-default,.text-black) { color: #e8e8f0 !important; }
+html[data-kr-enabled="true"] .z-tooltip .text-neutral { color: #b2b2c0 !important; }
+html[data-kr-enabled="true"] .z-tooltip .text-neutralInverse-fg-default a { color: var(--kr-accent) !important; text-decoration: underline; text-underline-offset: 2px; }
+html[data-kr-enabled="true"] .z-tooltip ::selection { color: #fff; background: rgba(var(--kr-accent-rgb),.3); }
+html[data-kr-enabled="true"] #chatroom-messages button[class~="text-white/40"] { color: #a1a1ae !important; }
+html[data-kr-enabled="true"] :is([role="menu"],[role="listbox"],[data-radix-popper-content-wrapper] > [role="dialog"]) {
+  background: #141418 !important;
+  border: 1px solid #ffffff12 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 38px #0005 !important;
+  padding: 5px;
+  backdrop-filter: none !important;
+}
+html[data-kr-enabled="true"] [role="menu"] :is([role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]) { border-radius: 7px; font-size: 12px; }
+html[data-kr-enabled="true"] [role="menu"] [data-highlighted] { background: #ffffff07 !important; }
+
+/* Native chat profile card: retain links, gift/mute/reply and moderator actions. */
+html[data-kr-enabled="true"] #user-identity {
+  width: 332px !important;
+  max-width: calc(100vw - 24px);
+  max-height: min(700px, calc(100dvh - 82px));
+  margin-inline-end: 10px;
+  padding: 14px !important;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #ffffff15;
+  border-radius: 16px;
+  background: #121216 !important;
+  box-shadow: 0 18px 55px #0007, 0 1px 4px #0004;
+  scrollbar-width: thin;
+}
+html[data-kr-enabled="true"] #user-identity > div { gap: 14px !important; }
+html[data-kr-enabled="true"] #user-identity > div > div { background: transparent !important; padding-inline: 0 !important; gap: 14px; }
+html[data-kr-enabled="true"] #user-identity a[title][target="_blank"] { color: #f0f0f5 !important; font-size: 19px !important; font-weight: 600 !important; letter-spacing: -.035em; }
+html[data-kr-enabled="true"] #user-identity a[title][target="_blank"]:hover { color: var(--kr-accent) !important; }
+html[data-kr-enabled="true"] #user-identity :is(button,a[class*="group"]) { border: 1px solid #ffffff0c; background: #ffffff05; min-height: 32px; border-radius: 8px !important; font-size: 12px !important; }
+html[data-kr-enabled="true"] #user-identity :is(button,a[class*="group"]):hover { background: #ffffff0a; border-color: #ffffff1b; }
+html[data-kr-enabled="true"] #user-identity [class*="grid-flow-col"] { gap: 5px; padding: 11px 8px; background: #ffffff03; border: 1px solid #ffffff08; border-radius: 9px; }
+html[data-kr-enabled="true"] #user-identity [class*="grid-flow-col"] .text-sm { font-size: 11px !important; font-weight: 500 !important; color: #90909e !important; }
+html[data-kr-enabled="true"] #user-identity [class*="grid-flow-col"] .text-xs { font-size: 11px !important; color: #d3d3de !important; }
+html[data-kr-enabled="true"] #user-identity img[width="132"] { border: 3px solid #121216; box-shadow: 0 0 0 1px #ffffff13; }
+html[data-kr-enabled="true"] #user-identity [class*="bg-surface-fg-decorative"] { background: #ffffff0a !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-kr-enabled="true"] :is(button,a,[data-kr-search-field],#chat-input-wrapper) { transition: none !important; }
+}

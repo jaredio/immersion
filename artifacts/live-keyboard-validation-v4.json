@@ -1,0 +1,11 @@
+{
+  "query": "tm",
+  "before": {
+    "theatre": "false",
+    "muted": false
+  },
+  "after": {
+    "theatre": "false",
+    "muted": false
+  }
+}

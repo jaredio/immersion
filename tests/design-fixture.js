@@ -1,0 +1,85 @@
+/* Synthetic interaction surfaces with the same structure as the inspected Kick
+ * components. No account, subscriptions or moderation requests are made. */
+(() => {
+  window.nativeHotkeys=[];
+  window.addEventListener('keydown',event=>{if(['KeyT','KeyM'].includes(event.code))window.nativeHotkeys.push(event.code);},{capture:true});
+  const responsive = document.createElement('style');
+  responsive.textContent = '@media(max-width:1023px){nav .border,nav [data-testid="login"],nav [data-testid="sign-up"]{display:none}}';
+  document.head.append(responsive);
+  const nav = document.querySelector('nav');
+  const nativeVideo=document.createElement('video'); nativeVideo.id='video-player'; nativeVideo.muted=true;
+  nativeVideo.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+  document.querySelector('.stage').append(nativeVideo);
+  window.originalVideo=nativeVideo; window.originalPlayer=document.querySelector('.stage');
+  window.originalChat=document.querySelector('#channel-chatroom');
+  document.querySelector('main').style.position='relative';
+  document.querySelector('[data-testid="sidebar-following-channel-1"]').dataset.live = 'true';
+  document.querySelector('[data-testid="sidebar-following-channel-2"]').dataset.live = 'false';
+  const logo = document.createElement('a');
+  logo.href = '/'; logo.title = 'Home'; logo.setAttribute('aria-label', 'Kick home');
+  logo.innerHTML = '<svg viewBox="0 0 80 26" fill="currentColor" aria-hidden="true"><text x="0" y="21" font-size="25" font-weight="900" font-family="system-ui">KICK</text></svg>';
+  nav.querySelector('strong').replaceWith(logo);
+  const input = nav.querySelector('input');
+  const field = document.createElement('div'); field.className = 'border';
+  field.style.cssText = 'display:flex;align-items:center;gap:8px;padding:0 12px;width:min(320px,30vw)';
+  input.before(field); field.append(input); input.dataset.testid = 'search';
+  input.type = 'search'; input.style.cssText = 'width:100%;min-width:0';
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('width', '16'); icon.setAttribute('height', '16');
+  icon.innerHTML = '<circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m15 15 5 5" stroke="currentColor" stroke-width="1.5"/>';
+  field.prepend(icon);
+
+  const account = document.createElement('button');
+  account.dataset.testid = 'navbar-account'; account.setAttribute('aria-label', 'Your profile');
+  account.textContent = 'me'; nav.append(account);
+  const menu = document.createElement('div');
+  menu.id = 'fixture-account-menu'; menu.setAttribute('role', 'menu'); menu.hidden = true;
+  menu.style.cssText = 'position:fixed;right:14px;top:64px;z-index:1000;width:180px';
+  menu.innerHTML = '<button role="menuitem">Profile settings</button><button role="menuitem">Account settings</button>';
+  document.body.append(menu);
+  account.addEventListener('click', () => { menu.hidden = !menu.hidden; });
+
+  const editor = document.querySelector('[data-testid="chat-input"]');
+  const composer = editor.parentElement;
+  const wrapper = document.createElement('div'); wrapper.id = 'chat-input-wrapper';
+  wrapper.style.cssText = 'display:flex;align-items:center;border:2px solid #454950;border-radius:4px;padding:0 5px';
+  editor.before(wrapper);
+  const identity = document.createElement('button'); identity.textContent = '◇'; identity.setAttribute('aria-label', 'Chat identity');
+  const text = document.createElement('div'); text.className = 'relative w-full'; text.style.cssText = 'flex:1;min-width:0;position:relative';
+  const placeholder = document.createElement('div'); placeholder.textContent = 'Send a message';
+  placeholder.style.cssText = 'position:absolute;top:50%;left:10px;transform:translateY(-50%);pointer-events:none;color:#737380';
+  editor.textContent = ''; editor.style.cssText = 'width:100%;min-width:0';
+  text.append(editor, placeholder); wrapper.append(identity, text);
+  editor.addEventListener('input', () => { placeholder.hidden = !!editor.textContent; });
+  const emote = document.createElement('button'); emote.textContent = '☺'; emote.setAttribute('aria-label', 'Emotes');
+  wrapper.append(emote);
+  composer.lastElementChild.id = 'send-message-button';
+
+  const tooltip = document.createElement('div');
+  tooltip.className = 'z-tooltip'; tooltip.dataset.state = 'delayed-open'; tooltip.dataset.side = 'top';
+  tooltip.id = 'fixture-tooltip'; tooltip.hidden = true;
+  tooltip.style.cssText = 'position:fixed;right:20px;bottom:120px;z-index:2000;background:white;color:black';
+  tooltip.innerHTML = 'Emotes<span role="tooltip" style="position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden">Emotes</span>';
+  document.body.append(tooltip);
+  const reply=document.createElement('div'); reply.id='fixture-reply-tooltip';reply.className='z-tooltip';reply.dataset.state='delayed-open';reply.dataset.side='top';reply.hidden=true;
+  reply.style.cssText='position:fixed;right:26px;top:170px;z-index:2000;max-width:290px';
+  reply.innerHTML='<div class="text-neutralInverse-fg-default" style="color:#111"><span>Original message: this track has such a clean transition. What is the title?</span></div>';
+  document.body.append(reply);
+  const replyTrigger=document.createElement('button');replyTrigger.id='fixture-reply-trigger';replyTrigger.className='text-white/40';replyTrigger.textContent='↳ Replying to synthwave: Original message…';replyTrigger.style.cssText='display:block;background:transparent;border:0;padding:0;color:#ffffff66;font-size:11px';
+  document.querySelector('#chatroom-messages [data-index]:last-child').prepend(replyTrigger);
+  replyTrigger.addEventListener('pointerenter',()=>{reply.hidden=false;});replyTrigger.addEventListener('pointerleave',()=>{reply.hidden=true;});
+  emote.addEventListener('pointerenter', () => { tooltip.hidden = false; });
+  emote.addEventListener('pointerleave', () => { tooltip.hidden = true; });
+
+  const card = document.createElement('div'); card.id = 'user-identity'; card.hidden = true;
+  card.style.cssText = 'position:fixed;right:var(--chat-width,340px);top:140px;z-index:1000;background:#202327;width:356px;padding:16px';
+  card.innerHTML = '<div class="flex cursor-auto flex-col gap-2"><div class="flex w-full flex-col gap-4 rounded bg-surface-bg-default px-2"><div style="position:relative;height:126px;background:linear-gradient(130deg,#2c3540,#34304b);border-radius:10px"><button id="fixture-card-close" aria-label="Close user card" style="position:absolute;right:8px;top:8px">×</button><div style="position:absolute;width:68px;height:68px;border:3px solid #121216;border-radius:50%;background:#48415e;left:calc(50% - 34px);bottom:-12px;display:grid;place-items:center;font-size:24px">s.</div></div><div style="text-align:center;padding-top:12px"><a href="/synthwave" target="_blank" title="synthwave">synthwave</a><div style="color:#a0a0b0;font-size:11px;margin-top:6px">Community member</div></div><div class="grid auto-cols-fr grid-flow-col" style="display:grid;grid-auto-flow:column;text-align:center"><div><div class="text-sm">Joined</div><div class="text-xs">Mar 12, 2024</div></div><div><div class="text-sm">Following</div><div class="text-xs">8 months</div></div></div><div style="display:flex;gap:8px"><button id="fixture-card-reply" style="flex:1">Reply</button><button id="fixture-card-mute" style="flex:1">Mute</button><a class="group" href="/synthwave" style="padding:7px;text-decoration:none;color:inherit">View channel</a></div></div></div>';
+  document.body.append(card);
+  window.nativeCardActions = [];
+  for (const action of ['reply', 'mute']) card.querySelector(`#fixture-card-${action}`).addEventListener('click', () => { window.nativeCardActions.push(action); });
+  card.querySelector('#fixture-card-close').addEventListener('click', () => { card.hidden = true; });
+  const name = document.createElement('button'); name.textContent = 'synthwave'; name.dataset.preventExpand = 'true';
+  name.style.cssText = 'color:#b8a2ff;background:transparent;border:0;padding:0;font-weight:bold';
+  const row = document.querySelector('#chatroom-messages [data-index]:last-child'); row.prepend(name, ' ');
+  name.addEventListener('click', () => { card.hidden = false; });
+})();

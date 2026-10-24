@@ -1,0 +1,13 @@
+{
+  "validator": "web-ext lint",
+  "target": "dist/firefox",
+  "name": "Immersion",
+  "version": "0.6.0",
+  "summary": {
+    "errors": 0,
+    "notices": 0,
+    "warnings": 0
+  },
+  "manifestVersion": 3,
+  "firefoxMinVersion": "142.0"
+}
