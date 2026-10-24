@@ -9,7 +9,7 @@ A sleek dark theme and built-in multistream experience for Kick.
 - Clean dark theme with customizable accent colors.
 - Modern sidebars, search, tooltips, and chat styling.
 - Alt+K channel switcher with profile pictures and live status.
-- Drag channels from the sidebar into multiview.
+- Drag channels into multiview with a glass placement preview and compact drag card.
 - Drag-to-resize layouts, quick chat tabs, and direct close, fullscreen, and reorder buttons.
 - Optional audio mixing with an indicator on each audible stream.
 - Channel cards with titles, categories, viewer counts, and social quick views.

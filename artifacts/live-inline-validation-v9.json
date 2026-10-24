@@ -1,0 +1,16 @@
+{
+  "inMain": true,
+  "tiles": 2,
+  "extraFrames": 1,
+  "nativeVideoPreserved": true,
+  "chatPreserved": true,
+  "positionError": 0,
+  "channelCards": 2,
+  "tabTitle": "Multistream: fissure_dota_en + VANC | Immersion",
+  "volumeSliders": 3,
+  "playbackButtons": 2,
+  "originalInfoHidden": true,
+  "featuredSize": 59,
+  "quietHidden": true,
+  "chatTabs": 2
+}

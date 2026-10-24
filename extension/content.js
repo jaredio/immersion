@@ -10,7 +10,7 @@
   let dockPosition = '';
   let currentPath = location.pathname;
   let disposed = false;
-  let drag = null, dropTarget = null, lastDrop = null;
+  let drag = null, dropTarget = null, lastDrop = null, dragChip = null, dragFrame = 0;
   const draggableRows = new Map();
   const abort = new AbortController();
   const sidebarObserver = new MutationObserver(() => scheduleRefresh());
@@ -290,7 +290,19 @@
   }
   function endDrag() {
     if(drag?.row)delete drag.row.dataset.krDragging;
-    drag=null;dropTarget?.remove();dropTarget=null;
+    cancelAnimationFrame(dragFrame);dragFrame=0;delete root.dataset.krDragging;dragChip?.remove();dragChip=null;drag=null;dropTarget?.remove();dropTarget=null;
+  }
+  function drawDrag(){
+    dragFrame=0;if(!drag||!dropTarget)return;
+    const rect=drag.main.getBoundingClientRect(),style=getComputedStyle(drag.main),left=rect.left+parseFloat(style.paddingLeft||0),actualTop=rect.top+parseFloat(style.paddingTop||0),top=Math.max(actualTop,0);
+    Object.assign(dropTarget.style,{left:`${left}px`,top:`${top}px`,width:`${Math.max(0,rect.width-parseFloat(style.paddingLeft||0)-parseFloat(style.paddingRight||0))}px`,height:`${Math.max(0,Math.min(rect.bottom,innerHeight)-top)}px`});
+    drag.preview.style.transform=`translateY(${actualTop-top-drag.main.scrollTop}px)`;
+    if(dragChip)dragChip.style.transform=`translate3d(${Math.max(8,Math.min(innerWidth-240,drag.x+18))}px,${Math.max(8,Math.min(innerHeight-65,drag.y+18))}px,0)`;
+  }
+  function trackDrag(event){
+    if(!drag)return;if(event.clientX||event.clientY){drag.x=event.clientX;drag.y=event.clientY;}
+    drag.preview.dataset.over=String(event.composedPath().includes(dropTarget));
+    if(!dragFrame)dragFrame=requestAnimationFrame(drawDrag);
   }
   function startDrag(event) {
     if(!settings.enabled || !event.dataTransfer || !multi)return;
@@ -301,15 +313,18 @@
     endDrag();drag={slug,row};row.dataset.krDragging='true';
     event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('application/x-kick-refined-channel',slug);
     event.dataTransfer.setData('text/uri-list',row.href);event.dataTransfer.setData('text/plain',row.href);
-    const rect=main.getBoundingClientRect(),top=Math.max(rect.top,0),bottom=Math.min(rect.bottom,innerHeight);
+    const preview=multi.dropPreview(slug);if(!preview){endDrag();return;}drag.main=main;drag.allowed=preview.allowed;root.dataset.krDragging='true';
     dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label','Drop channel to multiview');
-    dropTarget.style.cssText=`position:fixed;left:${rect.left}px;top:${top}px;width:${rect.width}px;height:${Math.max(0,bottom-top)}px;z-index:500;`;
-    const sr=shadowRoot(dropTarget),message=document.createElement('div');message.className='multi-drop-target';
-    const box=document.createElement('div'),title=document.createElement('strong'),hint=document.createElement('span');
-    title.textContent=`Drop to add ${describeChannel(row).title || slug}`;
-    hint.textContent=multi.isActive()?'Add another stream to this page':'Watch together. Your current stream stays in place.';
-    box.append(title,hint);message.append(box);sr.append(message);document.body.append(dropTarget);
-    dropTarget.addEventListener('dragover',e=>{if(drag){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
+    dropTarget.style.cssText='position:fixed;z-index:500;overflow:hidden;background:transparent !important;';
+    const sr=shadowRoot(dropTarget);sr.append(preview.element);drag.preview=preview.element;document.body.append(dropTarget);
+    dragChip=document.createElement('div');dragChip.id='kr-drag-chip';dragChip.style.cssText='position:fixed;left:0;top:0;z-index:2147483646;pointer-events:none;background:transparent !important;';
+    const chipRoot=shadowRoot(dragChip),chip=document.createElement('div');chip.className='drag-channel-chip';
+    const meta=describeChannel(row);if(meta.image){const image=document.createElement('img');image.src=meta.image;image.alt='';chip.append(image);}
+    const words=document.createElement('div'),name=document.createElement('strong'),category=document.createElement('span');name.textContent=meta.title||slug;category.textContent=meta.category||'Kick stream';words.append(name,category);chip.append(words);
+    const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;canvas.style.cssText='position:fixed;width:1px;height:1px;pointer-events:none';chipRoot.append(chip,canvas);document.body.append(dragChip);
+    event.dataTransfer.setDragImage(canvas,0,0);
+    drag.x=event.clientX||row.getBoundingClientRect().right;drag.y=event.clientY||row.getBoundingClientRect().top;drawDrag();
+    dropTarget.addEventListener('dragover',e=>{if(drag){e.preventDefault();e.dataTransfer.dropEffect=drag.allowed?'copy':'none';}});
     dropTarget.addEventListener('drop',e=>{
       if(!drag)return;e.preventDefault();e.stopPropagation();const dropped=drag.slug;
       lastDrop={slug:dropped,time:performance.now()};endDrag();
@@ -321,7 +336,6 @@
     currentPath = location.pathname;
     endDrag(); multi?.close({ restorePlayback: false });
     stopTransition();
-    // Filters are a view preference; leave the user's current query intact.
     scheduleRefresh();
   }
   function trackNavigation(event) {
@@ -395,6 +409,7 @@
     }
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-kr-enabled'] });
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });
+    document.addEventListener('dragover', trackDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragend', endDrag, { capture:true, signal:abort.signal });
     window.addEventListener('blur', endDrag, { signal:abort.signal });
     document.addEventListener('click', event => {

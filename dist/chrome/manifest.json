@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Immersion",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.",
   "permissions": [
     "storage"

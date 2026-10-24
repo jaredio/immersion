@@ -176,7 +176,18 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.locator('#kr-multi-root').count(), 0);
     let originalTabTitle=await page.title();
     const source=page.locator('[data-testid="sidebar-following-channel-1"]');
-    await source.dragTo(page.locator('main'), { targetPosition: { x:180,y:120 } });
+    const dragSource=await source.boundingBox(),dragDestination=await page.locator('main').boundingBox();
+    await page.mouse.move(dragSource.x+30,dragSource.y+20);await page.mouse.down();
+    await page.mouse.move(dragSource.x+80,dragSource.y+20,{steps:5});await page.mouse.move(dragDestination.x+180,dragDestination.y+120,{steps:8});
+    const dragPreview=page.locator('#kr-multi-drop');await dragPreview.waitFor();
+    assert.equal(await dragPreview.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','the overlay stays transparent above the playing stream');
+    assert.equal(await page.locator('#kr-multi-root').count(),0,'preview does not activate or load multiview');
+    assert.equal(await dragPreview.locator('.preview-tile').count(),2);
+    assert.equal(await dragPreview.locator('.preview-tile[data-incoming="true"]').count(),1);
+    assert.equal(await dragPreview.locator('iframe,video').count(),0,'drag previews never create media players');
+    assert.equal(await page.locator('#kr-drag-chip').isVisible(),true);
+    await page.screenshot({path:path.join(root,`artifacts/${engine}-drag-preview-v9.png`)});
+    await page.mouse.up();
     const multi = page.locator('#kr-multi-root .multiview');
     await multi.waitFor({ state: 'visible' });
     assert.equal(await page.evaluate(()=>document.querySelector('main').contains(document.getElementById('kr-multi-root'))),true);
@@ -212,6 +223,8 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await source.dispatchEvent('dragstart',{dataTransfer:transfer});
     await page.locator('#kr-multi-drop').waitFor(); await page.keyboard.press('Escape');
     assert.equal(await page.locator('#kr-multi-drop').count(),0,'canceling a drag removes its drop target');
+    assert.equal(await page.locator('#kr-drag-chip').count(),0,'canceling also removes the custom drag card');
+    assert.equal(await page.evaluate(()=>document.documentElement.dataset.krDragging),undefined);
     await multi.getByRole('button',{name:'Manage',exact:true}).click();
     const multiInput=multi.getByRole('combobox',{name:'Add channel to multiview'});
     await multiInput.fill(''); await page.evaluate(()=>{window.nativeHotkeys=[];}); await multiInput.pressSequentially('tm');
@@ -411,7 +424,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.8.1', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','channel metadata and safe social previews','tile edge resizing','tab title restoration','no redundant multistream banner'] });
+    report.push({ engine, passed: true, version:'0.9.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','glass layout preview without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','channel metadata and safe social previews','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } finally { await context.close(); if (browser) await browser.close(); }
 }

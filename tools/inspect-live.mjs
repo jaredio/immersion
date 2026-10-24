@@ -55,7 +55,9 @@ try {
     const source=page.locator('#sidebar-wrapper a[data-testid*="-channel-"]').filter({hasNot:page.locator('a[href="'+current+'"]')});
     const candidate=await page.locator('#sidebar-wrapper a[data-testid*="-channel-"]').evaluateAll((links,current)=>links.find(l=>l.pathname!==current)?.getAttribute('href'),current);
     if(candidate && native) {
-      await page.locator('#sidebar-wrapper a[href="'+candidate+'"]').dragTo(page.locator('main:has(#video-player):visible').first(),{targetPosition:{x:180,y:120}});
+      const dragSource=await page.locator('#sidebar-wrapper a[href="'+candidate+'"]').boundingBox(),dragDest=await page.locator('main:has(#video-player):visible').first().boundingBox();
+      await page.mouse.move(dragSource.x+20,dragSource.y+20);await page.mouse.down();await page.mouse.move(dragSource.x+60,dragSource.y+20,{steps:5});await page.mouse.move(dragDest.x+180,dragDest.y+120,{steps:8});
+      await page.locator('#kr-multi-drop').waitFor();await page.waitForTimeout(180);await page.screenshot({path:path.join(root,'artifacts/live-drag-preview-v9.png')});await page.mouse.up();
       await page.locator('#kr-multi-root .inline-multi').waitFor({state:'visible'});
       await page.waitForTimeout(2000);
       const workspace=page.locator('#kr-multi-root');
@@ -80,8 +82,8 @@ try {
       });
       const layout={featuredSize:Number(await separator.getAttribute('aria-valuenow')),quietHidden,chatTabs:await workspace.locator('#multi-chat-tabs button').count()};
       console.log('INLINE MULTIVIEW',JSON.stringify({...metrics,...controls,...layout}));
-      await writeFile(path.join(root,'artifacts/live-inline-validation-v8.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
-      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v8.png')});
+      await writeFile(path.join(root,'artifacts/live-inline-validation-v9.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
+      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v9.png')});
       for(const width of [1280,1024,390]) {
         await page.setViewportSize({width,height:900});await page.waitForTimeout(600);
         console.log('Inline viewport',await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,active:!!document.getElementById('kr-multi-root')})));
