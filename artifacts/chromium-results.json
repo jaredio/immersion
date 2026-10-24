@@ -2,7 +2,7 @@
   {
     "engine": "chromium",
     "passed": true,
-    "version": "0.7.0",
+    "version": "0.8.0",
     "mode": "installed unpacked extension",
     "checks": [
       "sidebar drag/drop",
@@ -17,8 +17,12 @@
       "chat tabs",
       "saved custom split",
       "natural video height with three streams",
-      "popover actions over native video",
-      "no redundant banner or cards"
+      "direct close/fullscreen/reorder actions",
+      "multiple audio sources",
+      "channel metadata and safe social previews",
+      "tile edge resizing",
+      "tab title restoration",
+      "no redundant multistream banner"
     ]
   }
 ]

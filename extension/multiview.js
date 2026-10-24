@@ -1,18 +1,20 @@
 /* Inline multiview. The native player stays in its React-owned DOM tree. */
 (() => {
-  const { api, channelSlug, multiState, multiURL } = KickRefined;
+    const { api, channelSlug, multiState, multiURL, channelDetails } = KickRefined;
   function create({ getChannels, onKeydown }) {
     const host = document.createElement('div'); host.id = 'kr-multi-root';
     const shadow = host.attachShadow({ mode: 'open' });
     const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = api.runtime.getURL('ui.css'); shadow.append(css);
     const panel = document.createElement('section'); panel.className = 'multiview inline-multi'; panel.setAttribute('aria-label','Multiview workspace');
     panel.innerHTML = `
-      <div class="multi-header"><span id="multi-audio-source" class="multi-audio-source" role="status">Muted</span><button id="multi-manage" aria-expanded="false">Manage</button><label class="multi-layout-label">Layout <select id="multi-layout" aria-label="Multiview layout"><option value="grid">Grid</option><option value="focus">Focus</option><option value="columns">Columns</option></select></label><button id="multi-mute">Mute all</button><button id="multi-fullscreen" aria-label="Fullscreen multiview">⛶</button><button class="multi-exit" aria-label="Close multiview">Single stream</button></div>
+      <div class="multi-header"><button id="multi-mix" aria-pressed="false" title="Allow sound from more than one stream">Mix audio</button><button id="multi-manage" aria-expanded="false">Manage</button><label class="multi-layout-label">Layout <select id="multi-layout" aria-label="Multiview layout"><option value="grid">Grid</option><option value="focus">Focus</option><option value="columns">Columns</option></select></label><button id="multi-mute">Mute all</button><button id="multi-fullscreen" aria-label="Fullscreen multiview">⛶</button><button class="multi-exit" aria-label="Close multiview">Single stream</button></div>
       <div class="multi-chat-bar"><label for="multi-chat-channel">Chat</label><select id="multi-chat-channel" aria-label="Chat channel"></select><a id="multi-chat-external" target="_blank" rel="noopener noreferrer" aria-label="Open chat in a new tab">↗</a><button id="multi-chat-toggle" aria-pressed="true">Hide chat</button></div>
       <div class="multi-options" hidden><div class="multi-tools"><form id="multi-add-form"><input id="multi-add" aria-label="Add channel to multiview" list="multi-suggestions" placeholder="Channel name or Kick URL" autocomplete="off" maxlength="120"><datalist id="multi-suggestions"></datalist><button type="submit">Add stream</button></form></div><div class="multi-footer"><div class="multi-save"><input id="multi-name" aria-label="Layout name" placeholder="Name this session" maxlength="48"><button id="multi-save">Save</button><select id="multi-sessions" aria-label="Saved multiview sessions"><option value="">Saved sessions…</option></select><button id="multi-delete" disabled>Delete saved</button></div><button id="multi-share">Copy link</button></div></div>
       <div id="multi-notice" class="multi-notice" role="status"></div><div class="multi-body"><div id="multi-grid" class="multi-grid"></div><aside class="multi-chat"><div class="multi-chat-mount"></div></aside></div>`;
     shadow.append(panel);
-    const quiet=document.createElement('button');quiet.id='multi-quiet';quiet.textContent='Quiet view';quiet.setAttribute('aria-pressed','false');quiet.title='Hide channel categories and status labels';
+    const directory=document.createElement('section');directory.className='multi-directory';directory.setAttribute('aria-label','Open stream channels');directory.innerHTML='<div id="multi-channel-list"></div>';panel.append(directory);
+    const preview=document.createElement('div');preview.className='multi-channel-preview';preview.id='multi-channel-preview';preview.popover='manual';preview.setAttribute('role','dialog');preview.setAttribute('aria-label','Channel quick view');panel.append(preview);
+    const quiet=document.createElement('button');quiet.id='multi-quiet';quiet.textContent='Quiet view';quiet.setAttribute('aria-pressed','false');quiet.title='Hide categories, status labels, and the channel list';
     panel.querySelector('#multi-fullscreen').before(quiet);
     const chatTabs=document.createElement('div');chatTabs.id='multi-chat-tabs';chatTabs.setAttribute('aria-label','Switch stream chat');
     panel.querySelector('#multi-chat-toggle').before(chatTabs);
@@ -24,11 +26,12 @@
     for(const type of ['keydown','kick-refined-keydown'])shadow.addEventListener(type,event=>{onKeydown?.(event);event.stopPropagation();});
     for(const type of ['keyup','keypress'])shadow.addEventListener(type,event=>event.stopPropagation());
     const $ = s => panel.querySelector(s);
-    let state = multiState(), sessions = [], audio = '', active = false, destroyed = false, context = null, native = null;
+    let state = multiState(), sessions = [], audio = new Set(), active = false, destroyed = false, context = null, native = null;
     let chatFrame = null, chatOverlay = null, writes = Promise.resolve(), layoutFrame = 0, catalog = new Map();
     const tiles = new Map(), paused = new Set(), nativeWired = new WeakSet(), restored = [];
     const audioSession=crypto.randomUUID();let controlRevision=0,nativeStatusFrame=0;
-    const hiddenInfo=new Map();let mainMarker=null,resizing=null;
+    const hiddenInfo=new Map();let mainMarker=null,resizing=null,resizeOwner=divider;
+    const detailsCache=new Map(),detailsPending=new Set(),detailsControllers=new Set();let detailsQueue=Promise.resolve(),previewSlug='',previewTimer=0;
     const resize = new ResizeObserver(() => schedulePosition());
     const loaded = api.storage.local.get(['multiview','multiSessions']).then(data => {
       state = multiState(data.multiview);
@@ -84,10 +87,55 @@
       for(const [child,value]of hiddenInfo){if(value===null)child.removeAttribute('data-kr-single-info');else child.setAttribute('data-kr-single-info',value);}hiddenInfo.clear();
       if(context?.main&&mainMarker){if(mainMarker.value===null)context.main.removeAttribute('data-kr-multi-active');else context.main.setAttribute('data-kr-multi-active',mainMarker.value);}mainMarker=null;
     }
+    let singleTitle='',multiTitle='';
+    const titleObserver=new MutationObserver(()=>{if(active&&context?.slug===channelSlug(location.pathname,location.origin)&&document.title!==multiTitle){singleTitle=document.title;document.title=multiTitle;}});
     function updateAudioLabel(){
-      const name=audio?(catalog.get(audio)?.title||audio):'';
-      $('#multi-audio-source').textContent=name?`Listening: ${name}`:'Muted';
-      $('#multi-audio-source').title=name?`Audio source: ${name}`:'All streams muted';
+      $('#multi-mix').setAttribute('aria-pressed',String(state.mixAudio));
+    }
+    function updateTabTitle(){multiTitle=`Multistream: ${state.channels.map(s=>catalog.get(s)?.title||s).join(' + ')} | Immersion`;if(document.title!==multiTitle)document.title=multiTitle;}
+    function requestDetails(slug){
+      if(detailsPending.has(slug)||Date.now()-(detailsCache.get(slug)?.time||0)<60000)return;
+      detailsPending.add(slug);
+      detailsQueue=detailsQueue.then(async()=>{
+        if(!active||!state.channels.includes(slug))return;
+        const controller=new AbortController();detailsControllers.add(controller);const timer=setTimeout(()=>controller.abort(),8000);
+        try{const response=await fetch(`${location.origin}/api/v2/channels/${encodeURIComponent(slug)}`,{credentials:'omit',signal:controller.signal});if(!response.ok)throw Error('Channel unavailable');
+          const data=channelDetails(await response.json(),slug);detailsCache.set(slug,{time:Date.now(),data});
+          if(active&&state.channels.includes(slug))render();
+        }catch{detailsCache.set(slug,{time:Date.now(),data:null});}finally{clearTimeout(timer);detailsControllers.delete(controller);}
+      }).finally(()=>detailsPending.delete(slug));
+    }
+    function closePreview(){clearTimeout(previewTimer);previewSlug='';if(preview.matches(':popover-open'))preview.hidePopover();}
+    function deferPreviewClose(){clearTimeout(previewTimer);previewTimer=setTimeout(closePreview,180);}
+    function showPreview(slug,anchor){
+      if(!active||!anchor?.isConnected)return;clearTimeout(previewTimer);previewSlug=slug;requestDetails(slug);
+      const meta=catalog.get(slug)||{},details=detailsCache.get(slug)?.data;preview.replaceChildren();
+      const name=document.createElement('strong');name.textContent=meta.title||slug;
+      const title=document.createElement('p');title.textContent=meta.streamTitle||(meta.live==='offline'?'Offline':'Stream title unavailable');
+      const stats=document.createElement('span');stats.textContent=[meta.category,meta.viewers?`${meta.viewers} viewers`:null].filter(Boolean).join(' · ');
+      const bio=document.createElement('p');bio.className='preview-bio';bio.textContent=meta.bio||'';preview.append(name,title,stats,bio);
+      const links=document.createElement('div');links.className='preview-socials';
+      for(const social of meta.socials||[]){const link=document.createElement('a');link.href=social.href;link.textContent=social.label;link.target='_blank';link.rel='noopener noreferrer';links.append(link);}
+      if(!links.children.length){const empty=document.createElement('span');empty.textContent=details?'No socials published':'Social links unavailable';links.append(empty);}preview.append(links);
+      const channel=document.createElement('a');channel.textContent=`Open ${meta.title||slug} on Kick ↗`;channel.href=`https://kick.com/${slug}`;channel.target='_blank';channel.rel='noopener noreferrer';preview.append(channel);
+      const rect=anchor.getBoundingClientRect();preview.style.left=`${Math.max(8,Math.min(innerWidth-328,rect.left))}px`;preview.style.top='8px';
+      if(!preview.matches(':popover-open'))preview.showPopover();preview.style.top=`${Math.max(8,Math.min(innerHeight-preview.offsetHeight-8,rect.top-preview.offsetHeight-8))}px`;
+    }
+    preview.addEventListener('pointerenter',()=>clearTimeout(previewTimer));preview.addEventListener('pointerleave',deferPreviewClose);
+    preview.addEventListener('focusout',()=>queueMicrotask(()=>{if(!preview.contains(shadow.activeElement)&&!directory.contains(shadow.activeElement))deferPreviewClose();}));
+    for(const type of ['keydown','kick-refined-keydown'])panel.addEventListener(type,event=>{if(event.key==='Escape'&&preview.matches(':popover-open')){event.preventDefault();closePreview();}});
+    for(const type of ['keydown','kick-refined-keydown'])preview.addEventListener(type,event=>{if(event.key==='Escape'){event.preventDefault();closePreview();}});
+    function renderDirectory(){
+      const list=$('#multi-channel-list');list.replaceChildren();
+      for(const slug of state.channels){
+        const meta=catalog.get(slug)||{},card=document.createElement('button');card.className='multi-channel-card';card.dataset.channel=slug;card.setAttribute('aria-label',`Preview ${slug}`);card.setAttribute('aria-haspopup','dialog');
+        if(meta.image){const image=document.createElement('img');image.src=meta.image;image.alt='';card.append(image);}
+        const text=document.createElement('div'),name=document.createElement('strong'),title=document.createElement('span'),stats=document.createElement('small');
+        name.textContent=meta.title||slug;title.textContent=meta.streamTitle||(meta.live==='offline'?'Offline':'Stream title unavailable');stats.textContent=[meta.category,meta.viewers?`${meta.viewers} viewers`:null].filter(Boolean).join(' · ');text.append(name,title,stats);card.append(text);list.append(card);
+        card.addEventListener('pointerenter',()=>showPreview(slug,card));card.addEventListener('pointerleave',deferPreviewClose);card.addEventListener('focus',()=>showPreview(slug,card));card.addEventListener('click',()=>showPreview(slug,card));card.addEventListener('blur',()=>{if(!preview.contains(shadow.activeElement))deferPreviewClose();});
+        requestDetails(slug);
+      }
+      if(previewSlug){const anchor=[...list.children].find(c=>c.dataset.channel===previewSlug);if(anchor)showPreview(previewSlug,anchor);else closePreview();}
     }
     function nativeVideo() {
       const video=context?.player?.querySelector('video')||null;
@@ -99,7 +147,7 @@
             nativeStatusFrame=0;if(!active||nativeVideo()!==video)return;
             const tile=tiles.get(context.slug);if(!tile)return;
             tile.volume=video.volume;tile.playing=!video.paused&&!video.ended;
-            tile.lastSettings=`${tile.slug!==audio}:${tile.volume}`;updateControls(tile);
+            tile.lastSettings=`${!audio.has(tile.slug)}:${tile.volume}`;updateControls(tile);
           });
         });
       }
@@ -131,7 +179,7 @@
       context.player.dataset.krNativePlayer='true';
       for(const [key,value] of Object.entries({position:'absolute','z-index':'2','max-height':'none','min-height':'0','aspect-ratio':'auto',overflow:'hidden',visibility:'hidden','box-sizing':'border-box'})) style(context.player,key,value);
       resize.observe(context.main); resize.observe(host);
-      audio=video && !video.muted && video.volume>0 ? context.slug : '';
+      audio.clear();if(video&&!video.muted&&video.volume>0)audio.add(context.slug);
     }
     function command(tile,muted,{action='',force=false}={}) {
       const signature=`${muted}:${tile.volume}`;
@@ -149,19 +197,17 @@
       } else tile.frame?.contentWindow?.postMessage({type:'kick-refined:control',session:audioSession,revision:tile.commandRevision,muted,volume:tile.volume,...(nextAction?{action:nextAction}:{})},'https://player.kick.com');
     }
     function updateControls(tile){
-      tile.listen.setAttribute('aria-pressed',String(tile.slug===audio));tile.listen.textContent=tile.slug===audio?'Selected':'Listen';
-      tile.listen.title=tile.slug===audio?'Mute this audio source':'Select this audio source';
+      tile.listen.setAttribute('aria-pressed',String(audio.has(tile.slug)));tile.listen.textContent=audio.has(tile.slug)?'Mute':'Listen';
+      tile.listen.title=audio.has(tile.slug)?'Mute this audio source':'Select this audio source';
       tile.pause.textContent=tile.playing?'Pause':'Play';tile.pause.setAttribute('aria-label',`${tile.playing?'Pause':'Play'} ${tile.slug}`);
       tile.pause.title=tile.pause.getAttribute('aria-label');
       tile.slider.value=String(Math.round(tile.volume*100));tile.level.textContent=`${Math.round(tile.volume*100)}%`;
-      tile.card.dataset.audio=String(tile.slug===audio);
+      tile.card.dataset.audio=String(audio.has(tile.slug));tile.audible.hidden=!audio.has(tile.slug)||tile.volume<=0||!tile.playing;
     }
     function selectAudio(slug){
-      audio=audio===slug?'':slug;notice();
-      const tile=tiles.get(slug);
-      if(audio&&tile&&tile.volume<=0)tile.volume=tile.lastVolume||.5;
-      syncAudio();
-      if(audio&&tile)command(tile,false,{action:'play'});
+      const enable=!audio.has(slug);if(!state.mixAudio)audio.clear();if(enable)audio.add(slug);else audio.delete(slug);notice();
+      const tile=tiles.get(slug);if(enable&&tile&&tile.volume<=0)tile.volume=tile.lastVolume||.5;
+      syncAudio();if(enable&&tile)command(tile,false,{action:'play'});
     }
     function focusStream(slug){
       state.layout=state.layout==='focus'&&state.focus===slug?'grid':'focus';state.focus=slug;render();persist();
@@ -170,10 +216,21 @@
       $('#multi-grid').style.setProperty('--multi-featured',`${state.focusSize}%`);
       stage.style.setProperty('--multi-featured',`${state.focusSize}%`);
       sizing.querySelector('input').value=String(state.focusSize);sizing.querySelector('output').textContent=`${state.focusSize}%`;
-      divider.setAttribute('aria-valuenow',String(state.focusSize));divider.setAttribute('aria-valuetext',`${state.focusSize}% featured stream width`);schedulePosition();
+      divider.setAttribute('aria-valuenow',String(state.focusSize));divider.setAttribute('aria-valuetext',`${state.focusSize}% featured stream width`);applyTileSizes();schedulePosition();
     }
+    function applyTileSizes(){
+      for(const [slug,tile]of tiles){
+        const span=state.sizes[slug]||(state.channels.length===1?6:state.channels.length<=4?3:2);
+        tile.card.style.setProperty('--tile-span',span);tile.card.dataset.span=String(span);
+        const focused=state.layout==='focus',featured=slug===state.focus;
+        tile.edge?.setAttribute('aria-valuemin',String(focused?(featured?45:20):2));tile.edge?.setAttribute('aria-valuemax',String(focused?(featured?80:55):6));
+        tile.edge?.setAttribute('aria-valuenow',String(focused?(featured?state.focusSize:100-state.focusSize):span));
+      }
+      schedulePosition();
+    }
+    function beginResize(element,event){if(event.button!==0)return false;finishResize();event.preventDefault();resizing=event.pointerId;resizeOwner=element;element.setPointerCapture(event.pointerId);stage.dataset.resizing='true';schedulePosition();return true;}
     function syncAudio() {
-      for(const [slug,tile] of tiles) { command(tile,slug!==audio);updateControls(tile); }
+      for(const [slug,tile] of tiles) { command(tile,!audio.has(slug));updateControls(tile); }
       if(context?.player&&!state.channels.includes(context.slug)) { const video=nativeVideo(); if(video&&!video.muted)video.muted=true; }
       updateAudioLabel();
     }
@@ -183,7 +240,7 @@
       const frame=document.createElement('iframe'); frame.name=`kick-refined:${slug}`; frame.title=`${slug} stream`;
       frame.allow='autoplay; fullscreen; picture-in-picture'; frame.allowFullscreen=true; frame.referrerPolicy='strict-origin-when-cross-origin';
       frame.src=`https://player.kick.com/${encodeURIComponent(slug)}?autoplay=true&muted=true`;
-      frame.addEventListener('load',()=>{if(active&&tiles.get(slug)===tile)command(tile,slug!==audio,{force:true});});
+      frame.addEventListener('load',()=>{if(active&&tiles.get(slug)===tile)command(tile,!audio.has(slug),{force:true});});
       tile.frame=frame; tile.player.replaceChildren(frame);
     }
     function add(input) {
@@ -208,42 +265,48 @@
       const controls=document.createElement('div'); controls.className='multi-tile-controls';
       const video=isNative(slug)?nativeVideo():null;
       const tile={slug,card,player,frame:null,listen:null,pause:null,volume:video?.volume??1,lastVolume:.5,playing:!!video&&!video.paused,lastSettings:'',commandRevision:0,pendingAction:'',slider:null,level:null};
-      let actionMenu=null;
-      const button=(label,text,action)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;el.textContent=text;el.addEventListener('click',()=>{if(actionMenu?.matches(':popover-open'))actionMenu.hidePopover();action();});(actionMenu||controls).append(el);return el;};
+      const quick=document.createElement('div');quick.className='multi-quick-actions';header.append(quick);
+      tile.audible=document.createElement('span');tile.audible.className='multi-audible';tile.audible.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg>';tile.audible.setAttribute('role','img');tile.audible.setAttribute('aria-label',`Audio enabled for ${slug}`);tile.audible.title='Audio enabled';tile.audible.hidden=true;quick.append(tile.audible);
+      const button=(label,text,action,target=controls)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;el.textContent=text;el.addEventListener('click',action);target.append(el);return el;};
       tile.listen=button('Listen to','Listen',()=>selectAudio(slug));
       const volume=document.createElement('label');volume.className='multi-volume';
       tile.slider=document.createElement('input');tile.slider.type='range';tile.slider.min='0';tile.slider.max='100';tile.slider.step='1';tile.slider.setAttribute('aria-label',`Volume for ${slug}`);
       tile.level=document.createElement('output');tile.level.textContent='100%';volume.append(tile.slider,tile.level);controls.append(volume);
       tile.slider.addEventListener('input',()=>{
         tile.volume=Number(tile.slider.value)/100;if(tile.volume>0)tile.lastVolume=tile.volume;
-        if(tile.volume>0&&audio!==slug)audio=slug;
+        if(tile.volume>0){if(!state.mixAudio)audio.clear();audio.add(slug);}
         syncAudio();
       });
-      tile.pause=button('Play','Play',()=>{if(isNative(slug)&&native)native.pausedByUs=false;command(tile,slug!==audio,{action:tile.playing?'pause':'play'});});
-      const more=document.createElement('button');more.className='multi-more';more.textContent='…';more.title='Stream options';more.setAttribute('aria-label',`Options for ${slug}`);more.setAttribute('aria-expanded','false');
-      actionMenu=document.createElement('div');actionMenu.className='multi-action-menu';actionMenu.popover='auto';actionMenu.id=`multi-actions-${slug}`;actionMenu.setAttribute('aria-label',`Actions for ${slug}`);more.setAttribute('aria-controls',actionMenu.id);
-      more.addEventListener('click',()=>{
-        if(actionMenu.matches(':popover-open')){actionMenu.hidePopover();return;}
-        const rect=more.getBoundingClientRect();actionMenu.style.left=`${Math.max(8,Math.min(innerWidth-188,rect.right-180))}px`;actionMenu.style.top=`${Math.max(8,rect.top-190)}px`;actionMenu.showPopover();actionMenu.querySelector('button')?.focus();
-      });
-      actionMenu.addEventListener('beforetoggle',event=>{if(event.newState==='closed'&&actionMenu.contains(shadow.activeElement))more.focus();});
-      actionMenu.addEventListener('toggle',()=>more.setAttribute('aria-expanded',String(actionMenu.matches(':popover-open'))));controls.append(more);
-      tile.focus=button('Focus','Focus stream',()=>focusStream(slug));
-      for(const [label,text,direction] of [['Move left','Move earlier',-1],['Move right','Move later',1]]) button(label,text,()=>{const i=state.channels.indexOf(slug),j=i+direction;if(j>=0&&j<state.channels.length){[state.channels[i],state.channels[j]]=[state.channels[j],state.channels[i]];render();persist();}});
-      button('Fullscreen','Fullscreen',()=>{
+      tile.pause=button('Play','Play',()=>{if(isNative(slug)&&native)native.pausedByUs=false;command(tile,!audio.has(slug),{action:tile.playing?'pause':'play'});});
+      tile.focus=button('Focus','▣',()=>focusStream(slug));
+      for(const [label,text,direction] of [['Move left','←',-1],['Move right','→',1]]) button(label,text,()=>{const i=state.channels.indexOf(slug),j=i+direction;if(j>=0&&j<state.channels.length){[state.channels[i],state.channels[j]]=[state.channels[j],state.channels[i]];render();persist();}});
+      button('Fullscreen','⛶',()=>{
         if(isNative(slug))context.player.querySelector('[data-testid="video-player-fullscreen"]')?.click();
         else tile.card.requestFullscreen().catch(()=>notice('Use the player fullscreen control if fullscreen is unavailable.'));
-      });
-      button('Remove','Remove stream',()=>{
-        state.channels=state.channels.filter(s=>s!==slug);state=multiState(state);paused.delete(slug);if(audio===slug)audio='';
+      },quick);
+      button('Remove','×',()=>{
+        state.channels=state.channels.filter(s=>s!==slug);state=multiState(state);paused.delete(slug);audio.delete(slug);
         if(isNative(slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}
         persist();
         if(state.channels.length===1 && state.channels[0]!==context.slug) {
           const remaining=state.channels[0],link=getChannels().find(c=>c.slug===remaining)?.link;
           close({restorePlayback:false});if(link?.isConnected)link.click();else location.assign(`/${remaining}`);
         } else if(state.channels.length<=1) close(); else render();
+      },quick);
+      const edge=document.createElement('div');edge.className='multi-tile-resize';edge.tabIndex=0;edge.setAttribute('role','separator');edge.setAttribute('aria-label',`Resize ${slug}`);edge.setAttribute('aria-orientation','vertical');edge.setAttribute('aria-valuemin','2');edge.setAttribute('aria-valuemax','6');edge.title='Drag the edge to resize; arrow keys adjust, double-click resets';tile.edge=edge;
+      let dragWidth=0,dragStart=0;
+      edge.addEventListener('pointerdown',event=>{if(beginResize(edge,event)){dragWidth=card.getBoundingClientRect().width;dragStart=event.clientX;}});
+      edge.addEventListener('pointermove',event=>{
+        if(resizing!==event.pointerId||resizeOwner!==edge)return;
+        const width=gridElement.getBoundingClientRect().width,desired=dragWidth+event.clientX-dragStart;
+        if(state.layout==='focus'){state.focusSize=Math.max(45,Math.min(80,Math.round((slug===state.focus?desired:width-desired)/width*100)));applySizing();}
+        else {state.layout='grid';gridElement.dataset.layout='grid';stage.dataset.layout='grid';$('#multi-layout').value='grid';state.sizes[slug]=Math.max(2,Math.min(6,Math.round(desired/width*6)));applyTileSizes();}
       });
-      card.append(header,player,controls,actionMenu);return tile;
+      for(const type of ['pointerup','pointercancel','lostpointercapture'])edge.addEventListener(type,finishResize);
+      const edgeKey=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();if(state.layout==='focus'){state.focusSize=event.key==='Home'?45:event.key==='End'?80:Math.max(45,Math.min(80,state.focusSize+(event.key==='ArrowRight'?2:-2)));applySizing();}else{state.layout='grid';state.sizes[slug]=event.key==='Home'?2:event.key==='End'?6:Math.max(2,Math.min(6,(Number(card.dataset.span)||3)+(event.key==='ArrowRight'?1:-1)));render();}persist();};
+      for(const type of ['keydown','kick-refined-keydown'])edge.addEventListener(type,edgeKey);
+      edge.addEventListener('dblclick',()=>{delete state.sizes[slug];state.focusSize=67;render();persist();});
+      card.append(header,player,controls,edge);return tile;
     }
     function chatMount() {
       if(!context.chat) return $('.multi-chat-mount');
@@ -268,6 +331,7 @@
     function render() {
       if(!active||destroyed)return;
       state=multiState(state);catalog=new Map(getChannels().map(c=>[c.slug,c]));
+      for(const slug of state.channels){const details=detailsCache.get(slug)?.data;if(details)catalog.set(slug,{...catalog.get(slug),...details,image:details.image||catalog.get(slug)?.image||''});}
       if(native && !state.channels.includes(context.slug)) { const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();} }
       else if(native?.pausedByUs && native.wasPlaying && !paused.has(context.slug)) { const v=nativeVideo();native.pausedByUs=false;if(v?.paused)v.play().catch(()=>{}); }
       const grid=$('#multi-grid');grid.dataset.layout=state.layout;grid.dataset.count=state.channels.length;
@@ -277,8 +341,9 @@
       for(const [slug,tile]of tiles)if(!state.channels.includes(slug)){resize.unobserve(tile.player);tile.card.remove();tiles.delete(slug);}
       grid.querySelector('.multi-empty')?.remove();
       if(!state.channels.length){const empty=document.createElement('div');empty.className='multi-empty';empty.textContent='Drag a channel from the sidebar, or add one using Manage.';grid.append(empty);}
-      state.channels.forEach((slug,index)=>{let tile=tiles.get(slug);if(!tile){tile=makeTile(slug);tiles.set(slug,tile);grid.append(tile.card);}tile.card.style.order=state.layout==='focus'&&state.focus===slug?-1:index;tile.card.dataset.featured=String(state.focus===slug);tile.focus.textContent=state.layout==='focus'&&state.focus===slug?'Return to grid':'Focus stream';tile.focus.title=state.layout==='focus'&&state.focus===slug?'Return to grid':'Focus stream';tile.focus.setAttribute('aria-label',state.layout==='focus'&&state.focus===slug?`Return to grid for ${slug}`:`Focus ${slug}`);tile.focus.setAttribute('aria-pressed',String(state.layout==='focus'&&state.focus===slug));mountPlayer(slug,tile);});
-      $('#multi-layout').value=state.layout;
+      state.channels.forEach((slug,index)=>{let tile=tiles.get(slug);if(!tile){tile=makeTile(slug);tiles.set(slug,tile);grid.append(tile.card);}tile.card.style.order=state.layout==='focus'&&state.focus===slug?-1:index;tile.card.dataset.featured=String(state.focus===slug);tile.focus.textContent=state.layout==='focus'&&state.focus===slug?'▦':'▣';tile.focus.title=state.layout==='focus'&&state.focus===slug?'Return to grid':'Focus stream';tile.focus.setAttribute('aria-label',state.layout==='focus'&&state.focus===slug?`Return to grid for ${slug}`:`Focus ${slug}`);tile.focus.setAttribute('aria-pressed',String(state.layout==='focus'&&state.focus===slug));mountPlayer(slug,tile);});
+      for(const [slug,tile]of tiles){const meta=catalog.get(slug);if(meta){tile.card.querySelector('.multi-tile-identity a').textContent=meta.title||slug;tile.card.querySelector('.multi-tile-identity span').textContent=meta.category||'Kick stream';const status=tile.card.querySelector('.live-status');status.dataset.live=meta.live||'unknown';status.textContent=isNative(slug)?'Current stream':meta.live==='live'?'Live':meta.live==='offline'?'Offline':'';}}
+      applyTileSizes();$('#multi-layout').value=state.layout;
       const select=$('#multi-chat-channel');select.replaceChildren(...state.channels.map(s=>new Option(catalog.get(s)?.title||s,s)));select.value=state.chat;
       chatTabs.replaceChildren(...state.channels.map(slug=>{
         const button=document.createElement('button');button.dataset.channel=slug;button.setAttribute('aria-label',`Show ${slug} chat`);button.title=`Open ${catalog.get(slug)?.title||slug} chat`;
@@ -286,7 +351,7 @@
         const name=document.createElement('span');name.textContent=meta?.title||slug;button.append(name);
         button.addEventListener('click',()=>{state.chat=slug;state.chatVisible=true;render();persist();});return button;
       }));
-      hideChannelInfo();renderChat();syncAudio();positionNative();schedulePosition();
+      hideChannelInfo();renderChat();syncAudio();updateTabTitle();renderDirectory();positionNative();schedulePosition();
       const saved=$('#multi-sessions'),choice=saved.value;saved.replaceChildren(new Option('Saved sessions…',''),...sessions.map((s,i)=>new Option(s.name,String(i))));saved.value=choice;$('#multi-delete').disabled=saved.value==='';
       $('#multi-suggestions').replaceChildren(...[...catalog.values()].map(c=>new Option(c.slug,c.slug)));
     }
@@ -296,32 +361,32 @@
         context=findContext();if(!context)return;
         $('.multi-options').hidden=true;$('#multi-manage').setAttribute('aria-expanded','false');$('#multi-add').value='';notice();
         if(shared)state=multiState(shared);else if(fresh)state=multiState({channels:current?[current]:[]});else if(current)state=multiState({...state,channels:[current,...state.channels.filter(s=>s!==current)].slice(0,6)});
-        active=true;if(context.player)context.player.before(host);else context.main.prepend(host);if(context.player)mountNative();else audio='';
-      } else if(shared){state=multiState(shared);audio='';paused.clear();}
+        active=true;singleTitle=document.title;titleObserver.observe(document.head,{childList:true,subtree:true,characterData:true});if(context.player)context.player.before(host);else context.main.prepend(host);if(context.player)mountNative();else audio.clear();
+      } else if(shared){state=multiState(shared);audio.clear();paused.clear();}
       for(const slug of seeds)if(!state.channels.includes(slug))add(slug);
       render();persist();
     }
     function close({restorePlayback=true}={}) {
-      if(!active)return;finishResize();active=false;cancelAnimationFrame(layoutFrame);layoutFrame=0;resize.disconnect();
+      if(!active)return;finishResize();closePreview();for(const controller of detailsControllers)controller.abort();active=false;cancelAnimationFrame(layoutFrame);layoutFrame=0;resize.disconnect();
       cancelAnimationFrame(nativeStatusFrame);nativeStatusFrame=0;
       for(const tile of tiles.values())tile.card.remove();tiles.clear();chatFrame?.remove();chatFrame=null;chatOverlay?.remove();chatOverlay=null;paused.clear();
       const video=context?.player?.querySelector('video');if(document.fullscreenElement===context?.main)document.exitFullscreen().catch(()=>{});
       restoreStyles();restoreChannelInfo();if(context?.player)delete context.player.dataset.krNativePlayer;
       if(video&&native){video.muted=native.muted;if(restorePlayback&&native.wasPlaying&&native.pausedByUs&&video.paused)video.play().catch(()=>{});}
-      host.remove();native=null;context=null;audio='';
+      titleObserver.disconnect();if(context?.slug===channelSlug(location.pathname,location.origin))document.title=singleTitle;else if(document.title===multiTitle)document.title='Kick';host.remove();native=null;context=null;audio.clear();
     }
     function refresh(){if(active&&(!host.isConnected||(context?.player&&!context.player.isConnected)||context?.slug!==channelSlug(location.pathname,location.origin)))close({restorePlayback:false});else if(active){hideChannelInfo();schedulePosition();}}
     function onMessage(event){
       if(!active||event.origin!=='https://player.kick.com')return;
       const entry=[...tiles].find(([,tile])=>tile.frame?.contentWindow===event.source);if(!entry)return;
       const [slug,tile]=entry,data=event.data;
-      if(data?.type==='kick-refined:ready'){command(tile,slug!==audio,{force:true});return;}
+      if(data?.type==='kick-refined:ready'){command(tile,!audio.has(slug),{force:true});return;}
       if(data?.type!=='kick-refined:status'||data.session!==audioSession||data.revision!==tile.commandRevision)return;
       if(data.hasVideo)tile.pendingAction='';
       if(typeof data.playing==='boolean')tile.playing=data.playing;
-      if(Number.isFinite(data.volume)&&data.volume>=0&&data.volume<=1){tile.volume=data.volume;if(tile.volume>0)tile.lastVolume=tile.volume;tile.lastSettings=`${slug!==audio}:${tile.volume}`;}
+      if(Number.isFinite(data.volume)&&data.volume>=0&&data.volume<=1){tile.volume=data.volume;if(tile.volume>0)tile.lastVolume=tile.volume;tile.lastSettings=`${!audio.has(slug)}:${tile.volume}`;}
       updateControls(tile);
-      if(data.error==='NotAllowedError'&&audio===slug)notice(`Click “Enable playback” inside ${catalog.get(slug)?.title||slug} to allow sound in Firefox.`);
+      if(data.error==='NotAllowedError'&&audio.has(slug))notice(`Click “Enable playback” inside ${catalog.get(slug)?.title||slug} to allow sound in Firefox.`);
     }
     window.addEventListener('message',onMessage);window.addEventListener('resize',schedulePosition);document.addEventListener('fullscreenchange',schedulePosition);
     $('.multi-exit').addEventListener('click',()=>close());
@@ -332,23 +397,24 @@
     sizing.querySelector('input').addEventListener('input',event=>{state.focusSize=Number(event.target.value);applySizing();});
     sizing.querySelector('input').addEventListener('change',persist);
     divider.addEventListener('pointerdown',event=>{
-      if(event.button!==0)return;event.preventDefault();resizing=event.pointerId;divider.setPointerCapture(event.pointerId);stage.dataset.resizing='true';schedulePosition();
+      beginResize(divider,event);
     });
     divider.addEventListener('pointermove',event=>{
-      if(resizing!==event.pointerId)return;const rect=gridElement.getBoundingClientRect();
+      if(resizing!==event.pointerId||resizeOwner!==divider)return;const rect=gridElement.getBoundingClientRect();
       state.focusSize=Math.max(45,Math.min(80,Math.round((event.clientX-rect.left)/rect.width*100)));applySizing();
     });
-    function finishResize(){if(resizing===null)return;const pointer=resizing;resizing=null;delete stage.dataset.resizing;if(divider.hasPointerCapture(pointer))divider.releasePointerCapture(pointer);persist();schedulePosition();}
+    function finishResize(){if(resizing===null)return;const pointer=resizing;resizing=null;delete stage.dataset.resizing;if(resizeOwner.hasPointerCapture(pointer))resizeOwner.releasePointerCapture(pointer);persist();schedulePosition();}
     for(const type of ['pointerup','pointercancel','lostpointercapture'])divider.addEventListener(type,finishResize);
     divider.addEventListener('dblclick',()=>{state.focusSize=67;applySizing();persist();});
     const dividerKey=event=>{const step=event.shiftKey?5:1;if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();state.focusSize=event.key==='Home'?45:event.key==='End'?80:Math.max(45,Math.min(80,state.focusSize+(event.key==='ArrowRight'?step:-step)));applySizing();persist();}};
     for(const type of ['keydown','kick-refined-keydown'])divider.addEventListener(type,dividerKey);
-    $('#multi-mute').addEventListener('click',()=>{audio='';syncAudio();});
+    $('#multi-mix').addEventListener('click',()=>{state.mixAudio=!state.mixAudio;if(!state.mixAudio&&audio.size>1){const first=audio.values().next().value;audio.clear();audio.add(first);}syncAudio();persist();});
+    $('#multi-mute').addEventListener('click',()=>{audio.clear();syncAudio();});
     $('#multi-chat-toggle').addEventListener('click',()=>{state.chatVisible=!state.chatVisible;render();persist();});
     $('#multi-chat-channel').addEventListener('change',e=>{state.chat=e.target.value;render();persist();});
     $('#multi-fullscreen').addEventListener('click',()=>{const target=context?.main;if(!target)return;const request=document.fullscreenElement===target?document.exitFullscreen():target.requestFullscreen();request.catch(()=>notice('Use the browser fullscreen shortcut if fullscreen is unavailable.'));});
     $('#multi-save').addEventListener('click',()=>{const name=$('#multi-name').value.trim().slice(0,48);if(!name||!state.channels.length)return notice('Add a stream and name this session before saving.');const i=sessions.findIndex(s=>s.name===name),session={name,state:multiState(state)};if(i>=0)sessions[i]=session;else sessions=[session,...sessions].slice(0,10);persist();render();notice(`Saved “${name}”.`);});
-    $('#multi-sessions').addEventListener('change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions[Number(e.target.value)];if(!session)return;state=multiState(session.state);paused.clear();audio='';$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();persist();notice(`Loaded “${session.name}”.`);});
+    $('#multi-sessions').addEventListener('change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions[Number(e.target.value)];if(!session)return;state=multiState(session.state);paused.clear();audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();persist();notice(`Loaded “${session.name}”.`);});
     $('#multi-delete').addEventListener('click',()=>{const choice=$('#multi-sessions').value;if(choice==='')return;sessions.splice(Number(choice),1);$('#multi-sessions').value='';persist();render();notice('Saved session deleted.');});
     $('#multi-share').addEventListener('click',async()=>{if(!state.channels.length)return notice('Add a stream before sharing.');const url=multiURL(state);try{await navigator.clipboard.writeText(url);notice('Link copied. Recipients need Immersion installed.');}catch{$('#multi-add').value=url;$('#multi-add').select();notice('Copy the selected link.');}});
     return {open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),close,refresh,isActive:()=>active,getDropMain:()=>findContext()?.main,destroy:()=>{close({restorePlayback:false});destroyed=true;window.removeEventListener('message',onMessage);window.removeEventListener('resize',schedulePosition);document.removeEventListener('fullscreenchange',schedulePosition);}};

@@ -160,3 +160,7 @@ html[data-kr-enabled="true"] #user-identity [class*="bg-surface-fg-decorative"] 
 @media (prefers-reduced-motion: reduce) {
   html[data-kr-enabled="true"] :is(button,a,[data-kr-search-field],#chat-input-wrapper) { transition: none !important; }
 }
+
+/* Keep sidebar avatars clean; live state remains in the row's dot/text. */
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] img { outline:none !important;border:0 !important;box-shadow:none !important; }
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] [class*="ring-"]:has(img) { --tw-ring-shadow:0 0 #0000 !important;--tw-ring-offset-shadow:0 0 #0000 !important;box-shadow:none !important;border-color:transparent !important; }

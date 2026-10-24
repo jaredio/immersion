@@ -108,6 +108,23 @@ test('player audio bridge rejects unrelated frames and untrusted commands', asyn
   vm.runInNewContext(source, { window: unowned, document });
 });
 
+test('channel quick views accept public fields and reject unsafe social links',()=>{
+  const {channelDetails}=context.KickRefined;
+  const result=channelDetails({slug:'aurora',user:{username:'Aurora',bio:'Live music',twitter:'aurora_live',instagram:'https://evil.test/phish',youtube:'javascript:alert(1)',discord:'https://discord.gg/music'},livestream:{is_live:true,session_title:'Friday set',viewer_count:1428,categories:[{name:'Music'}]}},'aurora');
+  assert.equal(result.streamTitle,'Friday set');assert.equal(result.viewers,'1,428');assert.equal(result.category,'Music');
+  assert.deepEqual(Array.from(result.socials,s=>s.href),['https://x.com/aurora_live','https://discord.gg/music']);
+  assert.equal(channelDetails({slug:'someone_else'},'aurora'),null);
+  assert.equal(channelDetails({slug:'aurora',livestream:null},'aurora').live,'offline');
+});
+
+test('tile widths and audio mixing migrate safely into saved and shared layouts',()=>{
+  const {multiState,multiURL}=context.KickRefined;
+  const state=multiState({channels:['a','b'],mixAudio:true,sizes:{a:900,b:-1,evil:6}});
+  assert.equal(state.sizes.a,6);assert.equal(state.sizes.b,2);assert.equal(state.sizes.evil,undefined);
+  assert.equal(multiState({mixAudio:'true'}).mixAudio,false);
+  const url=new URL(multiURL(state));assert.equal(url.searchParams.get('immersion-mix'),'1');assert.deepEqual(JSON.parse(url.searchParams.get('immersion-tiles')),{a:6,b:2});
+});
+
 test('a delayed player obeys the latest pause and avoids repeated media setters', async () => {
   const source=await readFile(new URL('../extension/player-frame.js',import.meta.url),'utf8');
   let present=false,observer,muted=true,volume=1,mutations=0,plays=0,pauses=0;

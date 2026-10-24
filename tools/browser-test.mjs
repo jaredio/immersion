@@ -57,6 +57,11 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
   try {
     await context.route('https://kick.com/**', route => {
       if (route.request().url().includes('/__extension/')) return route.fallback();
+      if(new URL(route.request().url()).pathname.startsWith('/api/v2/channels/')){
+        const slug=new URL(route.request().url()).pathname.split('/').pop();
+        if(slug==='third')return route.fulfill({status:403,body:'Unavailable'});
+        return route.fulfill({json:{slug,user:{username:slug,bio:`About ${slug}`,twitter:`${slug}_live`,instagram:'https://evil.test/untrusted'},livestream:{is_live:true,session_title:`${slug} live session`,viewer_count:1428,categories:[{name:slug==='aurora'?'Music':'Just Chatting'}]}}});
+      }
       if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<html><body><div id="chatroom-messages">Native chat fixture</div></body></html>' });
       return route.fulfill({ contentType: 'text/html', body: fixture });
     });
@@ -153,7 +158,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     });
     assert.equal(searchGeometry.fits, true, 'Escape hint has its own space beside the focus highlight');
     assert.equal(searchGeometry.outline, 'none');
-    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] img').evaluate(el => getComputedStyle(el).outlineColor), 'rgb(184, 162, 255)');
+    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] img').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
     assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"]').evaluate(el => getComputedStyle(el).boxShadow), 'none');
     await search.fill('night');
     assert.equal(await palette.getByRole('option').count(), 1);
@@ -173,6 +178,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
 
     // Native sidebar dragging starts inline multiview, without navigation/reload.
     assert.equal(await page.locator('#kr-multi-root').count(), 0);
+    let originalTabTitle=await page.title();
     const source=page.locator('[data-testid="sidebar-following-channel-1"]');
     await source.dragTo(page.locator('main'), { targetPosition: { x:180,y:120 } });
     const multi = page.locator('#kr-multi-root .multiview');
@@ -185,6 +191,19 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.locator('.stream-info').isVisible(),false,'single-channel info is hidden in multiview');
     assert.equal(await page.locator('main .below').isVisible(),false,'the original channel bio panels are hidden');
     assert.equal(await multi.locator('.multi-summary-channel').count(),0);
+    await page.waitForFunction(()=>document.title.startsWith('Multistream:')&&document.title.includes('aurora')&&document.title.includes('nightshift'));
+    await page.evaluate(()=>{document.title='Updated original channel title';});
+    originalTabTitle='Updated original channel title';
+    await page.waitForFunction(()=>document.title.startsWith('Multistream:'));
+    await multi.locator('.multi-channel-card').filter({hasText:'aurora live session'}).waitFor();
+    await multi.getByRole('button',{name:'Preview aurora',exact:true}).hover();
+    await multi.locator('.multi-channel-preview:popover-open').waitFor();
+    assert.match(await multi.locator('.multi-channel-preview').textContent(),/1,428 viewers/);
+    assert.equal(await multi.locator('.preview-socials a').count(),1,'untrusted social URLs are excluded');
+    assert.equal(await multi.locator('.preview-socials a').getAttribute('href'),'https://x.com/aurora_live');
+    await page.mouse.move(1,1);await multi.locator('.multi-channel-preview:popover-open').waitFor({state:'hidden'});
+    assert.equal(await multi.locator('#multi-audio-source').count(),0);
+    for(const slug of ['aurora','nightshift'])for(const action of ['Remove','Fullscreen','Move left','Move right'])assert.equal(await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).isVisible(),true);
     assert.doesNotMatch(await multi.textContent(),/Watching together|Drag channels here to add streams/);
     await page.waitForFunction(()=>{
       const native=window.originalPlayer.getBoundingClientRect(),target=document.getElementById('kr-multi-root').shadowRoot.querySelector('[data-channel="nightshift"] .multi-player').getBoundingClientRect();
@@ -237,7 +256,15 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.waitForTimeout(180);
     assert.equal(await multi.getByRole('button',{name:'Listen to nightshift',exact:true}).getAttribute('aria-pressed'),'true');
     assert.ok(await auroraPlayer.evaluate(()=>window.controlMessages)<70,'audio switching stays bounded');
-    const streamAction=async(slug,action)=>{await multi.getByRole('button',{name:`Options for ${slug}`,exact:true}).click();await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).click();};
+    const streamAction=async(slug,action)=>{await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).click();};
+    await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
+    await multi.getByRole('button',{name:'Listen to aurora',exact:true}).click();
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),false,'mixing keeps native audio enabled');
+    await multi.locator('.multi-tile[data-channel="aurora"] .multi-audible').waitFor({state:'visible'});
+    await multi.getByRole('button',{name:'Mute all',exact:true}).click();
+    await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
+    await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
     await streamAction('aurora','Focus');
     await streamAction('aurora','Move left');
     assert.equal(await auroraPlayer.evaluate(() => window.playerSentinel), 71, 'layout and reordering do not reload players');
@@ -264,16 +291,23 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multi.getByRole('button',{name:'Show nightshift chat',exact:true}).click();
     assert.equal(await page.locator('#kr-multi-chat iframe').count(),0);
     assert.equal(await page.evaluate(()=>document.getElementById('channel-chatroom')===window.originalChat),true,'switching back preserves the native chat connection');
+    await multi.getByRole('combobox',{name:'Multiview layout'}).selectOption('grid');
+    const edge=multi.getByRole('separator',{name:'Resize aurora',exact:true}),edgeRect=await edge.boundingBox();
+    await page.mouse.move(edgeRect.x+6,edgeRect.y+6);await page.mouse.down();await page.mouse.move(edgeRect.x+150,edgeRect.y+6,{steps:8});await page.mouse.up();
+    assert.ok(Number(await featured.getAttribute('data-span'))>3,'dragging a tile edge changes its snapped grid width');
+    assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'resizing keeps the same player');
+    await multi.getByRole('combobox',{name:'Multiview layout'}).selectOption('focus');
     await multi.getByRole('textbox', { name: 'Layout name', exact: true }).fill('Evening duo');
     await multi.getByRole('button', { name: 'Save', exact: true }).click();
     await addStream('pixelgarden');
+    await page.waitForFunction(()=>document.title.includes('pixelgarden'));
     const geometry=await featured.evaluate(card=>{
       const header=card.querySelector('.multi-tile-header').getBoundingClientRect(),player=card.querySelector('.multi-player').getBoundingClientRect(),controls=card.querySelector('.multi-tile-controls').getBoundingClientRect();
       return {excess:card.getBoundingClientRect().height-header.height-player.height-controls.height,ratio:player.width/player.height};
     });
     assert.ok(geometry.excess<5,'a featured tile never stretches to the combined height of its neighbours');
     assert.ok(Math.abs(geometry.ratio-16/9)<.03,'video keeps its natural aspect ratio');
-    await page.screenshot({path:path.join(root,`artifacts/${engine}-focus-three-v7.png`)});
+    await page.screenshot({path:path.join(root,`artifacts/${engine}-focus-three-v8.png`)});
     await streamAction('nightshift','Focus');
     assert.equal(await multi.locator('.multi-tile[data-channel="nightshift"]').getAttribute('data-featured'),'true','native-player options can actually receive clicks');
     await streamAction('aurora','Focus');
@@ -283,16 +317,13 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       assert.equal(overflow,false,`three-stream player controls fit at ${width}px`);
     }
     await page.setViewportSize({width:1600,height:1000});
-    await multi.getByRole('button',{name:'Options for nightshift',exact:true}).click();
-    assert.equal(await multi.getByRole('button',{name:'Remove nightshift',exact:true}).isVisible(),true,'native player cannot cover the options popover');
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(()=>!document.querySelector('#kr-multi-root').shadowRoot.querySelector('.multi-action-menu:popover-open'));
     for (const slug of ['third','fourth','fifth']) await addStream(slug);
     await addStream('seventh');
     assert.equal(await multi.locator('.multi-tile').count(), 6);
     assert.equal(await multi.locator('.multi-player iframe').count(), 5);
     assert.match(await multi.locator('#multi-notice').textContent(), /Six streams/);
     await multi.getByRole('combobox', { name: 'Saved multiview sessions' }).selectOption('0');
+    await page.waitForFunction(()=>document.title.startsWith('Multistream:')&&!document.title.includes('pixelgarden'));
     assert.equal(await multi.locator('.multi-player iframe').count(), 1);
     assert.equal(await divider.getAttribute('aria-valuenow'),'72','session retains the custom split');
     for(const width of [1280,1024,820,390]) {
@@ -305,9 +336,10 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     }
     await page.setViewportSize({width:1600,height:1000});
     await multi.getByRole('button',{name:'Manage',exact:true}).click();
-    await page.screenshot({ path: path.join(root, `artifacts/${engine}-immersion-multiview-v7.png`) });
+    await page.screenshot({ path: path.join(root, `artifacts/${engine}-immersion-multiview-v8.png`) });
     await multi.getByRole('button', { name: 'Close multiview', exact: true }).click();
     await page.waitForFunction(() => !document.getElementById('kr-multi-root'));
+    assert.equal(await page.title(),originalTabTitle,'the original tab title returns after closing multistream');
     assert.equal(await page.evaluate(()=>document.getElementById('video-player')===window.originalVideo && getComputedStyle(window.originalPlayer).position==='relative'),true);
     assert.equal(await page.locator('.stream-info').isVisible(),true,'single-channel info returns on exit');
     assert.equal(await page.locator('main .below').isVisible(),true);
@@ -384,7 +416,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.7.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','popover actions over native video','no redundant banner or cards'] });
+    report.push({ engine, passed: true, version:'0.8.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','channel metadata and safe social previews','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } finally { await context.close(); if (browser) await browser.close(); }
 }

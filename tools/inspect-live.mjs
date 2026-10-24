@@ -74,14 +74,14 @@ try {
       });
       const controls=await page.evaluate(()=>{
         const root=document.getElementById('kr-multi-root').shadowRoot;
-        return {summaryCards:root.querySelectorAll('[data-summary-channel]').length,volumeSliders:root.querySelectorAll('input[type="range"]').length,
+        return {channelCards:root.querySelectorAll('.multi-channel-card').length,tabTitle:document.title,volumeSliders:root.querySelectorAll('input[type="range"]').length,
           playbackButtons:[...root.querySelectorAll('button')].filter(b=>/^(Play|Pause) /.test(b.getAttribute('aria-label')||'')).length,
           originalInfoHidden:[...document.querySelectorAll('main > [data-kr-single-info="true"]')].every(el=>getComputedStyle(el).display==='none')};
       });
       const layout={featuredSize:Number(await separator.getAttribute('aria-valuenow')),quietHidden,chatTabs:await workspace.locator('#multi-chat-tabs button').count()};
       console.log('INLINE MULTIVIEW',JSON.stringify({...metrics,...controls,...layout}));
-      await writeFile(path.join(root,'artifacts/live-inline-validation-v7.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
-      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v7.png')});
+      await writeFile(path.join(root,'artifacts/live-inline-validation-v8.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
+      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v8.png')});
       for(const width of [1280,1024,390]) {
         await page.setViewportSize({width,height:900});await page.waitForTimeout(600);
         console.log('Inline viewport',await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,active:!!document.getElementById('kr-multi-root')})));

@@ -10,7 +10,9 @@ A sleek dark theme and built-in multistream experience for Kick.
 - Modern sidebars, search, tooltips, and chat styling.
 - Alt+K channel switcher with profile pictures and live status.
 - Drag channels from the sidebar into multiview.
-- Resizable layouts, quick chat tabs, and compact player controls with an options menu.
+- Drag-to-resize layouts, quick chat tabs, and direct close, fullscreen, and reorder buttons.
+- Optional audio mixing with an indicator on each audible stream.
+- Channel cards with titles, categories, viewer counts, and social quick views.
 - Saved viewing sessions and a distraction-free Quiet view.
 
 ## Install
@@ -34,6 +36,10 @@ This unsigned development install lasts until Firefox restarts.
 ## Use
 
 Open **Immersion** at the bottom of Kick's sidebar for settings. Press **Alt+K** to switch channels, or drag a sidebar channel onto the stream to start multiview. Double-click a stream header to focus it; drag the divider to resize.
+
+Enable **Mix audio** to listen to several streams. Drag a tile's bottom-right corner to resize it; grid tiles snap into place. Hover or focus a channel card below the players for its quick view. The browser tab lists the open channels and restores its original title when multiview closes.
+
+Channel details load from Kick's public endpoint and are cached for one minute. If Kick blocks a request, available sidebar details remain visible. Social links appear only when supplied by Kick.
 
 To update, reload the extension and refresh Kick.
 

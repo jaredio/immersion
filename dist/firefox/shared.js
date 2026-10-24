@@ -39,16 +39,34 @@
   function multiState(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const channels = Array.isArray(source.channels) ? [...new Set(source.channels.filter(s => typeof s === 'string').map(s => channelSlug(`/${s}`)).filter(Boolean))].slice(0, 6) : [];
-    return { channels, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 67, quiet: source.quiet === true };
+    const sizes={};for(const slug of channels)if(Number.isFinite(source.sizes?.[slug]))sizes[slug]=Math.max(2,Math.min(6,Math.round(source.sizes[slug])));
+    return { channels, sizes, mixAudio:source.mixAudio===true, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 67, quiet: source.quiet === true };
   }
   function multiURL(input) {
     const state = multiState(input), url = new URL('https://kick.com/');
     url.searchParams.set('refined-multi', state.channels.join(',')); url.searchParams.set('refined-layout', state.layout);
     url.searchParams.set('refined-chat', state.chat); url.searchParams.set('refined-focus', state.focus);
     url.searchParams.set('immersion-size',state.focusSize);
+    if(state.mixAudio)url.searchParams.set('immersion-mix','1');
+    if(Object.keys(state.sizes).length)url.searchParams.set('immersion-tiles',JSON.stringify(state.sizes));
     if(state.quiet)url.searchParams.set('immersion-quiet','1');
     if (!state.chatVisible) url.searchParams.set('refined-hide-chat', '1');
     return url.href;
   }
-  globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, multiState, multiURL });
+  function channelDetails(data,slug){
+    if(!data||typeof data!=='object'||data.slug?.toLowerCase()!==slug)return null;
+    const text=value=>typeof value==='string'?value.trim().slice(0,600):'';
+    const user=data.user||{},stream=data.livestream,category=stream?.categories?.[0]?.name||data.recent_categories?.[0]?.name;
+    const socials=[];
+    const platforms={twitter:['X','https://x.com/',['x.com','twitter.com']],instagram:['Instagram','https://www.instagram.com/',['instagram.com']],youtube:['YouTube','https://www.youtube.com/@',['youtube.com','youtu.be']],discord:['Discord','https://discord.gg/',['discord.gg','discord.com']],tiktok:['TikTok','https://www.tiktok.com/@',['tiktok.com']],facebook:['Facebook','https://www.facebook.com/',['facebook.com']]};
+    for(const [key,[label,base,hosts]]of Object.entries(platforms)){
+      const value=text(user[key]);if(!value)continue;
+      try{const href=/^https?:\/\//i.test(value)?new URL(value):/^[\w.@-]{1,120}$/.test(value)?new URL(base+encodeURIComponent(value.replace(/^@/,''))):null;
+        if(href?.protocol==='https:'&&hosts.some(host=>href.hostname===host||href.hostname.endsWith('.'+host))&&!href.username&&!href.password)socials.push({label,href:href.href});
+      }catch{}
+    }
+    let image='';try{const url=new URL(user.profile_pic);if(url.protocol==='https:'&&url.hostname.endsWith('.kick.com'))image=url.href;}catch{}
+    return {title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:text(user.bio),category:text(category),live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',image,socials};
+  }
+  globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, multiState, multiURL, channelDetails });
 })();
