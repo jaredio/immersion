@@ -54,13 +54,18 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     });
     await context.route('https://kick.com/__extension/ui.css', route => route.fulfill({ contentType: 'text/css', path: path.join(root, 'extension/ui.css') }));
   }
+  let panelFetches=0;
   try {
+    await context.route('https://files.kick.com/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180"><rect width="640" height="180" fill="#263b45"/><text x="32" y="105" font-family="sans-serif" font-size="30" fill="#b8e8df">TEST CHANNEL PANEL</text></svg>'}));
     await context.route('https://kick.com/**', route => {
       if (route.request().url().includes('/__extension/')) return route.fallback();
+      if(/^\/api\/v1\/channels\/[^/]+\/links$/.test(new URL(route.request().url()).pathname)){
+        panelFetches++;return route.fulfill({json:[{title:'Studio',image:{url:'https://files.kick.com/test-panel.webp'},link:'https://example.com/studio',description:'# Welcome\n\n**Live music** and [studio updates](https://example.com).\n\n- Weekly sets\n- New tracks'},{title:'Info',description:'<p>Readable <strong>formatted text</strong></p><img src="javascript:alert(1)" onerror="window.badProfileMarkup=true"><script>window.badProfileMarkup=true</script><iframe src="https://evil.test"></iframe>'}]});
+      }
       if(new URL(route.request().url()).pathname.startsWith('/api/v2/channels/')){
         const slug=new URL(route.request().url()).pathname.split('/').pop();
         if(slug==='third')return route.fulfill({status:403,body:'Unavailable'});
-        return route.fulfill({json:{slug,user:{username:slug,bio:`About ${slug}`,twitter:`${slug}_live`,instagram:'https://evil.test/untrusted'},livestream:{is_live:true,session_title:`${slug} live session`,viewer_count:1428,categories:[{name:slug==='aurora'?'Music':'Just Chatting'}]}}});
+        return route.fulfill({json:{slug,user:{username:slug,bio:`**About ${slug}**\n\nLive sessions and new music.`,twitter:`${slug}_live`,instagram:'https://evil.test/untrusted'},livestream:{is_live:true,session_title:`${slug} live session`,viewer_count:1428,categories:[{name:slug==='aurora'?'Music':'Just Chatting'}]}}});
       }
       if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<html><body><div id="chatroom-messages">Native chat fixture</div></body></html>' });
       return route.fulfill({ contentType: 'text/html', body: fixture });
@@ -82,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'multiview.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -203,12 +208,21 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     originalTabTitle='Updated original channel title';
     await page.waitForFunction(()=>document.title.startsWith('Multistream:'));
     await multi.locator('.multi-channel-card').filter({hasText:'aurora live session'}).waitFor();
-    await multi.getByRole('button',{name:'Preview aurora',exact:true}).hover();
-    await multi.locator('.multi-channel-preview:popover-open').waitFor();
-    assert.match(await multi.locator('.multi-channel-preview').textContent(),/1,428 viewers/);
-    assert.equal(await multi.locator('.preview-socials a').count(),1,'untrusted social URLs are excluded');
-    assert.equal(await multi.locator('.preview-socials a').getAttribute('href'),'https://x.com/aurora_live');
-    await page.mouse.move(1,1);await multi.locator('.multi-channel-preview:popover-open').waitFor({state:'hidden'});
+    const detailsButton=multi.getByRole('button',{name:'Channel details for aurora',exact:true});
+    await detailsButton.hover();assert.equal(await multi.locator('.multi-expanded-profile').count(),0,'hover never opens the channel profile');
+    assert.equal(panelFetches,0,'panel images and descriptions are not fetched until expansion');
+    await detailsButton.click();const expanded=multi.getByRole('region',{name:'About aurora',exact:true});await expanded.waitFor();
+    await expanded.locator('.profile-panel').first().waitFor();assert.equal(panelFetches,1);
+    assert.match(await expanded.textContent(),/1,428 viewers/);
+    assert.equal(await expanded.locator('.profile-socials a').count(),2,'only the validated social and channel link render');
+    assert.equal(await expanded.getByRole('link',{name:'X',exact:true}).getAttribute('href'),'https://x.com/aurora_live');
+    assert.equal(await expanded.locator('.profile-bio strong').textContent(),'About aurora');
+    assert.equal(await expanded.locator('.profile-panel li').count(),2,'panel markdown lists are formatted');
+    assert.equal(await expanded.locator('script,iframe,[onerror]').count(),0,'publisher markup cannot introduce active content');
+    assert.equal(await page.evaluate(()=>window.badProfileMarkup),undefined);
+    await expanded.locator('.profile-panel img').first().waitFor();
+    await page.waitForTimeout(180);await expanded.screenshot({path:path.join(root,`artifacts/${engine}-expanded-profile-v10.png`)});
+    await detailsButton.click();assert.equal(await multi.locator('.multi-expanded-profile').count(),0);
     assert.equal(await multi.locator('#multi-audio-source').count(),0);
     for(const slug of ['aurora','nightshift'])for(const action of ['Remove','Fullscreen','Move left','Move right'])assert.equal(await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).isVisible(),true);
     assert.doesNotMatch(await multi.textContent(),/Watching together|Drag channels here to add streams/);
@@ -275,6 +289,9 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
     await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
     await streamAction('aurora','Focus');
+    assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora','focusing a stream follows its chat');
+    assert.equal(await multi.locator('.multi-channel-card').count(),1,'only the focused channel appears beneath the players');
+    assert.equal(await multi.locator('.multi-channel-card').getAttribute('data-channel'),'aurora');
     await streamAction('aurora','Move left');
     assert.equal(await auroraPlayer.evaluate(() => window.playerSentinel), 71, 'layout and reordering do not reload players');
     const featured=multi.locator('.multi-tile[data-channel="aurora"]');
@@ -290,6 +307,8 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('#multi-grid').getAttribute('data-layout'),'grid');
     await featured.locator('.multi-tile-header').dblclick({position:{x:12,y:12}});
     assert.equal(await multi.locator('#multi-grid').getAttribute('data-layout'),'focus');
+    assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora');
+    assert.equal(await multi.locator('.multi-channel-card').count(),1);
     const quiet=multi.getByRole('button',{name:'Quiet view',exact:true});await quiet.click();
     assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),false);
     assert.equal(await multi.getByRole('button',{name:'Listen to aurora',exact:true}).isVisible(),true);
@@ -316,7 +335,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     });
     assert.ok(geometry.excess<5,'a featured tile never stretches to the combined height of its neighbours');
     assert.ok(Math.abs(geometry.ratio-16/9)<.03,'video keeps its natural aspect ratio');
-    await page.screenshot({path:path.join(root,`artifacts/${engine}-focus-three-v8.png`)});
+    await page.screenshot({path:path.join(root,`artifacts/${engine}-focus-three-v10.png`)});
     await streamAction('nightshift','Focus');
     assert.equal(await multi.locator('.multi-tile[data-channel="nightshift"]').getAttribute('data-featured'),'true','native-player options can actually receive clicks');
     await streamAction('aurora','Focus');
@@ -345,7 +364,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     }
     await page.setViewportSize({width:1600,height:1000});
     await multi.getByRole('button',{name:'Manage',exact:true}).click();
-    await page.screenshot({ path: path.join(root, `artifacts/${engine}-immersion-multiview-v8.png`) });
+    await page.screenshot({ path: path.join(root, `artifacts/${engine}-immersion-multiview-v10.png`) });
     await multi.getByRole('button', { name: 'Close multiview', exact: true }).click();
     await page.waitForFunction(() => !document.getElementById('kr-multi-root'));
     assert.equal(await page.title(),originalTabTitle,'the original tab title returns after closing multistream');
@@ -424,7 +443,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.9.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','glass layout preview without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','channel metadata and safe social previews','tile edge resizing','tab title restoration','no redundant multistream banner'] });
+    report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','glass layout preview without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } finally { await context.close(); if (browser) await browser.close(); }
 }

@@ -6,14 +6,14 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const base = {
   manifest_version: 3,
   name: 'Immersion',
-  version: '0.9.0',
+  version: '0.10.0',
   description: 'A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.',
   permissions: ['storage'],
   icons: { 16: 'icons/16.png', 48: 'icons/48.png', 128: 'icons/128.png' },
   action: { default_title: 'Immersion', default_popup: 'popup.html', default_icon: { 16: 'icons/16.png', 48: 'icons/48.png' } },
   content_scripts: [
     { matches: ['https://kick.com/*', 'https://www.kick.com/*'], js: ['scroll.js'], run_at: 'document_start', world: 'MAIN', all_frames: true },
-    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'multiview.js', 'content.js'], run_at: 'document_idle' },
+    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'content.js'], run_at: 'document_idle' },
     { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
     { matches: ['https://player.kick.com/*'], js: ['player-frame.js'], run_at: 'document_start', all_frames: true }
   ],

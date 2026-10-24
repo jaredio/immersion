@@ -61,7 +61,18 @@ try {
       await page.locator('#kr-multi-root .inline-multi').waitFor({state:'visible'});
       await page.waitForTimeout(2000);
       const workspace=page.locator('#kr-multi-root');
-      await workspace.getByRole('combobox',{name:'Multiview layout'}).selectOption('focus');
+      await workspace.getByRole('button',{name:'Manage',exact:true}).click();
+      if(!await workspace.locator('.multi-tile[data-channel="adinross"]').count()){
+        await workspace.getByRole('combobox',{name:'Add channel to multiview'}).fill('adinross');await workspace.getByRole('button',{name:'Add stream',exact:true}).click();
+      }
+      await workspace.getByRole('button',{name:'Manage',exact:true}).click();
+      await workspace.getByRole('combobox',{name:'Multiview layout'}).selectOption('grid');
+      await workspace.getByRole('button',{name:'Focus adinross',exact:true}).click();
+      await workspace.getByRole('button',{name:'Channel details for adinross',exact:true}).click();
+      const profile=workspace.locator('.multi-expanded-profile');await profile.locator('.profile-panel img').first().waitFor({timeout:20000});
+      await profile.locator('.profile-identity').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(root,'artifacts/live-expanded-profile-v10.png')});
+      console.log('PROFILE',JSON.stringify({focusedCards:await workspace.locator('.multi-channel-card').count(),chat:await workspace.locator('#multi-chat-channel').inputValue(),panels:await profile.locator('.profile-panel').count(),images:await profile.locator('.profile-panel img').count()}));
+      await workspace.getByRole('button',{name:'Channel details for adinross',exact:true}).click();
       const separator=workspace.getByRole('separator',{name:'Resize featured stream'}),rect=await separator.boundingBox();
       await page.mouse.move(rect.x+rect.width/2,rect.y+30);await page.mouse.down();await page.mouse.move(rect.x-70,rect.y+30,{steps:8});await page.mouse.up();
       await workspace.getByRole('button',{name:'Quiet view',exact:true}).click();
@@ -82,8 +93,8 @@ try {
       });
       const layout={featuredSize:Number(await separator.getAttribute('aria-valuenow')),quietHidden,chatTabs:await workspace.locator('#multi-chat-tabs button').count()};
       console.log('INLINE MULTIVIEW',JSON.stringify({...metrics,...controls,...layout}));
-      await writeFile(path.join(root,'artifacts/live-inline-validation-v9.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
-      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v9.png')});
+      await writeFile(path.join(root,'artifacts/live-inline-validation-v10.json'),JSON.stringify({...metrics,...controls,...layout},null,2));
+      await page.screenshot({path:path.join(root,'artifacts/live-immersion-multiview-v10.png')});
       for(const width of [1280,1024,390]) {
         await page.setViewportSize({width,height:900});await page.waitForTimeout(600);
         console.log('Inline viewport',await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,active:!!document.getElementById('kr-multi-root')})));

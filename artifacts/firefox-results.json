@@ -2,7 +2,7 @@
   {
     "engine": "firefox",
     "passed": true,
-    "version": "0.9.0",
+    "version": "0.10.0",
     "mode": "Firefox engine with extension API shim",
     "checks": [
       "sidebar drag/drop",
@@ -21,7 +21,9 @@
       "natural video height with three streams",
       "direct close/fullscreen/reorder actions",
       "multiple audio sources",
-      "channel metadata and safe social previews",
+      "click-expanded formatted profiles and safe image panels",
+      "focus follows chat",
+      "focused-only channel summary",
       "tile edge resizing",
       "tab title restoration",
       "no redundant multistream banner"
