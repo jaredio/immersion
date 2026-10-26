@@ -1,6 +1,7 @@
 /* Second design pass. Keep native button sizes, event handlers, tooltips and cards. */
 #kr-multi-root { display:block;position:relative;flex:0 0 auto;width:100%;min-width:0; }
-main[data-kr-multi-active="true"] > [data-kr-single-info="true"] { display:none !important; }
+/* Native popup portals can mount under main alongside the channel panels. */
+main[data-kr-multi-active="true"] > [data-kr-single-info="true"]:not(:is(#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal])):not(:has(:is(#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal]))) { display:none !important; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-kr-dragging="true"] { opacity:.5; }
 html[data-kr-enabled="true"] body button:not(:is(#chatroom-messages button,[data-testid^="video-player-"],[data-testid^="ad-"])) {
   border-radius: 8px;

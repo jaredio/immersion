@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,16 +13,19 @@ const base = {
   action: { default_title: 'Immersion', default_popup: 'popup.html', default_icon: { 16: 'icons/16.png', 48: 'icons/48.png' } },
   content_scripts: [
     { matches: ['https://kick.com/*', 'https://www.kick.com/*'], js: ['scroll.js'], run_at: 'document_start', world: 'MAIN', all_frames: true },
-    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'content.js'], run_at: 'document_idle' },
-    { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
+    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'content.js'], run_at: 'document_idle' },
+    { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'chat-clips.js', 'clip-bridge.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
     { matches: ['https://player.kick.com/*'], js: ['player-frame.js'], run_at: 'document_start', all_frames: true }
   ],
-  web_accessible_resources: [{ resources: ['ui.css'], matches: ['https://kick.com/*', 'https://www.kick.com/*'] }],
+  web_accessible_resources: [{ resources: ['ui.css', 'vendor/hls.light.mjs'], matches: ['https://kick.com/*', 'https://www.kick.com/*'] }],
   content_security_policy: { extension_pages: "script-src 'self'; object-src 'none'" }
 };
 for (const target of ['chrome', 'firefox']) {
   const out = path.join(root, 'dist', target);
   await mkdir(path.join(out, 'icons'), { recursive: true });
+  await mkdir(path.join(out, 'vendor'), { recursive: true });
+  await copyFile(path.join(root,'node_modules/hls.js/dist/hls.light.mjs'),path.join(out,'vendor/hls.light.mjs'));
+  await copyFile(path.join(root,'node_modules/hls.js/LICENSE'),path.join(out,'vendor/hls-LICENSE.txt'));
   for (const entry of await readdir(path.join(root, 'extension'), { withFileTypes: true })) {
     if (entry.isFile()) await copyFile(path.join(root, 'extension', entry.name), path.join(out, entry.name));
   }
@@ -36,7 +39,7 @@ for (const target of ['chrome', 'firefox']) {
   await writeFile(path.join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`Built dist/${target}`);
 }
-// Keep the build dependency-free; Python's standard library creates distributable ZIPs.
+// Python's standard library creates the ZIPs without extra packaging dependencies.
 const { spawnSync } = await import('node:child_process');
 const zip = spawnSync('python', [path.join(root, 'tools', 'package.py')], { cwd: root, encoding: 'utf8' });
 if (zip.status !== 0) throw new Error(zip.stderr || 'ZIP packaging failed');

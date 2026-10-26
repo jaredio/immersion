@@ -46,6 +46,8 @@
         "ui.js",
         "profile.js",
         "multiview.js",
+        "chat-clips.js",
+        "clip-bridge.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -61,6 +63,8 @@
       ],
       "js": [
         "shared.js",
+        "chat-clips.js",
+        "clip-bridge.js",
         "chat-frame.js"
       ],
       "run_at": "document_idle",
@@ -80,7 +84,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "ui.css"
+        "ui.css",
+        "vendor/hls.light.mjs"
       ],
       "matches": [
         "https://kick.com/*",

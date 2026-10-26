@@ -1,4 +1,4 @@
-import playwright from './playwright.mjs';
+import playwright from 'playwright';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -67,7 +67,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
         if(slug==='third')return route.fulfill({status:403,body:'Unavailable'});
         return route.fulfill({json:{slug,user:{username:slug,bio:`**About ${slug}**\n\nLive sessions and new music.`,twitter:`${slug}_live`,instagram:'https://evil.test/untrusted'},livestream:{is_live:true,session_title:`${slug} live session`,viewer_count:1428,categories:[{name:slug==='aurora'?'Music':'Just Chatting'}]}}});
       }
-      if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<html><body><div id="chatroom-messages">Native chat fixture</div></body></html>' });
+      if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body style="margin:0;background:#101014;color:#eee;font:13px system-ui"><div id="chatroom-messages">Native chat fixture <button id="frame-username">fixture-user</button></div><div id="user-identity" role="dialog" hidden style="position:fixed;top:40px;right:0;padding:16px;background:#24242c"><strong>fixture-user</strong><button id="frame-reply">Reply</button><button id="frame-close">Close user card</button></div><script>window.frameReplies=0;document.getElementById("frame-username").onclick=()=>document.getElementById("user-identity").hidden=false;document.getElementById("frame-reply").onclick=()=>window.frameReplies++;document.getElementById("frame-close").onclick=()=>document.getElementById("user-identity").hidden=true;</script></body></html>' });
       return route.fulfill({ contentType: 'text/html', body: fixture });
     });
     await context.route('https://player.kick.com/**', route => route.fulfill({ contentType: 'text/html', body: `<html><body style="margin:0;background:#0b0b0e;color:#858592;display:grid;place-items:center;font:12px system-ui"><div>Kick player fixture · silent local audio</div><video src="${mediaFixture}" loop autoplay muted playsinline style="width:1px;height:1px;position:absolute;opacity:0"></video><script>
@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -189,7 +189,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.locator('#kr-multi-root').count(),0,'preview does not activate or load multiview');
     assert.equal(await dragPreview.locator('.preview-tile,.multi-header,.multi-grid').count(),0,'dragging does not clone a fake workspace');
     assert.equal(await dragPreview.locator('.stream-drop-zone[data-allowed="true"]').count(),1);
-    assert.match(await dragPreview.locator('.stream-drop-cue').textContent(),/Drop to start multistream/);
+    assert.equal(await dragPreview.locator('.stream-drop-zone').textContent(),'','stream dragging uses a border without instructional captions');
     assert.equal(await dragPreview.locator('iframe,video').count(),0,'dragging never creates media players');
     assert.equal(await dragPreview.locator('.stream-drop-zone').evaluate(el=>getComputedStyle(el).backdropFilter),'none','dragging does not blur the playing stream');
     assert.equal(await page.locator('#kr-drag-chip').isVisible(),true);
@@ -204,6 +204,20 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.evaluate(()=>document.getElementById('video-player')===window.originalVideo && window.originalVideo.parentElement===window.originalPlayer),true);
     assert.equal(await page.locator('.stream-info').isVisible(),false,'single-channel info is hidden in multiview');
     assert.equal(await page.locator('main .below').isVisible(),false,'the original channel bio panels are hidden');
+    await page.locator('#chatroom-messages button[data-prevent-expand]').click();
+    await page.waitForTimeout(220);
+    await page.locator('#user-identity').waitFor({state:'visible',timeout:2000});
+    await page.locator('#fixture-card-reply').click();
+    assert.equal(await page.evaluate(()=>window.nativeCardActions.at(-1)),'reply','native username cards work during multiview');
+    await page.getByRole('button',{name:'Close user card'}).click();
+    await page.evaluate(()=>{const portal=document.createElement('div');portal.id='fixture-late-user-portal';document.querySelector('main').append(portal);});
+    await page.waitForFunction(()=>document.getElementById('fixture-late-user-portal').dataset.krSingleInfo==='true');
+    const lateDisplay=await page.evaluate(()=>{const portal=document.getElementById('fixture-late-user-portal');portal.append(document.getElementById('user-identity'));document.querySelector('#chatroom-messages button[data-prevent-expand]').click();return getComputedStyle(portal).display;});
+    assert.notEqual(lateDisplay,'none','a newly mounted user card is immediately visible before the next refresh');
+    await page.waitForFunction(()=>!document.getElementById('fixture-late-user-portal').hasAttribute('data-kr-single-info'));
+    await page.locator('#fixture-card-mute').click();
+    assert.equal(await page.evaluate(()=>window.nativeCardActions.at(-1)),'mute');
+    await page.getByRole('button',{name:'Close user card'}).click();
     assert.equal(await multi.locator('.multi-summary-channel').count(),0);
     await page.waitForFunction(()=>document.title.startsWith('Multistream:')&&document.title.includes('aurora')&&document.title.includes('nightshift'));
     await page.evaluate(()=>{document.title='Updated original channel title';});
@@ -241,7 +255,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await source.dispatchEvent('dragstart',{dataTransfer:transfer});
     await page.locator('#kr-multi-drop').waitFor();
     assert.equal(await page.locator('#kr-multi-drop .stream-drop-zone').getAttribute('data-allowed'),'false','duplicate streams are rejected before dropping');
-    assert.match(await page.locator('#kr-multi-drop .stream-drop-cue').textContent(),/Already in this workspace/);
+    assert.match(await page.locator('#kr-multi-drop .stream-drop-zone').getAttribute('aria-label'),/Already in this workspace/);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#kr-multi-drop').count(),0,'canceling a drag removes its drop target');
     assert.equal(await page.locator('#kr-drag-chip').count(),0,'canceling also removes the custom drag card');
@@ -332,6 +346,12 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'hiding and showing settings retains the player');
     await multi.getByRole('button', { name: 'Show aurora chat', exact: true }).click();
     assert.match(await page.locator('#kr-multi-chat iframe').getAttribute('src'), /\/popout\/aurora\/chat$/);
+    const switchedChat=page.frameLocator('#kr-multi-chat iframe');
+    await switchedChat.getByRole('button',{name:'fixture-user',exact:true}).click();
+    await switchedChat.locator('#user-identity').waitFor({state:'visible'});
+    await switchedChat.getByRole('button',{name:'Reply',exact:true}).click();
+    assert.equal(await switchedChat.locator('body').evaluate(()=>window.frameReplies),1,'username cards remain interactive in switched chat');
+    await switchedChat.getByRole('button',{name:'Close user card',exact:true}).click();
     await multi.getByRole('button',{name:'Show nightshift chat',exact:true}).click();
     assert.equal(await page.locator('#kr-multi-chat iframe').count(),0);
     assert.equal(await page.evaluate(()=>document.getElementById('channel-chatroom')===window.originalChat),true,'switching back preserves the native chat connection');
@@ -365,7 +385,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await addStream('seventh');
     assert.equal(await multi.locator('.multi-tile').count(), 6);
     assert.equal(await multi.locator('.multi-player iframe').count(), 5);
-    assert.match(await multi.locator('#multi-notice').textContent(), /Six streams/);
+    assert.match(await multi.locator('#multi-notice').textContent(), /Six tiles/);
     await multi.getByRole('combobox', { name: 'Saved multiview sessions' }).selectOption('0');
     await page.waitForFunction(()=>document.title.startsWith('Multistream:')&&!document.title.includes('pixelgarden'));
     assert.equal(await multi.locator('.multi-player iframe').count(), 1);

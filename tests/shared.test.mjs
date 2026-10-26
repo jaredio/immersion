@@ -77,12 +77,11 @@ test('shared multiview links carry only validated workspace settings on Kick', (
 test('Immersion layout preferences migrate safely and share only bounded sizes', () => {
   const {multiState,multiURL}=context.KickRefined;
   assert.equal(multiState({channels:['a','b']}).focusSize,67);
-  assert.equal(multiState({focusSize:Infinity,quiet:'true'}).quiet,false);
+  assert.equal(multiState({focusSize:Infinity}).focusSize,67);
   assert.equal(multiState({focusSize:900}).focusSize,80);
   assert.equal(multiState({focusSize:-900}).focusSize,45);
-  const url=new URL(multiURL({channels:['a','b'],focusSize:72,quiet:true}));
+  const url=new URL(multiURL({channels:['a','b'],focusSize:72}));
   assert.equal(url.searchParams.get('immersion-size'),'72');
-  assert.equal(url.searchParams.get('immersion-quiet'),'1');
 });
 
 test('player audio bridge rejects unrelated frames and untrusted commands', async () => {

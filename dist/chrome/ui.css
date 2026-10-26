@@ -179,7 +179,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 #multi-chat-tabs span { max-width:115px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .multi-chat-bar > label, #multi-chat-channel { display:none; }
 #multi-chat-toggle { flex-shrink:0; }
-.inline-multi[data-quiet="true"] :is(.multi-tile-identity span,.live-status) { display:none; }
 .multi-tile-header { user-select:none; }
 .multi-options[hidden] { display:none; }
 .inline-multi .multi-tools { padding:8px 12px; }
@@ -275,7 +274,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-channel-card strong { color:#e5e5ee;font-weight:550;font-size:11px; }
 .multi-channel-card span { color:#b0b0be;font-size:10px; }
 .multi-channel-card small { color:#777785;font-size:9px; }
-.inline-multi[data-quiet="true"] .multi-directory { display:none; }
 @container(max-width:300px) {
   .multi-tile-header .live-status { display:none; }
   .inline-multi .multi-tile-controls { gap:1px; }
@@ -294,21 +292,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-audible svg { display:block;width:15px;height:15px; }
 
 /* A quiet drop affordance keeps the actual stream visible during a drag. */
-.stream-drop-zone { position:absolute;inset:6px;pointer-events:none;border:1px solid #ffffff24;border-radius:12px;background:transparent;transition:border-color 120ms; }
-.stream-drop-zone[data-over="true"][data-allowed="true"] { border-color:var(--accent); }
-.stream-drop-cue { position:absolute;left:50%;top:24px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100% - 24px);padding:13px 16px;border:1px solid #ffffff20;border-radius:11px;background:#18181e;color:#d8d8e2;box-shadow:0 6px 20px #0004;animation:drop-cue-in 120ms ease-out; }
-.stream-drop-cue > .multi-icon { width:22px;height:22px;color:var(--accent); }
-.stream-drop-cue > div { display:flex;flex-direction:column;gap:4px;min-width:0; }
-.stream-drop-cue strong { font-size:13px;line-height:1.4;font-weight:550; }
-.stream-drop-cue span { font-size:11px;line-height:1.4;color:#9999aa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.stream-drop-zone[data-allowed="false"] .multi-icon { color:#a4a4b1; }
-.drag-channel-chip { display:flex;align-items:center;gap:9px;width:200px;padding:9px 11px;border:1px solid #ffffff24;border-radius:9px;background:#1c1c23;box-shadow:0 4px 12px #0004; }
+.stream-drop-zone { position:absolute;inset:6px;pointer-events:none;border:1px solid #ffffff14;border-radius:12px;background:transparent;transition:border-color 140ms,background 140ms,box-shadow 140ms; }
+.stream-drop-zone[data-over="true"][data-allowed="true"] { border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 1%,transparent);box-shadow:inset 0 0 16px color-mix(in srgb,var(--accent) 4%,transparent),0 0 6px color-mix(in srgb,var(--accent) 3%,transparent); }
+.stream-drop-zone[data-allowed="false"] { border-color:#ffffff16; }
+.drag-channel-chip { display:flex;align-items:center;gap:9px;width:max-content;max-width:200px;padding:8px 10px;border:1px solid #ffffff24;border-radius:9px;background:#1c1c23;box-shadow:0 4px 12px #0004; }
 .drag-channel-chip img { width:28px;height:28px;object-fit:cover;border-radius:50%; }
 .drag-channel-chip > div { display:flex;flex-direction:column;gap:4px;min-width:0; }
 .drag-channel-chip strong { font-size:12px;color:#f0f0f6;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.drag-channel-chip span { font-size:10px;color:#9999a8; }
-@keyframes drop-cue-in { from { opacity:0;translate:0 -3px; } to { opacity:1;translate:0 0; } }
-@media(prefers-reduced-motion:reduce) { .stream-drop-cue { animation:none; } .stream-drop-zone { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .stream-drop-zone { transition:none; } }
 
 /* The selected channel opens in place; secondary streams stay in the rail. */
 .multi-directory[data-focused="true"] #multi-channel-list { grid-template-columns:minmax(0,1fr); }
@@ -416,3 +407,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .inline-multi :is(.multi-header,.multi-chat-bar,.multi-options) button[title] { position:relative; }
 .inline-multi :is(.multi-header,.multi-chat-bar,.multi-options) button[title]::after { content:attr(title);position:absolute;top:calc(100% + 9px);right:0;z-index:20;max-width:230px;width:max-content;padding:7px 10px;border:1px solid #ffffff20;border-radius:7px;background:#24242c;color:#eeeef5;font-size:11px;font-weight:450;line-height:1.4;box-shadow:0 5px 18px #0006;pointer-events:none;opacity:0;visibility:hidden; }
 .inline-multi :is(.multi-header,.multi-chat-bar,.multi-options) button[title]:is(:hover,:focus-visible)::after { opacity:1;visibility:visible;transition:opacity 100ms 250ms; }
+
+.clip-drop-targets{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0;pointer-events:auto}
+.clip-drop-choice{min-width:0;border:0;background:transparent}
+.multi-clip-player{width:100%;min-width:0}.multi-clip-badge{flex-shrink:0;font-size:9px;letter-spacing:.04em;color:var(--accent);padding:4px 6px;border:1px solid #ffffff14;border-radius:5px;white-space:nowrap}
+.multi-clip-tile .multi-tile-header>button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;padding:5px;background:transparent;border-color:transparent}
+.multi-clip-tile .multi-tile-header{position:relative;padding-right:44px}
+.multi-clip-tile .multi-tile-header>button:last-child{position:absolute;top:8px;right:8px}
+.inline-multi{position:relative}
+.inline-multi .multi-header{padding-right:64px}
+.inline-multi .multi-workspace-close{position:absolute;top:8px;right:16px;z-index:6;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;min-width:36px;padding:8px;margin:0;background:#ffffff05;border:1px solid #ffffff14;border-radius:9px}
+.inline-multi .multi-workspace-close:hover{background:#ffffff10;border-color:#ffffff30}
+.inline-multi[data-toolbar-hidden="true"] .multi-chat-bar{padding-right:64px}
+@container(max-width:320px){.multi-clip-tile .multi-tile-header{flex-wrap:wrap}.multi-clip-tile .multi-tile-identity{flex-basis:100%}}

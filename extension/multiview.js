@@ -9,7 +9,7 @@
       chat:'M21 4H3v13h5l4 4 4-4h5z', add:'M12 5v14M5 12h14', save:'M4 3h13l4 4v14H3V3zM7 3v6h10V3M7 21v-8h10v8',
       trash:'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7', link:'m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 12a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-1 1',
       play:'m8 5 11 7-11 7z', pause:'M8 5v14M16 5v14', focus:'M3 4h18v16H3zM15 4v16', grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
-      left:'m10 6-6 6 6 6M4 12h16', right:'m14 6 6 6-6 6M4 12h16', close:'m6 6 12 12M18 6 6 18'
+      left:'m10 6-6 6 6 6M4 12h16', right:'m14 6 6 6-6 6M4 12h16', close:'m6 6 12 12M18 6 6 18', pop:'M8 3h13v13H8zM3 8v13h13v-5M8 7h13'
     };
     const icon = name => `<svg class="multi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${iconPaths[name]}"/></svg>`;
     function decorate(button, symbol, label, iconOnly=false) {
@@ -29,10 +29,11 @@
       <div id="multi-notice" class="multi-notice" role="status"></div><div class="multi-body"><div id="multi-grid" class="multi-grid"></div><aside class="multi-chat"><div class="multi-chat-mount"></div></aside></div>`;
     shadow.append(panel);
     const directory=document.createElement('section');directory.className='multi-directory';directory.setAttribute('aria-label','Open stream channels');directory.innerHTML='<div id="multi-channel-list"></div>';panel.append(directory);
-    for(const [selector,symbol] of [['#multi-mix','mix'],['#multi-manage','manage'],['#multi-mute','mute'],['#multi-fullscreen','fullscreen'],['.multi-exit','single'],['#multi-add-form button','add'],['#multi-save','save'],['#multi-delete','trash'],['#multi-share','link']]) {
+    for(const [selector,symbol] of [['#multi-mix','mix'],['#multi-manage','manage'],['#multi-mute','mute'],['#multi-fullscreen','fullscreen'],['.multi-exit','close'],['#multi-add-form button','add'],['#multi-save','save'],['#multi-delete','trash'],['#multi-share','link']]) {
       const button=panel.querySelector(selector),label=button.getAttribute('aria-label')||button.textContent;
       decorate(button,symbol,label,true);
     }
+    const workspaceClose=panel.querySelector('.multi-exit');workspaceClose.classList.add('multi-workspace-close');workspaceClose.title='Close workspace';panel.prepend(workspaceClose);
     const layoutLabel=panel.querySelector('.multi-layout-label');
     layoutLabel.firstChild.remove();layoutLabel.querySelector('select').title='Change multistream layout';
     const chatTabs=document.createElement('div');chatTabs.id='multi-chat-tabs';chatTabs.setAttribute('aria-label','Switch stream chat');
@@ -51,8 +52,15 @@
     let state = multiState(), sessions = [], audio = new Set(), active = false, destroyed = false, context = null, native = null, toolbarHidden = false;
     let chatFrame = null, chatOverlay = null, writes = Promise.resolve(), layoutFrame = 0, catalog = new Map();
     const tiles = new Map(), paused = new Set(), nativeWired = new WeakSet(), restored = [];
+    const clipTiles=new Map();let clipFocus='',clipReturn=null,retainedChat='';
+    const focusKey=()=>clipFocus||state.focus;
+    const tileCount=()=>state.channels.length+clipTiles.size;
+    function selectedChat(){return clipTiles.size?retainedChat||state.chat:state.chat;}
+    function chatChannels(){return [...new Set([...state.channels,...(clipTiles.size&&retainedChat?[retainedChat]:[])])];}
+    function discardClips(){for(const [key,tile]of clipTiles){resize.unobserve(tile.player);tile.item.release();tile.card.remove();audio.delete(key);}clipTiles.clear();clipFocus='';clipReturn=null;retainedChat='';}
     const audioSession=crypto.randomUUID();let controlRevision=0,nativeStatusFrame=0;
     const hiddenInfo=new Map();let mainMarker=null,resizing=null,resizeOwner=divider;
+    const nativeOverlaySelector='#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal]';
     const detailsCache=new Map(),detailsPending=new Set(),detailsControllers=new Set();let detailsQueue=Promise.resolve(),expandedChannel='';const panelCache=new Map(),panelRequests=new Set();
     const resize = new ResizeObserver(() => schedulePosition());
     const loaded = api.storage.local.get(['multiview','multiSessions','multiToolbarHidden']).then(data => {
@@ -109,13 +117,18 @@
       if(mainMarker===null)mainMarker={value:context.main.getAttribute('data-kr-multi-active')};
       context.main.dataset.krMultiActive='true';
       for(const child of context.main.children){
+        if(child.matches(nativeOverlaySelector)||child.querySelector(nativeOverlaySelector)){restoreInfoChild(child);continue;}
         if(child===host||child===context.player||child.matches('script,style,link'))continue;
         if(!hiddenInfo.has(child))hiddenInfo.set(child,child.getAttribute('data-kr-single-info'));
         if(child.dataset.krSingleInfo!=='true')child.dataset.krSingleInfo='true';
       }
     }
+    function restoreInfoChild(child){
+      if(!hiddenInfo.has(child))return;const value=hiddenInfo.get(child);
+      if(value===null)child.removeAttribute('data-kr-single-info');else child.setAttribute('data-kr-single-info',value);hiddenInfo.delete(child);
+    }
     function restoreChannelInfo(){
-      for(const [child,value]of hiddenInfo){if(value===null)child.removeAttribute('data-kr-single-info');else child.setAttribute('data-kr-single-info',value);}hiddenInfo.clear();
+      for(const child of hiddenInfo.keys())restoreInfoChild(child);
       if(context?.main&&mainMarker){if(mainMarker.value===null)context.main.removeAttribute('data-kr-multi-active');else context.main.setAttribute('data-kr-multi-active',mainMarker.value);}mainMarker=null;
     }
     let singleTitle='',multiTitle='';
@@ -123,7 +136,12 @@
     function updateAudioLabel(){
       $('#multi-mix').setAttribute('aria-pressed',String(state.mixAudio));
     }
-    function updateTabTitle(){multiTitle=`Multistream: ${state.channels.map(s=>catalog.get(s)?.title||s).join(' + ')} | Immersion`;if(document.title!==multiTitle)document.title=multiTitle;}
+    function updateTabTitle(){
+      // document.title collapses whitespace. Compare the same normalized string
+      // so an empty stream list cannot cause an endless mutation-observer loop.
+      multiTitle=(state.channels.length?`Multistream: ${state.channels.map(s=>catalog.get(s)?.title||s).join(' + ')} | Immersion`:'Clip workspace | Immersion').replace(/\s+/g,' ').trim();
+      if(document.title!==multiTitle)document.title=multiTitle;
+    }
     function requestDetails(slug){
       if(detailsPending.has(slug)||Date.now()-(detailsCache.get(slug)?.time||0)<60000)return;
       detailsPending.add(slug);
@@ -201,7 +219,7 @@
       layoutFrame=0;
       if(active){
         // Explicit rail rows pack secondary tiles without moving their frames.
-        const grid=$('#multi-grid'),rail=[...tiles.values()].filter(tile=>tile.slug!==state.focus),featured=tiles.get(state.focus);
+        const grid=$('#multi-grid'),all=new Map([...tiles,...clipTiles]),rail=[...all.values()].filter(tile=>tile.slug!==focusKey()),featured=all.get(focusKey());
         let rows='',minimum='';
         if(state.layout==='focus'&&stage.clientWidth>640&&innerWidth>900&&rail.length&&featured){
           const heights=rail.map(tile=>Math.ceil(tile.card.getBoundingClientRect().height));rows=heights.map(height=>`${height}px`).join(' ');
@@ -264,7 +282,9 @@
       syncAudio();if(enable&&tile)command(tile,false,{action:'play'});
     }
     function focusStream(slug){
-      state.layout=state.layout==='focus'&&state.focus===slug?'grid':'focus';state.focus=slug;state.chat=slug;state.chatVisible=true;expandedChannel='';render();persist();
+      const featured=!clipFocus&&state.layout==='focus'&&state.focus===slug;clipFocus='';
+      if(clipTiles.size)retainedChat=slug;
+      state.layout=featured?'grid':'focus';state.focus=slug;state.chat=slug;state.chatVisible=true;expandedChannel='';render();persist();
     }
     function applySizing(){
       $('#multi-grid').style.setProperty('--multi-featured',`${state.focusSize}%`);
@@ -274,9 +294,9 @@
     }
     function applyTileSizes(){
       for(const [slug,tile]of tiles){
-        const span=state.sizes[slug]||(state.channels.length===1?6:state.channels.length<=4?3:2);
+        const span=state.sizes[slug]||(tileCount()===1?6:tileCount()<=4?3:2);
         tile.card.style.setProperty('--tile-span',span);tile.card.dataset.span=String(span);
-        const focused=state.layout==='focus',featured=slug===state.focus;
+        const focused=state.layout==='focus',featured=slug===focusKey();
         tile.edge?.setAttribute('aria-valuemin',String(focused?(featured?45:20):2));tile.edge?.setAttribute('aria-valuemax',String(focused?(featured?80:55):6));
         tile.edge?.setAttribute('aria-valuenow',String(focused?(featured?state.focusSize:100-state.focusSize):span));
       }
@@ -285,6 +305,7 @@
     function beginResize(element,event){if(event.button!==0)return false;finishResize();event.preventDefault();resizing=event.pointerId;resizeOwner=element;element.setPointerCapture(event.pointerId);stage.dataset.resizing='true';schedulePosition();return true;}
     function syncAudio() {
       for(const [slug,tile] of tiles) { command(tile,!audio.has(slug));updateControls(tile); }
+      for(const [key,tile]of clipTiles){tile.item.setMuted(!audio.has(key));tile.card.dataset.audio=String(audio.has(key));tile.listen.setAttribute('aria-pressed',String(audio.has(key)));}
       if(context?.player&&!state.channels.includes(context.slug)) { const video=nativeVideo(); if(video&&!video.muted)video.muted=true; }
       updateAudioLabel();
     }
@@ -301,7 +322,7 @@
       const slug=canonical(input);
       if(!slug) { notice('Enter a channel name or a Kick channel URL.'); return false; }
       if(state.channels.includes(slug)) { notice(`${catalog.get(slug)?.title||slug} is already here.`); return false; }
-      if(state.channels.length>=6) { notice('Six streams are open. Remove one before adding another.'); return false; }
+      if(tileCount()>=6) { notice('Six tiles are open. Remove one before adding another.'); return false; }
       state.channels.push(slug); state=multiState(state); notice(); render(); persist(); return true;
     }
     function makeTile(slug) {
@@ -342,6 +363,7 @@
         state.channels=state.channels.filter(s=>s!==slug);state=multiState(state);paused.delete(slug);audio.delete(slug);
         if(isNative(slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}
         persist();
+        if(clipTiles.size){if(!state.channels.includes(state.chat))state.chat=state.channels[0]||'';render();return;}
         if(state.channels.length===1 && state.channels[0]!==context.slug) {
           const remaining=state.channels[0],link=getChannels().find(c=>c.slug===remaining)?.link;
           close({restorePlayback:false});if(link?.isConnected)link.click();else location.assign(`/${remaining}`);
@@ -353,7 +375,7 @@
       edge.addEventListener('pointermove',event=>{
         if(resizing!==event.pointerId||resizeOwner!==edge)return;
         const width=gridElement.getBoundingClientRect().width,desired=dragWidth+event.clientX-dragStart;
-        if(state.layout==='focus'){state.focusSize=Math.max(45,Math.min(80,Math.round((slug===state.focus?desired:width-desired)/width*100)));applySizing();}
+        if(state.layout==='focus'){state.focusSize=Math.max(45,Math.min(80,Math.round((slug===focusKey()?desired:width-desired)/width*100)));applySizing();}
         else {state.layout='grid';gridElement.dataset.layout='grid';stage.dataset.layout='grid';$('#multi-layout').value='grid';state.sizes[slug]=Math.max(2,Math.min(6,Math.round(desired/width*6)));applyTileSizes();}
       });
       for(const type of ['pointerup','pointercancel','lostpointercapture'])edge.addEventListener(type,finishResize);
@@ -368,42 +390,43 @@
       return chatOverlay;
     }
     function renderChat() {
-      const useNative=!!context.chat,original=state.chat===context.slug;panel.dataset.nativeChat=String(useNative);
-      $('.multi-chat').hidden=useNative||!state.chatVisible||!state.chat;
+      const chat=selectedChat(),useNative=!!context.chat,original=chat===context.slug;panel.dataset.nativeChat=String(useNative);
+      $('.multi-chat').hidden=useNative||!state.chatVisible||!chat;
       if(useNative){
         const prior=restored.find(s=>s.element===context.branch&&s.property==='display');
         style(context.branch,'display',state.chatVisible?(prior?.value??context.branch.style.getPropertyValue('display')):'none');
         style(context.chat,'visibility',state.chatVisible&&original?'visible':'hidden');
       }
-      const needsFrame=state.chatVisible&&state.chat&&!(useNative&&original);
-      const url=state.chat?`https://kick.com/popout/${encodeURIComponent(state.chat)}/chat`:'https://kick.com';$('#multi-chat-external').href=url;
+      const needsFrame=state.chatVisible&&chat&&!(useNative&&original);
+      const url=chat?`https://kick.com/popout/${encodeURIComponent(chat)}/chat`:'https://kick.com';$('#multi-chat-external').href=url;
       if(needsFrame){if(!chatFrame){chatFrame=document.createElement('iframe');chatFrame.title='Selected stream chat';chatFrame.style.cssText='width:100%;height:100%;border:0;display:block';chatMount().append(chatFrame);}if(chatFrame.getAttribute('src')!==url)chatFrame.src=url;if(chatOverlay)chatOverlay.hidden=false;}
       else {chatFrame?.remove();chatFrame=null;if(chatOverlay)chatOverlay.hidden=true;}
       $('#multi-chat-toggle').setAttribute('aria-pressed',String(state.chatVisible));$('#multi-chat-toggle').setAttribute('aria-label',state.chatVisible?'Hide chat':'Show chat');decorate($('#multi-chat-toggle'),'chat',state.chatVisible?'Hide chat':'Show chat',true);
-      for(const button of chatTabs.children)button.setAttribute('aria-pressed',String(state.chat===button.dataset.channel));
+      for(const button of chatTabs.children)button.setAttribute('aria-pressed',String(chat===button.dataset.channel));
     }
     function render() {
       if(!active||destroyed)return;
       state=multiState(state);catalog=new Map(getChannels().map(c=>[c.slug,c]));
+      if(!state.focus&&!clipFocus&&clipTiles.size)clipFocus=clipTiles.keys().next().value;
       for(const slug of state.channels){const details=detailsCache.get(slug)?.data;if(details)catalog.set(slug,{...catalog.get(slug),...details,image:details.image||catalog.get(slug)?.image||''});}
       if(native && !state.channels.includes(context.slug)) { const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();} }
       else if(native?.pausedByUs && native.wasPlaying && !paused.has(context.slug)) { const v=nativeVideo();native.pausedByUs=false;if(v?.paused)v.play().catch(()=>{}); }
-      const grid=$('#multi-grid');grid.dataset.layout=state.layout;grid.dataset.count=state.channels.length;
-      stage.dataset.layout=state.layout;divider.hidden=state.layout!=='focus'||state.channels.length<2;applySizing();
-      state.quiet=false;
-      grid.style.setProperty('--multi-columns',state.channels.length<=1?1:state.channels.length<=4?2:3);grid.style.setProperty('--multi-count',Math.max(1,state.channels.length));grid.style.setProperty('--multi-focus-rows',Math.max(1,state.channels.length-1));
+      const count=tileCount(),grid=$('#multi-grid');grid.dataset.layout=state.layout;grid.dataset.count=count;
+      stage.dataset.layout=state.layout;divider.hidden=state.layout!=='focus'||count<2;applySizing();
+      grid.style.setProperty('--multi-columns',count<=1?1:count<=4?2:3);grid.style.setProperty('--multi-count',Math.max(1,count));grid.style.setProperty('--multi-focus-rows',Math.max(1,count-1));
       for(const [slug,tile]of tiles)if(!state.channels.includes(slug)){resize.unobserve(tile.player);tile.card.remove();tiles.delete(slug);}
       grid.querySelector('.multi-empty')?.remove();
-      if(!state.channels.length){const empty=document.createElement('div');empty.className='multi-empty';empty.textContent='Drag a channel from the sidebar, or add one using Manage.';grid.append(empty);}
+      if(!count){const empty=document.createElement('div');empty.className='multi-empty';empty.textContent='Drag a channel from the sidebar, or add one using Manage.';grid.append(empty);}
       state.channels.forEach((slug,index)=>{let tile=tiles.get(slug);if(!tile){tile=makeTile(slug);tiles.set(slug,tile);grid.append(tile.card);}tile.card.style.order=state.layout==='focus'&&state.focus===slug?-1:index;tile.card.dataset.featured=String(state.focus===slug);decorate(tile.focus,state.layout==='focus'&&state.focus===slug?'grid':'focus','Focus',true);tile.focus.title=state.layout==='focus'&&state.focus===slug?'Return to grid':'Focus stream';tile.focus.setAttribute('aria-label',state.layout==='focus'&&state.focus===slug?`Return to grid for ${slug}`:`Focus ${slug}`);tile.focus.setAttribute('aria-pressed',String(state.layout==='focus'&&state.focus===slug));mountPlayer(slug,tile);});
       for(const [slug,tile]of tiles){const meta=catalog.get(slug);if(meta){tile.card.querySelector('.multi-tile-identity a').textContent=meta.title||slug;tile.card.querySelector('.multi-tile-identity span').textContent=meta.category||'Kick stream';const status=tile.card.querySelector('.live-status');status.dataset.live=meta.live||'unknown';status.textContent=isNative(slug)?'Current stream':meta.live==='live'?'Live':meta.live==='offline'?'Offline':'';}}
+      for(const [key,tile]of new Map([...tiles,...clipTiles])){const featured=key===focusKey();tile.card.dataset.featured=String(featured);tile.card.style.order=state.layout==='focus'&&featured?-1:state.channels.indexOf(key)>=0?state.channels.indexOf(key):state.channels.length+[...clipTiles.keys()].indexOf(key);if(tile.focus){decorate(tile.focus,featured&&state.layout==='focus'?'grid':'focus','Focus',true);tile.focus.setAttribute('aria-pressed',String(featured&&state.layout==='focus'));if(!clipTiles.has(key))tile.focus.setAttribute('aria-label',featured&&state.layout==='focus'?`Return to grid for ${key}`:`Focus ${key}`);}if(clipTiles.has(key))tile.card.style.setProperty('--tile-span',count===1?6:count<=4?3:2);}
       applyTileSizes();$('#multi-layout').value=state.layout;
-      const select=$('#multi-chat-channel');select.replaceChildren(...state.channels.map(s=>new Option(catalog.get(s)?.title||s,s)));select.value=state.chat;
-      chatTabs.replaceChildren(...state.channels.map(slug=>{
+      const select=$('#multi-chat-channel');select.replaceChildren(...chatChannels().map(s=>new Option(catalog.get(s)?.title||s,s)));select.value=selectedChat();
+      chatTabs.replaceChildren(...chatChannels().map(slug=>{
         const button=document.createElement('button');button.dataset.channel=slug;button.setAttribute('aria-label',`Show ${slug} chat`);button.title=`Open ${catalog.get(slug)?.title||slug} chat`;
         const meta=catalog.get(slug);if(meta?.image){const image=document.createElement('img');image.src=meta.image;image.alt='';button.append(image);}
         const name=document.createElement('span');name.textContent=meta?.title||slug;button.append(name);
-        button.addEventListener('click',()=>{state.chat=slug;state.chatVisible=true;render();persist();});return button;
+        button.addEventListener('click',()=>{state.chat=slug;if(clipTiles.size)retainedChat=slug;state.chatVisible=true;render();persist();});return button;
       }));
       hideChannelInfo();renderChat();syncAudio();updateTabTitle();renderDirectory();positionNative();schedulePosition();
       const saved=$('#multi-sessions'),choice=saved.value;saved.replaceChildren(new Option('Saved sessions…',''),...sessions.map((s,i)=>new Option(s.name,String(i))));saved.value=choice;$('#multi-delete').disabled=saved.value==='';
@@ -416,13 +439,14 @@
         $('.multi-options').hidden=true;$('#multi-manage').setAttribute('aria-expanded','false');$('#multi-add').value='';notice();
         if(shared)state=multiState(shared);else if(fresh)state=multiState({channels:current?[current]:[]});else if(current)state=multiState({...state,channels:[current,...state.channels.filter(s=>s!==current)].slice(0,6)});
         active=true;singleTitle=document.title;titleObserver.observe(document.head,{childList:true,subtree:true,characterData:true});if(context.player)context.player.before(host);else context.main.prepend(host);if(context.player)mountNative();else audio.clear();
-      } else if(shared){state=multiState(shared);audio.clear();paused.clear();}
+      } else if(shared){discardClips();state=multiState(shared);audio.clear();paused.clear();}
       for(const slug of seeds)if(!state.channels.includes(slug))add(slug);
       render();persist();
     }
     function close({restorePlayback=true}={}) {
       if(!active)return;finishResize();expandedChannel='';for(const controller of detailsControllers)controller.abort();active=false;cancelAnimationFrame(layoutFrame);layoutFrame=0;resize.disconnect();
       cancelAnimationFrame(nativeStatusFrame);nativeStatusFrame=0;
+      for(const tile of clipTiles.values()){tile.item.release();tile.card.remove();}clipTiles.clear();clipFocus='';retainedChat='';if(clipReturn){state.layout=clipReturn.layout;state.focus=clipReturn.focus;clipReturn=null;}
       for(const tile of tiles.values())tile.card.remove();tiles.clear();chatFrame?.remove();chatFrame=null;chatOverlay?.remove();chatOverlay=null;paused.clear();
       const video=context?.player?.querySelector('video');if(document.fullscreenElement===context?.main)document.exitFullscreen().catch(()=>{});
       restoreStyles();restoreChannelInfo();if(context?.player)delete context.player.dataset.krNativePlayer;
@@ -446,7 +470,7 @@
     $('.multi-exit').addEventListener('click',()=>close());
     $('#multi-manage').addEventListener('click',()=>{const show=$('.multi-options').hidden;$('.multi-options').hidden=!show;$('#multi-manage').setAttribute('aria-expanded',String(show));schedulePosition();});
     $('#multi-add-form').addEventListener('submit',e=>{e.preventDefault();if(add($('#multi-add').value))$('#multi-add').value='';});
-    $('#multi-layout').addEventListener('change',e=>{state.layout=e.target.value;render();persist();});
+    $('#multi-layout').addEventListener('change',e=>{state.layout=e.target.value;if(state.layout!=='focus')clipFocus='';render();persist();});
     sizing.querySelector('input').addEventListener('input',event=>{state.focusSize=Number(event.target.value);applySizing();});
     sizing.querySelector('input').addEventListener('change',persist);
     divider.addEventListener('pointerdown',event=>{
@@ -464,27 +488,46 @@
     $('#multi-mix').addEventListener('click',()=>{state.mixAudio=!state.mixAudio;if(!state.mixAudio&&audio.size>1){const first=audio.values().next().value;audio.clear();audio.add(first);}syncAudio();persist();});
     $('#multi-mute').addEventListener('click',()=>{audio.clear();syncAudio();});
     $('#multi-chat-toggle').addEventListener('click',()=>{state.chatVisible=!state.chatVisible;render();persist();});
-    $('#multi-chat-channel').addEventListener('change',e=>{state.chat=e.target.value;render();persist();});
+    $('#multi-chat-channel').addEventListener('change',e=>{state.chat=e.target.value;if(clipTiles.size)retainedChat=state.chat;render();persist();});
     $('#multi-fullscreen').addEventListener('click',()=>{const target=context?.main;if(!target)return;const request=document.fullscreenElement===target?document.exitFullscreen():target.requestFullscreen();request.catch(()=>notice('Use the browser fullscreen shortcut if fullscreen is unavailable.'));});
     $('#multi-save').addEventListener('click',()=>{const name=$('#multi-name').value.trim().slice(0,48);if(!name||!state.channels.length)return notice('Add a stream and name this session before saving.');const i=sessions.findIndex(s=>s.name===name),session={name,state:multiState(state)};if(i>=0)sessions[i]=session;else sessions=[session,...sessions].slice(0,10);persist();render();notice(`Saved “${name}”.`);});
-    $('#multi-sessions').addEventListener('change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions[Number(e.target.value)];if(!session)return;state=multiState(session.state);paused.clear();audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();persist();notice(`Loaded “${session.name}”.`);});
+    $('#multi-sessions').addEventListener('change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions[Number(e.target.value)];if(!session)return;discardClips();state=multiState(session.state);paused.clear();audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();persist();notice(`Loaded “${session.name}”.`);});
     $('#multi-delete').addEventListener('click',()=>{const choice=$('#multi-sessions').value;if(choice==='')return;sessions.splice(Number(choice),1);$('#multi-sessions').value='';persist();render();notice('Saved session deleted.');});
     $('#multi-share').addEventListener('click',async()=>{if(!state.channels.length)return notice('Add a stream before sharing.');const url=multiURL(state);try{await navigator.clipboard.writeText(url);notice('Link copied. Recipients need Immersion installed.');}catch{$('#multi-add').value=url;$('#multi-add').select();notice('Copy the selected link.');}});
+    function canAddClip(id){return !clipTiles.has(`clip:${id}`)&&(active?tileCount():(findContext()?.slug?1:0))<6&&!!findContext();}
+    function removeClip(key){
+      const tile=clipTiles.get(key);if(!tile)return;
+      clipTiles.delete(key);audio.delete(key);resize.unobserve(tile.player);tile.item.release();tile.card.remove();if(clipFocus===key)clipFocus='';
+      if(!clipTiles.size&&clipReturn){const previous=clipReturn;clipReturn=null;state.layout=previous.layout;state.focus=state.channels.includes(previous.focus)?previous.focus:state.channels[0]||'';audio.clear();for(const source of previous.audio)if(state.channels.includes(source))audio.add(source);if(!previous.active&&state.channels.length<=1){close();return;}}
+      render();persist();
+    }
+    async function addClip(item,mode='alongside'){
+      if(!item||!KickRefinedClips.parseClip(item.href)||!canAddClip(item.id)){notice('This clip is already here, or the workspace has six tiles.');return false;}
+      const wasActive=active;await activate([],channelSlug(location.pathname,location.origin),null,!active);if(!active||destroyed||!canAddClip(item.id))return false;
+      if(!clipReturn){clipReturn={active:wasActive,layout:state.layout,focus:state.focus,audio:[...audio]};retainedChat=state.chat||context.slug||'';}
+      const key=`clip:${item.id}`,card=document.createElement('section');card.className='multi-tile multi-clip-tile';card.dataset.clip=item.id;card.dataset.kind='clip';
+      const header=document.createElement('div');header.className='multi-tile-header';const identity=document.createElement('div');identity.className='multi-tile-identity';const words=document.createElement('div'),title=document.createElement('a'),credit=document.createElement('span');title.href=item.href;title.target='_blank';title.rel='noopener noreferrer';title.textContent=item.title||'Kick clip';words.append(title,credit);identity.append(words);
+      const badge=document.createElement('span');badge.className='multi-clip-badge';badge.textContent='CLIP';
+      const player=document.createElement('div');player.className='multi-clip-player';const tile={slug:key,card,player,item};
+      const control=(label,symbol,action)=>{const button=document.createElement('button');button.setAttribute('aria-label',label);decorate(button,symbol,label,true);button.title={sound:'Choose clip audio',focus:'Feature clip',close:'Remove clip',pop:'Pop out clip player'}[symbol]||label;button.addEventListener('click',action);return button;};
+      tile.listen=control(`Listen to clip ${item.id}`,'sound',()=>{const enabled=!audio.has(key);if(!state.mixAudio)audio.clear();if(enabled)audio.add(key);syncAudio();});
+      const toggleFocus=()=>{const featured=state.layout==='focus'&&clipFocus===key;clipFocus=featured?'':key;state.layout=featured?'grid':'focus';render();};
+      tile.focus=control(`Focus clip ${item.id}`,'focus',toggleFocus);
+      header.addEventListener('dblclick',event=>{if(event.target.closest('a,button,input'))return;event.preventDefault();toggleFocus();});
+      header.append(identity,badge,tile.listen,control(`Pop out clip ${item.id}`,'pop',()=>item.popout()),tile.focus,control(`Remove clip ${item.id}`,'close',()=>removeClip(key)));card.append(header,player);clipTiles.set(key,tile);$('#multi-grid').append(card);resize.observe(player);
+      try{item.mount(player,{focus:toggleFocus,remove:()=>removeClip(key),audio:enabled=>{if(enabled&&!state.mixAudio)audio.clear();if(enabled)audio.add(key);else audio.delete(key);syncAudio();},ended:()=>{audio.delete(key);if(!state.mixAudio){for(const source of clipReturn?.audio||[])if(state.channels.includes(source)){audio.add(source);break;}}syncAudio();},info:data=>{title.textContent=data.title||item.title||'Kick clip';credit.textContent=data.creator?`Clipped by ${data.creator}`:data.credit||'';badge.textContent=data.duration?`CLIP · ${Math.round(data.duration)}s`:'CLIP';schedulePosition();}});}catch{removeClip(key);return false;}
+      if(mode==='featured'){clipFocus=key;state.layout='focus';}else if(!wasActive){state.layout='focus';clipFocus='';}
+      if(!item.snapshot().paused){if(!state.mixAudio)audio.clear();audio.add(key);}render();return true;
+    }
     function dropPreview(slug){
       const current=findContext();if(!current)return null;
       const next=active?multiState(state):multiState({channels:current.slug?[current.slug]:[]});
-      const duplicate=next.channels.includes(slug),full=next.channels.length>=6;
+      const duplicate=next.channels.includes(slug),full=active?tileCount()>=6:next.channels.length>=6;
       const workspace=document.createElement('div');workspace.className='stream-drop-zone';workspace.dataset.allowed=String(!duplicate&&!full);
-      const cue=document.createElement('div');cue.className='stream-drop-cue';
-      cue.innerHTML=icon(duplicate||full?'close':'add');
-      const words=document.createElement('div'),title=document.createElement('strong'),hint=document.createElement('span');
-      title.textContent=duplicate?'Already in this workspace':full?'Workspace is full':active?'Drop to add stream':'Drop to start multistream';
-      const name=getChannels().find(channel=>channel.slug===slug)?.title||slug;
-      hint.textContent=duplicate?'Choose another channel':full?'Remove a stream before adding another':`${name} · release to add`;
-      words.append(title,hint);cue.append(words);workspace.append(cue);
+      workspace.setAttribute('aria-label',duplicate?'Already in this workspace':full?'Workspace is full':'Add stream to workspace');
       return {element:workspace,allowed:!duplicate&&!full};
     }
-    return {open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),close,refresh,isActive:()=>active,getDropMain:()=>findContext()?.main,dropPreview,destroy:()=>{close({restorePlayback:false});destroyed=true;window.removeEventListener('message',onMessage);window.removeEventListener('resize',schedulePosition);document.removeEventListener('fullscreenchange',schedulePosition);}};
+    return {open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),addClip,canAddClip,isChatSource:source=>!!chatFrame&&chatFrame.contentWindow===source,chatFrameRect:()=>chatFrame?.getBoundingClientRect(),close,refresh,isActive:()=>active,getDropMain:()=>findContext()?.main,dropPreview,destroy:()=>{close({restorePlayback:false});destroyed=true;window.removeEventListener('message',onMessage);window.removeEventListener('resize',schedulePosition);document.removeEventListener('fullscreenchange',schedulePosition);}};
   }
   globalThis.KickRefinedMulti=Object.freeze({create});
 })();

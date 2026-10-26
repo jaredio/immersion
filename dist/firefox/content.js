@@ -4,7 +4,7 @@
   if (!api?.storage || document.getElementById('kr-root')) return;
   let root = document.documentElement;
   let settings = normalize();
-  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi;
+  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge;
   let channels = [], shown = [], selected = 0;
   let refreshTimer, writeTimer, routeTimer, routeTimeout, previousFocus;
   let dockPosition = '';
@@ -32,6 +32,8 @@
       updateForm?.(settings);
     }
     updateSidebarRows();
+    clips?.setEnabled(settings.enabled&&settings.chatClips&&!settings.textOnly);
+    if(drag?.kind==='clip'&&(!settings.chatClips||settings.textOnly))endDrag();
     if (!settings.enabled) { endDrag(); multi?.close(); }
   }
 
@@ -88,6 +90,8 @@
     footer.innerHTML = '<span id="result-count"></span><span class="key-hint">↑↓ select · Enter open</span><div class="actions"><button id="pin-channel">Pin selected</button><button id="add-multi">Add to Multi</button></div>';
     shadow.querySelector('#add-multi').addEventListener('click', () => openMulti(shown[selected]));
     multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut });
+    clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
+    clipBridge=KickRefinedClipBridge.create({getClips:()=>clips,multi,startDrag:startClipDrag,endDrag});
     const localKeydown=event=>{
       if(event.key==='Escape' && (palette?.open || settingsDialog?.open)) { event.preventDefault();palette?.open?palette.close():settingsDialog.close(); }
       else handleShortcut(event);
@@ -320,13 +324,13 @@
     event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('application/x-kick-refined-channel',slug);
     event.dataTransfer.setData('text/uri-list',row.href);event.dataTransfer.setData('text/plain',row.href);
     const preview=multi.dropPreview(slug);if(!preview){endDrag();return;}drag.main=main;drag.allowed=preview.allowed;drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
-    dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label','Drop channel to multiview');
+    dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label',preview.element.getAttribute('aria-label'));
     dropTarget.style.cssText='position:fixed;z-index:500;overflow:hidden;background:transparent !important;';
     const sr=shadowRoot(dropTarget);sr.append(preview.element);drag.preview=preview.element;document.body.append(dropTarget);
     dragChip=document.createElement('div');dragChip.id='kr-drag-chip';dragChip.style.cssText='position:fixed;left:0;top:0;z-index:2147483646;pointer-events:none;background:transparent !important;';
     const chipRoot=shadowRoot(dragChip),chip=document.createElement('div');chip.className='drag-channel-chip';
     const meta=describeChannel(row);if(meta.image){const image=document.createElement('img');image.src=meta.image;image.alt='';chip.append(image);}
-    const words=document.createElement('div'),name=document.createElement('strong'),category=document.createElement('span');name.textContent=meta.title||slug;category.textContent=meta.category||'Kick stream';words.append(name,category);chip.append(words);
+    const words=document.createElement('div'),name=document.createElement('strong');name.textContent=meta.title||slug;words.append(name);chip.append(words);
     const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;canvas.style.cssText='position:fixed;width:1px;height:1px;pointer-events:none';chipRoot.append(chip,canvas);document.body.append(dragChip);
     event.dataTransfer.setDragImage(canvas,0,0);
     drag.x=event.clientX||row.getBoundingClientRect().right;drag.y=event.clientY||row.getBoundingClientRect().top;drawDrag();
@@ -336,6 +340,24 @@
       lastDrop={slug:dropped,time:performance.now()};endDrag();
       if(allowed)multi.drop(dropped,channelSlug(location.pathname,location.origin));
     });
+  }
+  function startClipDrag(event,item){
+    if(!settings.enabled||!settings.chatClips||!KickRefinedClips.parseClip(item.href))return;
+    const main=multi.getDropMain();if(!main)return;
+    endDrag();drag={main,kind:'clip',item,allowed:multi.canAddClip(item.id),measure:true,x:event?.clientX??item.x??0,y:event?.clientY??item.y??0};
+    drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
+    dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label','Drop clip into workspace');dropTarget.style.cssText='position:fixed;z-index:500;overflow:hidden;background:transparent !important;';
+    const preview=document.createElement('div');preview.className='stream-drop-zone clip-drop-targets';preview.dataset.allowed=String(drag.allowed);drag.preview=preview;
+    for(const [mode,label]of [['alongside','Watch alongside'],['featured','Watch featured']]){
+      const zone=document.createElement('div');zone.className='clip-drop-choice';zone.dataset.placement=mode;zone.setAttribute('aria-label',label);preview.append(zone);
+      zone.addEventListener('dragover',e=>{e.preventDefault();if(!drag)return;e.dataTransfer.dropEffect=drag.allowed?'copy':'none';for(const choice of preview.children)choice.dataset.active=String(choice===zone);});
+    }
+    shadowRoot(dropTarget).append(preview);document.body.append(dropTarget);
+    dragChip=document.createElement('div');dragChip.id='kr-drag-chip';dragChip.style.cssText='position:fixed;left:0;top:0;z-index:2147483646;pointer-events:none;background:transparent !important;';
+    const chipRoot=shadowRoot(dragChip),chip=document.createElement('div');chip.className='drag-channel-chip';const words=document.createElement('div'),name=document.createElement('strong');name.textContent=item.title||'Kick clip';words.append(name);chip.append(words);chipRoot.append(chip);
+    const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;chipRoot.append(canvas);canvas.style.cssText='position:absolute;width:1px;height:1px;opacity:0';document.body.append(dragChip);event?.dataTransfer?.setDragImage(canvas,0,0);drawDrag();
+    dropTarget.addEventListener('dragover',e=>{e.preventDefault();if(drag)e.dataTransfer.dropEffect=drag.allowed?'copy':'none';});
+    dropTarget.addEventListener('drop',e=>{if(!drag||drag.kind!=='clip')return;e.preventDefault();e.stopPropagation();const mode=e.composedPath().find(node=>node.dataset?.placement)?.dataset.placement||'alongside',allowed=drag.allowed;endDrag();if(allowed){if(item.commit)item.commit(mode);else void multi.addClip(item,mode);}});
   }
   function checkRoute() {
     if (currentPath === location.pathname) return;
@@ -394,7 +416,7 @@
   function dispose() {
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; abort.abort(); observer.disconnect(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
-    clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
+    clipBridge?.destroy();clips?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
   }
   function handleShortcut(e) {
     if(e.key==='Escape' && drag) { e.preventDefault();endDrag();return; }
@@ -411,7 +433,7 @@
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);
       const params = new URL(location.href).searchParams;
-      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : 67, quiet: params.get('immersion-quiet') === '1', mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
+      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : 67, mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-kr-enabled'] });
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });

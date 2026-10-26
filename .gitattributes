@@ -2,3 +2,5 @@
 *.png binary
 *.zip binary
 *.wav binary
+# Preserve the formatting of packaged third-party dependencies.
+dist/**/vendor/** -whitespace

@@ -12,7 +12,7 @@
     for (const type of ['keydown','keypress','keyup']) window.addEventListener(type, event => {
       const path = event.composedPath(), target = path[0];
       const root = target?.getRootNode?.();
-      if (!(root instanceof ShadowRoot) || !owners.has(root.host.id)) return;
+      if (!(root instanceof ShadowRoot) || !(owners.has(root.host.id)||root.host.classList.contains('kr-chat-clip')||root.host.classList.contains('kr-clip-floating'))) return;
       event.stopImmediatePropagation();
       if (type !== 'keydown') return;
       // A distinct event type also avoids Firefox re-composing synthetic native
