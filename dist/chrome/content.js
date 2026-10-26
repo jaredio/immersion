@@ -290,15 +290,21 @@
   }
   function endDrag() {
     if(drag?.row)delete drag.row.dataset.krDragging;
+    drag?.resize?.disconnect();
     cancelAnimationFrame(dragFrame);dragFrame=0;delete root.dataset.krDragging;dragChip?.remove();dragChip=null;drag=null;dropTarget?.remove();dropTarget=null;
   }
   function drawDrag(){
     dragFrame=0;if(!drag||!dropTarget)return;
-    const rect=drag.main.getBoundingClientRect(),style=getComputedStyle(drag.main),left=rect.left+parseFloat(style.paddingLeft||0),actualTop=rect.top+parseFloat(style.paddingTop||0),top=Math.max(actualTop,0);
-    Object.assign(dropTarget.style,{left:`${left}px`,top:`${top}px`,width:`${Math.max(0,rect.width-parseFloat(style.paddingLeft||0)-parseFloat(style.paddingRight||0))}px`,height:`${Math.max(0,Math.min(rect.bottom,innerHeight)-top)}px`});
-    drag.preview.style.transform=`translateY(${actualTop-top-drag.main.scrollTop}px)`;
-    if(dragChip)dragChip.style.transform=`translate3d(${Math.max(8,Math.min(innerWidth-240,drag.x+18))}px,${Math.max(8,Math.min(innerHeight-65,drag.y+18))}px,0)`;
+    // Pointer movement only writes a transform. Re-measure the target when its
+    // geometry changes, rather than forcing layout for every dragover event.
+    if(drag.measure){
+      drag.measure=false;
+      const rect=drag.main.getBoundingClientRect(),style=getComputedStyle(drag.main),left=Math.max(0,rect.left+parseFloat(style.paddingLeft||0)),top=Math.max(rect.top+parseFloat(style.paddingTop||0),0);
+      Object.assign(dropTarget.style,{left:`${left}px`,top:`${top}px`,width:`${Math.max(0,Math.min(rect.right-parseFloat(style.paddingRight||0),innerWidth)-left)}px`,height:`${Math.max(0,Math.min(rect.bottom,innerHeight)-top)}px`});
+    }
+    if(dragChip)dragChip.style.transform=`translate3d(${Math.max(8,Math.min(innerWidth-208,drag.x+16))}px,${Math.max(8,Math.min(innerHeight-60,drag.y+16))}px,0)`;
   }
+  function resizeDrag(){if(drag){drag.measure=true;if(!dragFrame)dragFrame=requestAnimationFrame(drawDrag);}}
   function trackDrag(event){
     if(!drag)return;if(event.clientX||event.clientY){drag.x=event.clientX;drag.y=event.clientY;}
     drag.preview.dataset.over=String(event.composedPath().includes(dropTarget));
@@ -310,10 +316,10 @@
     if(!row)return;
     const slug=channelSlug(row.href,location.origin),main=multi.getDropMain();
     if(!slug || !main)return;
-    endDrag();drag={slug,row};row.dataset.krDragging='true';
+    endDrag();drag={slug,row,measure:true};row.dataset.krDragging='true';
     event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('application/x-kick-refined-channel',slug);
     event.dataTransfer.setData('text/uri-list',row.href);event.dataTransfer.setData('text/plain',row.href);
-    const preview=multi.dropPreview(slug);if(!preview){endDrag();return;}drag.main=main;drag.allowed=preview.allowed;root.dataset.krDragging='true';
+    const preview=multi.dropPreview(slug);if(!preview){endDrag();return;}drag.main=main;drag.allowed=preview.allowed;drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
     dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label','Drop channel to multiview');
     dropTarget.style.cssText='position:fixed;z-index:500;overflow:hidden;background:transparent !important;';
     const sr=shadowRoot(dropTarget);sr.append(preview.element);drag.preview=preview.element;document.body.append(dropTarget);
@@ -326,9 +332,9 @@
     drag.x=event.clientX||row.getBoundingClientRect().right;drag.y=event.clientY||row.getBoundingClientRect().top;drawDrag();
     dropTarget.addEventListener('dragover',e=>{if(drag){e.preventDefault();e.dataTransfer.dropEffect=drag.allowed?'copy':'none';}});
     dropTarget.addEventListener('drop',e=>{
-      if(!drag)return;e.preventDefault();e.stopPropagation();const dropped=drag.slug;
+      if(!drag)return;e.preventDefault();e.stopPropagation();const dropped=drag.slug,allowed=drag.allowed;
       lastDrop={slug:dropped,time:performance.now()};endDrag();
-      multi.drop(dropped,channelSlug(location.pathname,location.origin));
+      if(allowed)multi.drop(dropped,channelSlug(location.pathname,location.origin));
     });
   }
   function checkRoute() {
@@ -411,6 +417,8 @@
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragover', trackDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragend', endDrag, { capture:true, signal:abort.signal });
+    window.addEventListener('scroll',resizeDrag,{capture:true,passive:true,signal:abort.signal});
+    window.addEventListener('resize',resizeDrag,{passive:true,signal:abort.signal});
     window.addEventListener('blur', endDrag, { signal:abort.signal });
     document.addEventListener('click', event => {
       const row=event.target.closest?.('#sidebar-wrapper a[data-testid*="-channel-"]');

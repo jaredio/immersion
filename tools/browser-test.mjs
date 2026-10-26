@@ -187,9 +187,11 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     const dragPreview=page.locator('#kr-multi-drop');await dragPreview.waitFor();
     assert.equal(await dragPreview.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','the overlay stays transparent above the playing stream');
     assert.equal(await page.locator('#kr-multi-root').count(),0,'preview does not activate or load multiview');
-    assert.equal(await dragPreview.locator('.preview-tile').count(),2);
-    assert.equal(await dragPreview.locator('.preview-tile[data-incoming="true"]').count(),1);
-    assert.equal(await dragPreview.locator('iframe,video').count(),0,'drag previews never create media players');
+    assert.equal(await dragPreview.locator('.preview-tile,.multi-header,.multi-grid').count(),0,'dragging does not clone a fake workspace');
+    assert.equal(await dragPreview.locator('.stream-drop-zone[data-allowed="true"]').count(),1);
+    assert.match(await dragPreview.locator('.stream-drop-cue').textContent(),/Drop to start multistream/);
+    assert.equal(await dragPreview.locator('iframe,video').count(),0,'dragging never creates media players');
+    assert.equal(await dragPreview.locator('.stream-drop-zone').evaluate(el=>getComputedStyle(el).backdropFilter),'none','dragging does not blur the playing stream');
     assert.equal(await page.locator('#kr-drag-chip').isVisible(),true);
     await page.screenshot({path:path.join(root,`artifacts/${engine}-drag-preview-v9.png`)});
     await page.mouse.up();
@@ -220,6 +222,8 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await expanded.locator('.profile-panel li').count(),2,'panel markdown lists are formatted');
     assert.equal(await expanded.locator('script,iframe,[onerror]').count(),0,'publisher markup cannot introduce active content');
     assert.equal(await page.evaluate(()=>window.badProfileMarkup),undefined);
+    // Larger workspace controls can place lazy panel images below the viewport.
+    await expanded.locator('.profile-panel').first().scrollIntoViewIfNeeded();
     await expanded.locator('.profile-panel img').first().waitFor();
     await page.waitForTimeout(180);await expanded.screenshot({path:path.join(root,`artifacts/${engine}-expanded-profile-v10.png`)});
     await detailsButton.click();assert.equal(await multi.locator('.multi-expanded-profile').count(),0);
@@ -235,7 +239,10 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('.multi-tile').count(),2,'duplicate drops do not add players');
     const transfer=await page.evaluateHandle(()=>new DataTransfer());
     await source.dispatchEvent('dragstart',{dataTransfer:transfer});
-    await page.locator('#kr-multi-drop').waitFor(); await page.keyboard.press('Escape');
+    await page.locator('#kr-multi-drop').waitFor();
+    assert.equal(await page.locator('#kr-multi-drop .stream-drop-zone').getAttribute('data-allowed'),'false','duplicate streams are rejected before dropping');
+    assert.match(await page.locator('#kr-multi-drop .stream-drop-cue').textContent(),/Already in this workspace/);
+    await page.keyboard.press('Escape');
     assert.equal(await page.locator('#kr-multi-drop').count(),0,'canceling a drag removes its drop target');
     assert.equal(await page.locator('#kr-drag-chip').count(),0,'canceling also removes the custom drag card');
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.krDragging),undefined);
@@ -309,11 +316,20 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('#multi-grid').getAttribute('data-layout'),'focus');
     assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora');
     assert.equal(await multi.locator('.multi-channel-card').count(),1);
-    const quiet=multi.getByRole('button',{name:'Quiet view',exact:true});await quiet.click();
-    assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),false);
+    assert.equal(await multi.getByRole('button',{name:'Quiet view',exact:true}).count(),0);
+    assert.equal(await multi.locator('.multi-header button span').count(),0,'settings actions use icons with accessible names');
+    assert.equal(await multi.getByRole('button',{name:'Mute all',exact:true}).getAttribute('title'),'Mute all');
+    const expandedHeaderHeight=await multi.evaluate(el=>el.getBoundingClientRect().height);
+    await multi.getByRole('button',{name:'Hide settings bar',exact:true}).click();
+    assert.equal(await multi.locator('.multi-header').isVisible(),false);
+    assert.equal(await multi.locator('.multi-options').isVisible(),false);
+    assert.ok(await multi.evaluate(el=>el.getBoundingClientRect().height)<expandedHeaderHeight-40,'hiding settings saves vertical space');
     assert.equal(await multi.getByRole('button',{name:'Listen to aurora',exact:true}).isVisible(),true);
-    await quiet.click();assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),true);
-    assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'resize, focus and quiet view retain the player');
+    await multi.getByRole('button',{name:'Show settings bar',exact:true}).click();
+    assert.equal(await multi.locator('.multi-header').isVisible(),true);
+    assert.equal(await multi.locator('.multi-options').isVisible(),true,'expanded management controls are restored');
+    assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),true);
+    assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'hiding and showing settings retains the player');
     await multi.getByRole('button', { name: 'Show aurora chat', exact: true }).click();
     assert.match(await page.locator('#kr-multi-chat iframe').getAttribute('src'), /\/popout\/aurora\/chat$/);
     await multi.getByRole('button',{name:'Show nightshift chat',exact:true}).click();
@@ -443,7 +459,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','glass layout preview without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','quiet view','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
+    report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','minimal drop cue without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','collapsible settings bar','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } finally { await context.close(); if (browser) await browser.close(); }
 }
