@@ -1,4 +1,21 @@
 /* Second design pass. Keep native button sizes, event handlers, tooltips and cards. */
+/* Native live alerts keep their routing, duration, stacking and dismiss action. */
+html[data-kr-enabled="true"] main[data-kr-multi-active="true"] { scroll-behavior:auto!important;overflow-anchor:none;scrollbar-gutter:stable; }
+html[data-kr-enabled="true"] [data-kr-live-notice] { display:flex!important;align-items:center!important;gap:12px!important;padding:12px!important;box-sizing:border-box!important;width:min(400px,calc(100vw - 24px))!important;max-width:100%!important;margin-inline-start:auto;min-width:0;background:#16161c!important;color:#ededf5!important;border:1px solid #ffffff15!important;border-radius:13px!important;box-shadow:0 10px 32px #0006!important; }
+html[data-kr-enabled="true"] [data-kr-notice-info] { display:flex!important;align-items:center!important;gap:10px!important;flex:1;min-width:0;text-decoration:none!important; }
+html[data-kr-enabled="true"] [data-kr-notice-info] > img { width:36px!important;height:36px!important;flex-shrink:0;object-fit:cover;border-radius:10px!important; }
+html[data-kr-enabled="true"] [data-kr-notice-info] > div { min-width:0;gap:3px; }
+html[data-kr-enabled="true"] [data-kr-notice-title] { display:block;color:#bdbdca!important;font-size:14px!important;line-height:1.4!important; }
+html[data-kr-enabled="true"] [data-kr-notice-title] .font-bold { color:#f1f1f7!important;font-weight:650!important; }
+html[data-kr-enabled="true"] [data-kr-notice-description] { display:block!important;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#898999!important;font-size:12px!important;line-height:1.4!important; }
+html[data-kr-enabled="true"] [data-kr-notice-actions] { display:flex!important;align-items:center;gap:6px!important;flex-shrink:0; }
+html[data-kr-enabled="true"] [data-kr-notice-watch] { display:inline-flex!important;align-items:center;justify-content:center;gap:6px!important;height:32px!important;min-height:32px!important;padding:0 10px!important;border:1px solid rgba(var(--kr-accent-rgb),.24)!important;border-radius:8px!important;background:rgba(var(--kr-accent-rgb),.09)!important;color:var(--kr-accent)!important;font-size:13px!important;font-weight:600!important;text-decoration:none!important; }
+html[data-kr-enabled="true"] [data-kr-notice-watch]:hover { background:rgba(var(--kr-accent-rgb),.17)!important;border-color:rgba(var(--kr-accent-rgb),.4)!important; }
+html[data-kr-enabled="true"] [data-kr-notice-watch] svg { width:14px!important;height:14px!important; }
+html[data-kr-enabled="true"] [data-kr-notice-close] { display:grid!important;place-items:center;width:28px!important;height:28px!important;min-width:28px!important;padding:6px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:#8e8e9e!important; }
+html[data-kr-enabled="true"] [data-kr-notice-close]:hover { background:#ffffff08!important;color:#ededf5!important; }
+html[data-kr-enabled="true"] [data-kr-notice-close] svg { width:15px!important;height:15px!important; }
+@media(max-width:480px) { html[data-kr-enabled="true"] [data-kr-live-notice] { padding:10px!important;gap:8px!important; } html[data-kr-enabled="true"] [data-kr-notice-watch] { padding:0 8px!important; } }
 #kr-multi-root { display:block;position:relative;flex:0 0 auto;width:100%;min-width:0; }
 /* Native popup portals can mount under main alongside the channel panels. */
 main[data-kr-multi-active="true"] > [data-kr-single-info="true"]:not(:is(#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal])):not(:has(:is(#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal]))) { display:none !important; }
@@ -149,6 +166,18 @@ html[data-kr-enabled="true"] #user-identity {
   scrollbar-width: thin;
 }
 html[data-kr-enabled="true"] #user-identity > div { gap: 14px !important; }
+/* Kick normally opens this card to the left of chat. An iframe cannot paint there. */
+html[data-kr-enabled="true"][data-kr-chat-frame="true"] #user-identity {
+  box-sizing:border-box!important;
+  position:fixed!important;
+  right:8px!important;
+  left:auto!important;
+  width:calc(100vw - 16px)!important;
+  max-width:332px!important;
+  max-height:calc(100dvh - 16px);
+  margin-inline:0!important;
+  z-index:2147483640!important;
+}
 html[data-kr-enabled="true"] #user-identity > div > div { background: transparent !important; padding-inline: 0 !important; gap: 14px; }
 html[data-kr-enabled="true"] #user-identity a[title][target="_blank"] { color: #f0f0f5 !important; font-size: 19px !important; font-weight: 600 !important; letter-spacing: -.035em; }
 html[data-kr-enabled="true"] #user-identity a[title][target="_blank"]:hover { color: var(--kr-accent) !important; }

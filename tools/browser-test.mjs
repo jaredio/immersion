@@ -67,7 +67,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
         if(slug==='third')return route.fulfill({status:403,body:'Unavailable'});
         return route.fulfill({json:{slug,user:{username:slug,bio:`**About ${slug}**\n\nLive sessions and new music.`,twitter:`${slug}_live`,instagram:'https://evil.test/untrusted'},livestream:{is_live:true,session_title:`${slug} live session`,viewer_count:1428,categories:[{name:slug==='aurora'?'Music':'Just Chatting'}]}}});
       }
-      if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body style="margin:0;background:#101014;color:#eee;font:13px system-ui"><div id="chatroom-messages">Native chat fixture <button id="frame-username">fixture-user</button></div><div id="user-identity" role="dialog" hidden style="position:fixed;top:40px;right:0;padding:16px;background:#24242c"><strong>fixture-user</strong><button id="frame-reply">Reply</button><button id="frame-close">Close user card</button></div><script>window.frameReplies=0;document.getElementById("frame-username").onclick=()=>document.getElementById("user-identity").hidden=false;document.getElementById("frame-reply").onclick=()=>window.frameReplies++;document.getElementById("frame-close").onclick=()=>document.getElementById("user-identity").hidden=true;</script></body></html>' });
+      if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body style="margin:0;background:#101014;color:#eee;font:13px system-ui"><div id="chatroom-messages">Native chat fixture <button id="frame-username">fixture-user</button></div><div id="user-identity" role="dialog" hidden style="position:fixed;top:40px;right:var(--chat-width,340px);width:356px;padding:16px;background:#24242c"><strong>fixture-user</strong><button id="frame-reply">Reply</button><button id="frame-close">Close user card</button></div><script>window.frameReplies=0;document.getElementById("frame-username").onclick=()=>document.getElementById("user-identity").hidden=false;document.getElementById("frame-reply").onclick=()=>window.frameReplies++;document.getElementById("frame-close").onclick=()=>document.getElementById("user-identity").hidden=true;</script></body></html>' });
       return route.fulfill({ contentType: 'text/html', body: fixture });
     });
     await context.route('https://player.kick.com/**', route => route.fulfill({ contentType: 'text/html', body: `<html><body style="margin:0;background:#0b0b0e;color:#858592;display:grid;place-items:center;font:12px system-ui"><div>Kick player fixture · silent local audio</div><video src="${mediaFixture}" loop autoplay muted playsinline style="width:1px;height:1px;position:absolute;opacity:0"></video><script>
@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'reply-preview.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'reply-preview.js', 'notices.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -114,6 +114,19 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.getByRole('button', { name: 'Emotes', exact: true }).hover();
     assert.equal(await page.locator('#fixture-tooltip').evaluate(el => getComputedStyle(el).color), 'rgb(220, 220, 228)');
     await page.screenshot({ path: path.join(root, `artifacts/${engine}-tooltip-v2.png`) });
+    const liveNotice=page.locator('#fixture-live-notice');
+    await page.locator('#fixture-notice-zone').evaluate(el=>el.hidden=false);
+    await liveNotice.locator('[data-kr-notice-watch]').waitFor();
+    assert.equal(await liveNotice.getByRole('link',{name:'Watch',exact:true}).getAttribute('href'),'/cuffem');
+    assert.equal(await page.locator('#fixture-generic-watch').textContent(),'Watch now','unrelated links retain their label');
+    await liveNotice.locator('[data-kr-notice-watch] > span').evaluate(el=>el.textContent='Watch now');
+    await page.waitForFunction(()=>document.querySelector('[data-kr-notice-watch] > span')?.textContent==='Watch');
+    await liveNotice.screenshot({path:path.join(root,`artifacts/${engine}-live-notice.png`)});
+    await liveNotice.getByRole('link',{name:'Watch',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.nativeNoticeActions),['watch'],'native watch handler is preserved');
+    await page.locator('#fixture-notice-zone').evaluate(el=>el.hidden=false);
+    await liveNotice.getByRole('button',{name:'Dismiss notification',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.nativeNoticeActions),['watch','dismiss'],'native dismiss handler is preserved');
     await page.locator('#chatroom-messages button[data-prevent-expand]').click();
     await page.locator('#user-identity').waitFor({ state: 'visible' });
     await page.locator('#fixture-card-reply').click(); await page.locator('#fixture-card-mute').click();
@@ -191,9 +204,10 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await palette.getByRole('option').count(), 1);
     await palette.getByRole('button', { name: 'Pin selected' }).click();
     await palette.getByRole('button', { name: 'Unpin selected' }).waitFor();
+    const navigationsBeforeSwitch=await page.evaluate(()=>window.nativeNavigations);
     await search.press('Enter');
     assert.equal(new URL(page.url()).pathname, '/nightshift');
-    assert.equal(await page.evaluate(() => window.nativeNavigations), 1, 'uses native link handler');
+    assert.equal(await page.evaluate(() => window.nativeNavigations), navigationsBeforeSwitch+1, 'uses native link handler');
     await page.keyboard.press('Alt+k');
     await palette.waitFor({ state: 'visible' });
     assert.match(await palette.getByRole('option').first().textContent(), /nightshift/);
@@ -226,7 +240,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.evaluate(()=>document.querySelector('main').contains(document.getElementById('kr-multi-root'))),true);
     assert.equal(await page.locator('dialog.multiview').count(),0);
     assert.equal(new URL(page.url()).pathname,'/nightshift');
-    assert.equal(await page.evaluate(()=>window.nativeNavigations),1);
+    assert.equal(await page.evaluate(()=>window.nativeNavigations),navigationsBeforeSwitch+1);
     assert.equal(await page.evaluate(()=>document.getElementById('video-player')===window.originalVideo && window.originalVideo.parentElement===window.originalPlayer),true);
     assert.equal(await page.locator('.stream-info').isVisible(),false,'single-channel info is hidden in multiview');
     assert.equal(await page.locator('main .below').isVisible(),false,'the original channel bio panels are hidden');
@@ -255,7 +269,11 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(panelFetches,0,'panel images and descriptions are not fetched until expansion');
     await detailsButton.click();const expanded=multi.getByRole('region',{name:'About aurora',exact:true});await expanded.waitFor();
     await expanded.locator('.profile-panel').first().waitFor();assert.equal(panelFetches,1);
-    assert.match(await expanded.textContent(),/1,428 viewers/);
+    assert.equal(await detailsButton.locator('.channel-viewers').textContent(),'1,428 viewers');
+    assert.equal(await detailsButton.locator('.channel-viewers svg').count(),1,'viewer count has an icon beside the category');
+    assert.equal(await expanded.locator('.profile-identity').count(),0,'expanded bio does not repeat the channel heading');
+    assert.equal(await expanded.getByText('1,428 viewers',{exact:true}).count(),0,'viewer count appears only in the summary');
+    assert.equal(await detailsButton.locator('.profile-chevron svg').count(),1,'expansion uses a chevron');
     assert.equal(await expanded.locator('.profile-socials a').count(),2,'only the validated social and channel link render');
     assert.equal(await expanded.getByRole('link',{name:'X',exact:true}).getAttribute('href'),'https://x.com/aurora_live');
     assert.equal(await expanded.locator('.profile-bio strong').textContent(),'About aurora');
@@ -301,41 +319,55 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     const auroraPlayer = page.frames().find(f => f.url().startsWith('https://player.kick.com/aurora'));
     assert.equal(page.frames().some(f=>f.url().startsWith('https://player.kick.com/nightshift')),false);
     await auroraPlayer.evaluate(() => { window.playerSentinel = 71; });
-    await multi.getByRole('button', { name: 'Listen to aurora', exact: true }).click();
+    await multi.getByRole('button', { name: 'Audio for aurora', exact: true }).click();
     await auroraPlayer.waitForFunction(() => document.querySelector('video').muted === false);
-    await multi.getByRole('button', { name: 'Listen to nightshift', exact: true }).click();
+    await multi.getByRole('button', { name: 'Audio for nightshift', exact: true }).click();
     await auroraPlayer.waitForFunction(() => document.querySelector('video').muted === true);
     await page.waitForFunction(() => document.getElementById('video-player').muted === false);
     await multi.getByRole('slider',{name:'Volume for aurora',exact:true}).fill('37');
     await auroraPlayer.waitForFunction(()=>Math.abs(document.querySelector('video').volume-.37)<.01);
+    const auroraAudio=multi.getByRole('button',{name:'Audio for aurora',exact:true});
+    assert.equal(await auroraAudio.getAttribute('data-audio-state'),'on','speaker icon represents enabled audio');
+    assert.equal(await auroraAudio.getAttribute('title'),'Mute aurora','hover describes the action separately');
+    await multi.getByRole('slider',{name:'Volume for aurora',exact:true}).fill('0');
+    await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted&&document.querySelector('video').volume===0);
+    assert.equal(await auroraAudio.getAttribute('data-audio-state'),'off');
+    await auroraAudio.click();await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted&&Math.abs(document.querySelector('video').volume-.37)<.01);
     await multi.getByRole('button',{name:'Pause aurora',exact:true}).click();
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').paused);
     await multi.getByRole('button',{name:'Play aurora',exact:true}).click();
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').paused);
     assert.equal(await multi.locator('.multi-player iframe').count(),1,'pause/play retains the same player');
     // Delayed SDK media events must not take ownership or generate reply storms.
-    await multi.getByRole('button',{name:'Listen to nightshift',exact:true}).click();
+    await multi.getByRole('button',{name:'Audio for nightshift',exact:true}).click();
     await page.waitForFunction(()=>document.getElementById('video-player').muted===false);
     await auroraPlayer.evaluate(()=>{for(let i=0;i<150;i++)document.querySelector('video').dispatchEvent(new Event('volumechange'));});
     await page.waitForTimeout(180);
-    assert.equal(await multi.getByRole('button',{name:'Listen to nightshift',exact:true}).getAttribute('aria-pressed'),'true');
+    assert.equal(await multi.getByRole('button',{name:'Audio for nightshift',exact:true}).getAttribute('aria-pressed'),'true');
     const quietCount=await auroraPlayer.evaluate(()=>window.controlMessages);
     await page.waitForTimeout(180);
     assert.equal(await auroraPlayer.evaluate(()=>window.controlMessages),quietCount,'passive reports do not cause commands');
-    for(let i=0;i<12;i++)await multi.getByRole('button',{name:`Listen to ${i%2?'nightshift':'aurora'}`,exact:true}).click();
+    for(let i=0;i<12;i++)await multi.getByRole('button',{name:`Audio for ${i%2?'nightshift':'aurora'}`,exact:true}).click();
     await page.waitForTimeout(180);
-    assert.equal(await multi.getByRole('button',{name:'Listen to nightshift',exact:true}).getAttribute('aria-pressed'),'true');
+    assert.equal(await multi.getByRole('button',{name:'Audio for nightshift',exact:true}).getAttribute('aria-pressed'),'true');
     assert.ok(await auroraPlayer.evaluate(()=>window.controlMessages)<70,'audio switching stays bounded');
     const streamAction=async(slug,action)=>{await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).click();};
     await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
-    await multi.getByRole('button',{name:'Listen to aurora',exact:true}).click();
+    await multi.getByRole('button',{name:'Audio for aurora',exact:true}).click();
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
     assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),false,'mixing keeps native audio enabled');
+    await auroraAudio.click();await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
+    await multi.locator('.multi-tile[data-channel="aurora"] .multi-tile-header').dblclick({position:{x:12,y:12}});
+    assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),false,'focusing preserves other audio when mixing');
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    await multi.locator('.multi-tile[data-channel="aurora"] .multi-tile-header').dblclick({position:{x:12,y:12}});
     await multi.locator('.multi-tile[data-channel="aurora"] .multi-audible').waitFor({state:'visible'});
     await multi.getByRole('button',{name:'Mute all',exact:true}).click();
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
     await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
     await streamAction('aurora','Focus');
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),true,'focusing selects only that stream audio when mixing is off');
     assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora','focusing a stream follows its chat');
     assert.equal(await multi.locator('.multi-channel-card').count(),1,'only the focused channel appears beneath the players');
     assert.equal(await multi.locator('.multi-channel-card').getAttribute('data-channel'),'aurora');
@@ -354,6 +386,25 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('#multi-grid').getAttribute('data-layout'),'grid');
     await featured.locator('.multi-tile-header').dblclick({position:{x:12,y:12}});
     assert.equal(await multi.locator('#multi-grid').getAttribute('data-layout'),'focus');
+    assert.equal(await auroraPlayer.evaluate(()=>document.querySelector('video').muted),false,'returning to grid and refocusing does not toggle audio off');
+    await multi.locator('.multi-tile[data-channel="nightshift"] .multi-tile-header').dblclick({position:{x:12,y:12}});
+    await page.waitForFunction(()=>document.getElementById('video-player').muted===false);
+    await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
+    await featured.locator('.multi-tile-header').dblclick({position:{x:12,y:12}});
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    await multi.getByRole('button',{name:'Audio for nightshift',exact:true}).click();
+    await page.waitForFunction(()=>document.getElementById('video-player').muted===false);
+    await auroraPlayer.locator('html').dblclick();
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    await page.waitForFunction(()=>document.getElementById('video-player').muted===true);
+    await multi.getByRole('button',{name:'Show nightshift chat',exact:true}).dblclick();
+    await page.waitForFunction(()=>document.getElementById('video-player').muted===false);
+    await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
+    await page.locator('.stage').dblclick({position:{x:20,y:25}});
+    assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'nightshift');
+    await multi.getByRole('button',{name:'Show aurora chat',exact:true}).dblclick();
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    await page.waitForFunction(()=>document.getElementById('video-player').muted===true);
     assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora');
     assert.equal(await multi.locator('.multi-channel-card').count(),1);
     assert.equal(await multi.getByRole('button',{name:'Quiet view',exact:true}).count(),0);
@@ -364,7 +415,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('.multi-header').isVisible(),false);
     assert.equal(await multi.locator('.multi-options').isVisible(),false);
     assert.ok(await multi.evaluate(el=>el.getBoundingClientRect().height)<expandedHeaderHeight-40,'hiding settings saves vertical space');
-    assert.equal(await multi.getByRole('button',{name:'Listen to aurora',exact:true}).isVisible(),true);
+    assert.equal(await multi.getByRole('button',{name:'Audio for aurora',exact:true}).isVisible(),true);
     await multi.getByRole('button',{name:'Show settings bar',exact:true}).click();
     assert.equal(await multi.locator('.multi-header').isVisible(),true);
     assert.equal(await multi.locator('.multi-options').isVisible(),true,'expanded management controls are restored');
@@ -373,8 +424,20 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multi.getByRole('button', { name: 'Show aurora chat', exact: true }).click();
     assert.match(await page.locator('#kr-multi-chat iframe').getAttribute('src'), /\/popout\/aurora\/chat$/);
     const switchedChat=page.frameLocator('#kr-multi-chat iframe');
+    if(engine==='firefox'){
+      const frame=page.frames().find(frame=>frame.url().startsWith('https://kick.com/popout/aurora/chat'));
+      for(const file of ['theme.css','polish.css'])await frame.addStyleTag({path:path.join(root,'extension',file)});
+      for(const file of ['shared.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','reply-preview.js','chat-frame.js'])await frame.addScriptTag({path:path.join(root,'extension',file)});
+    }
     await switchedChat.getByRole('button',{name:'fixture-user',exact:true}).click();
     await switchedChat.locator('#user-identity').waitFor({state:'visible'});
+    for(const width of [400,340,280]){
+      await page.locator('#kr-multi-chat iframe').evaluate((el,width)=>el.style.width=`${width}px`,width);
+      const cardBounds=await switchedChat.locator('#user-identity').evaluate(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth};});
+      assert.ok(cardBounds.left>=0&&cardBounds.right<=cardBounds.width,`native profile fits inside ${width}px embedded chat`);
+    }
+    await page.locator('#kr-multi-chat iframe').evaluate(el=>el.style.width='100%');
+    await switchedChat.locator('#user-identity').screenshot({path:path.join(root,'artifacts',`${engine}-embedded-user-profile.png`)});
     await switchedChat.getByRole('button',{name:'Reply',exact:true}).click();
     assert.equal(await switchedChat.locator('body').evaluate(()=>window.frameReplies),1,'username cards remain interactive in switched chat');
     await switchedChat.getByRole('button',{name:'Close user card',exact:true}).click();
@@ -397,6 +460,34 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     });
     assert.ok(geometry.excess<5,'a featured tile never stretches to the combined height of its neighbours');
     assert.ok(Math.abs(geometry.ratio-16/9)<.03,'video keeps its natural aspect ratio');
+    // A short viewport exercises real wheel routing over both cross-origin and native players.
+    await page.setViewportSize({width:1600,height:700});
+    await page.locator('main').evaluate(el=>el.scrollTop=0);await page.waitForTimeout(220);
+    const chatScroll=await page.locator('#chatroom-messages').evaluate(el=>el.scrollTop);
+    const playerArea=await featured.locator('.multi-player').boundingBox();
+    await page.mouse.move(playerArea.x+playerArea.width/2,Math.min(650,playerArea.y+50));
+    await page.mouse.wheel(0,180);
+    await page.waitForFunction(()=>document.querySelector('main').scrollTop>40);
+    assert.equal(await multi.locator('#multi-grid').evaluate(el=>el.scrollTop),0,'grid does not trap vertical scrolling');
+    assert.equal(await page.locator('#chatroom-messages').evaluate(el=>el.scrollTop),chatScroll,'workspace wheel does not move chat');
+    const mainScroll=await page.locator('main').evaluate(el=>el.scrollTop);
+    const nativeArea=await page.locator('.stage').boundingBox();
+    await page.mouse.move(nativeArea.x+nativeArea.width/2,Math.max(80,Math.min(650,nativeArea.y+30)));
+    await page.mouse.wheel(0,-100);
+    await page.waitForFunction(before=>document.querySelector('main').scrollTop<before-30,mainScroll);
+    await page.waitForFunction(()=>{
+      const root=document.getElementById('kr-multi-root'),slot=root.shadowRoot.querySelector('[data-native="true"]').getBoundingClientRect(),player=window.originalPlayer.getBoundingClientRect();
+      return Math.abs(slot.top-player.top)<2&&Math.abs(slot.left-player.left)<2;
+    });
+    const tileReads=await page.evaluate(async()=>{
+      const original=Element.prototype.getBoundingClientRect;let reads=0;
+      Element.prototype.getBoundingClientRect=function(...args){if(this.classList.contains('multi-tile'))reads++;return Reflect.apply(original,this,args);};
+      const probe=document.createElement('span');probe.style.cssText='position:absolute;width:0;height:0;overflow:hidden';window.originalPlayer.append(probe);
+      try{for(let i=0;i<10;i++){probe.textContent=String(i);await new Promise(resolve=>setTimeout(resolve,35));}await new Promise(resolve=>setTimeout(resolve,260));return reads;}
+      finally{probe.remove();Element.prototype.getBoundingClientRect=original;}
+    });
+    assert.ok(tileReads<3,`unrelated player updates should not remeasure all tiles (${tileReads} reads)`);
+    await page.setViewportSize({width:1600,height:1000});await page.locator('main').evaluate(el=>el.scrollTop=0);
     await page.screenshot({path:path.join(root,`artifacts/${engine}-focus-three-v10.png`)});
     await streamAction('nightshift','Focus');
     assert.equal(await multi.locator('.multi-tile[data-channel="nightshift"]').getAttribute('data-featured'),'true','native-player options can actually receive clicks');
@@ -412,6 +503,15 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('.multi-tile').count(), 6);
     assert.equal(await multi.locator('.multi-player iframe').count(), 5);
     assert.match(await multi.locator('#multi-notice').textContent(), /Six tiles/);
+    await multi.getByRole('combobox',{name:'Multiview layout'}).selectOption('columns');
+    await multi.locator('#multi-grid').evaluate(grid=>{
+      const slot=grid.querySelector('[data-native="true"]').getBoundingClientRect(),bounds=grid.getBoundingClientRect();grid.scrollLeft+=slot.left-bounds.left+80;
+    });
+    await page.waitForFunction(()=>{
+      const grid=document.getElementById('kr-multi-root').shadowRoot.querySelector('#multi-grid'),slot=grid.querySelector('[data-native="true"]').getBoundingClientRect(),player=window.originalPlayer.getBoundingClientRect();
+      return grid.scrollLeft>50&&Math.abs(slot.left-player.left)<2&&getComputedStyle(window.originalPlayer).clipPath!=='none';
+    });
+    assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'horizontal scroll keeps the same players');
     await multi.getByRole('combobox', { name: 'Saved multiview sessions' }).selectOption('0');
     await page.waitForFunction(()=>document.title.startsWith('Multistream:')&&!document.title.includes('pixelgarden'));
     assert.equal(await multi.locator('.multi-player iframe').count(), 1);
@@ -467,6 +567,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await button.click();
     await settings.locator('#enabled').uncheck();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'false');
+    assert.equal(await liveNotice.locator(':scope > div > a > span').textContent(),'Watch now','disabling restores the native notification label');
     assert.equal(await page.locator('#kr-sidebar-filter').count(),0);
     // Disable is reversible with no reload and does not remove native nodes.
     assert.equal(await page.locator('#chatroom-messages [data-index]').count(), 500);

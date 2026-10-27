@@ -54,6 +54,7 @@
         "x-post-data.js",
         "x-posts.js",
         "reply-preview.js",
+        "notices.js",
         "content.js"
       ],
       "run_at": "document_idle"

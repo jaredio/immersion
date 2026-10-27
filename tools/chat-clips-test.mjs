@@ -51,7 +51,7 @@ try{
  page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(['error','warning'].includes(message.type()))console.error('Browser:',message.text());});page.setDefaultTimeout(20000);
  await page.goto('https://kick.com/sweatergxd');
  await page.addStyleTag({content:'*{box-sizing:border-box}'});
- if(engine!=='chromium')for(const name of ['shared.js','ui.js','profile.js','multiview.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','reply-preview.js','content.js'])await page.addScriptTag({path:path.join(root,'extension',name)});
+ if(engine!=='chromium')for(const name of ['shared.js','ui.js','profile.js','multiview.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','reply-preview.js','notices.js','content.js'])await page.addScriptTag({path:path.join(root,'extension',name)});
  const card=page.locator('.kr-chat-clip');await card.waitFor();
  assert.equal(await page.locator('.native-preview').isVisible(),false);
  assert.equal(await page.locator('#clip-message > a').isVisible(),false,'raw URL is hidden when its card is available');
@@ -204,11 +204,11 @@ try{
  await framedCard.getByRole('status').filter({hasText:'Added to workspace'}).waitFor();
  await framedCard.getByRole('button',{name:'Add clip to workspace',exact:true}).click();await page.waitForTimeout(100);
  assert.equal(await workspace.locator('.multi-clip-tile').count(),1,'duplicate clips do not create another player');
- await clipTile.getByRole('button',{name:`Listen to clip ${id}`,exact:true}).click();
+ await clipTile.getByRole('button',{name:`Audio for clip ${id}`,exact:true}).click();
  assert.equal(await clipTile.locator('video').evaluate(video=>video.muted),false);
  assert.equal(await page.locator('#video-player').evaluate(video=>video.muted),true,'selecting clip audio mutes the live source');
  await workspace.getByRole('button',{name:'Mix audio',exact:true}).click();
- await workspace.getByRole('button',{name:'Listen to sweatergxd',exact:true}).click();
+ await workspace.getByRole('button',{name:'Audio for sweatergxd',exact:true}).click();
  assert.equal(await page.locator('#video-player').evaluate(video=>video.muted),false);
  assert.equal(await clipTile.locator('video').evaluate(video=>video.muted),false,'mixing can retain clip and live audio');
  await workspace.getByRole('button',{name:'Mute all',exact:true}).click();
@@ -229,7 +229,7 @@ try{
  const offlinePage=await context.newPage().catch(error=>{if(engine==='firefox'&&error.message.includes("reading '_page'"))return offlineReady;throw error;});await offlineReady;
  offlinePage.on('pageerror',error=>errors.push(error.message));offlinePage.on('crash',()=>errors.push('Offline workspace page crashed'));
  await offlinePage.goto('https://kick.com/offlineowner');await offlinePage.addStyleTag({content:'*{box-sizing:border-box}'});
- if(engine!=='chromium')for(const name of ['shared.js','ui.js','profile.js','multiview.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','reply-preview.js','content.js'])await offlinePage.addScriptTag({path:path.join(root,'extension',name)});
+ if(engine!=='chromium')for(const name of ['shared.js','ui.js','profile.js','multiview.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','reply-preview.js','notices.js','content.js'])await offlinePage.addScriptTag({path:path.join(root,'extension',name)});
  const offlineCard=offlinePage.locator('.kr-chat-clip');await offlineCard.waitFor();
  await offlineCard.getByRole('button',{name:'Play sweatergxd clip',exact:true}).click();
  await offlinePage.waitForFunction(()=>document.querySelector('.kr-chat-clip').shadowRoot.querySelector('video')?.readyState>=2);

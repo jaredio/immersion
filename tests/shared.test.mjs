@@ -88,12 +88,15 @@ test('Immersion layout preferences migrate safely and share only bounded sizes',
 
 test('player audio bridge rejects unrelated frames and untrusted commands', async () => {
   const source = await readFile(new URL('../extension/player-frame.js', import.meta.url), 'utf8');
-  const listeners = {}, parent = { postMessage() {} }, video = { muted:true,volume:1,paused:true,addEventListener(){} };
+  const sent=[],listeners = {}, parent = { postMessage(data) {sent.push(data);} }, video = { muted:true,volume:1,paused:true,addEventListener(){} };
   const document = { documentElement: {}, querySelectorAll: () => [video] };
   const window = { name: 'kick-refined:xqc', parent, top: {}, addEventListener: (name, cb) => { listeners[name] = cb; } };
   class Observer { observe() {} }
   vm.runInNewContext(source, { window, document, MutationObserver: Observer, setTimeout });
   const command={type:'kick-refined:control',session:'test-session',revision:1,muted:false,volume:.37};
+  const focusEvent={target:{closest:()=>null},preventDefault(){},stopImmediatePropagation(){}};
+  listeners.dblclick(focusEvent);
+  assert.equal(sent.filter(data=>data.type==='kick-refined:focus').length,0,'uninitialized embeds cannot request focus');
   listeners.message({ source: {}, origin: 'https://kick.com', data:command });
   assert.equal(video.muted, true);
   listeners.message({ source: parent, origin: 'https://evil.test', data:command });
@@ -101,6 +104,10 @@ test('player audio bridge rejects unrelated frames and untrusted commands', asyn
   listeners.message({ source: parent, origin: 'https://kick.com', data:command });
   assert.equal(video.muted, false);
   assert.equal(video.volume,.37);
+  listeners.dblclick(focusEvent);
+  assert.equal(sent.at(-1).type,'kick-refined:focus');assert.equal(sent.at(-1).session,'test-session');
+  const focusCount=sent.length;listeners.dblclick({...focusEvent,target:{closest:()=>({})}});
+  assert.equal(sent.length,focusCount,'double-clicks on player buttons and sliders do not change focus');
   listeners.message({source:parent,origin:'https://kick.com',data:{...command,revision:0,muted:true,volume:0}});
   assert.equal(video.muted,false,'stale control commands do not override newer intent');
   listeners.message({source:parent,origin:'https://kick.com',data:{...command,revision:2,volume:900}});

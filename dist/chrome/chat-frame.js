@@ -15,6 +15,7 @@
     replyPreviews.setEnabled(s.enabled);
     root.dataset.krEnabled = String(s.enabled); root.dataset.krPerformance = String(s.performance);
     root.dataset.krTextOnly = String(s.textOnly); root.dataset.krAccent = s.accent;
+    root.dataset.krChatFrame = String(window !== window.top);
     root.style.setProperty('--kr-font-size', `${s.fontSize}px`);
   }
   api.storage.local.get('settings').then(data => apply(data.settings)).catch(() => apply());

@@ -41,6 +41,12 @@ Open **Immersion** at the bottom of Kick's sidebar for settings. Press **Alt+K**
 
 Enable **Mix audio** to listen to several streams. Drag a tile's bottom-right corner to resize it; grid tiles snap into place. Click a channel card below the players to expand its profile. Double-click a stream header to focus it and switch its chat; Focus layout shows only that channel below, with the other streams in the side rail. The browser tab lists the open channels and restores its original title when multiview closes.
 
+Double-click a stream header, video area, or chat tab to focus that player and enable its audio. Other players mute unless **Mix audio** is enabled; returning to the grid keeps the clicked player's audio. Speaker icons show the current sound state, with **Mute/Unmute** hover labels. Setting a stream's slider to zero mutes it, and unmuting restores its last nonzero level.
+
+Live notifications use a compact dark card and a **Watch** button. Their original channel links, dismiss action, and display duration are preserved.
+
+The main viewing area handles vertical workspace scrolling; chat keeps its own scroll. Columns layout scrolls horizontally, with the original Kick player aligned and clipped to its tile. Workspace layout changes do not animate player positioning or automatically adjust the scroll anchor.
+
 Channel details load from Kick's public endpoint and are cached for one minute. If Kick blocks a request, available sidebar details remain visible. Social links appear only when supplied by Kick. Image panels load when you expand a profile and are cached for two minutes.
 
 To update, reload the extension and refresh Kick.

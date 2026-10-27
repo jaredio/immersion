@@ -52,6 +52,10 @@
     if(['play','pause'].includes(data.action))execute(data.action);
     scheduleStatus();
   });
+  window.addEventListener('dblclick',event=>{
+    if(!session||event.target.closest?.('button,a,input,select,textarea,[role="button"],[contenteditable="true"]'))return;
+    event.preventDefault();event.stopImmediatePropagation();send('kick-refined:focus');
+  },true);
   const observer=new MutationObserver(()=>{if(!scanTimer)scanTimer=setTimeout(scan,80);});
   function init(){scan();observer.observe(document.documentElement,{childList:true,subtree:true});send('kick-refined:ready');}
   if(document.documentElement)init();else document.addEventListener('DOMContentLoaded',init,{once:true});

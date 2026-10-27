@@ -90,4 +90,10 @@
   name.style.cssText = 'color:#b8a2ff;background:transparent;border:0;padding:0;font-weight:bold';
   const row = document.querySelector('#chatroom-messages [data-index]:last-child'); row.prepend(name, ' ');
   name.addEventListener('click', () => { card.hidden = false; });
+  const noticeZone=document.createElement('aside');noticeZone.id='fixture-notice-zone';noticeZone.hidden=true;noticeZone.style.cssText='position:fixed;right:20px;top:24px;z-index:10000;width:480px;max-width:calc(100vw - 24px)';
+  noticeZone.innerHTML='<div id="fixture-live-notice" class="max-w-xvw" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;background:#29292e"><a title="Watch now" href="/cuffem" style="display:flex;gap:8px"><img alt="Cuffem"><div style="display:flex;flex-direction:column"><span><span class="font-bold">Cuffem</span> just went live!</span><span>WHOOPTY DOO</span></div></a><div style="display:flex;gap:8px"><a href="/cuffem"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 7h18v14H3zM3 3h18v3H3z"/></svg><span>Watch now</span></a><button type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor"/></svg></button></div></div><a id="fixture-generic-watch" href="/other">Watch now</a>';
+  noticeZone.querySelector('img').src=document.querySelector('#sidebar-wrapper img').src;document.body.append(noticeZone);window.nativeNoticeActions=[];
+  noticeZone.querySelector('[title="Watch now"]').addEventListener('click',event=>event.preventDefault());
+  noticeZone.querySelector('#fixture-live-notice > div > a').addEventListener('click',event=>{event.preventDefault();window.nativeNoticeActions.push('watch');noticeZone.hidden=true;});
+  noticeZone.querySelector('button').addEventListener('click',()=>{window.nativeNoticeActions.push('dismiss');noticeZone.hidden=true;});
 })();
