@@ -1,26 +1,28 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 2,
   "name": "Immersion",
   "version": "0.10.0",
   "description": "A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.",
   "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "https://api.fxtwitter.com/*"
+    "storage",
+    "webRequest",
+    "webRequestBlocking",
+    "https://api.fxtwitter.com/*",
+    "https://www.tiktok.com/*",
+    "https://vt.tiktok.com/*",
+    "https://vm.tiktok.com/*",
+    "https://www.youtube.com/oembed*",
+    "https://kick.com/*",
+    "https://www.kick.com/*",
+    "https://kickbot.com/*",
+    "https://www.kickbot.com/*",
+    "https://streamelements.com/*",
+    "https://www.streamelements.com/*"
   ],
   "icons": {
     "16": "icons/16.png",
     "48": "icons/48.png",
     "128": "icons/128.png"
-  },
-  "action": {
-    "default_title": "Immersion",
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/16.png",
-      "48": "icons/48.png"
-    }
   },
   "content_scripts": [
     {
@@ -48,16 +50,39 @@
         "shared.js",
         "ui.js",
         "profile.js",
+        "support-data.js",
+        "support.js",
         "multiview.js",
         "chat-clips.js",
         "clip-bridge.js",
         "x-post-data.js",
         "x-posts.js",
+        "media-data.js",
+        "media-embeds.js",
         "reply-preview.js",
         "notices.js",
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://powerchat.live/*",
+        "https://www.powerchat.live/*",
+        "https://kickbot.com/tips/*",
+        "https://www.kickbot.com/tips/*",
+        "https://streamelements.com/*/tip*",
+        "https://www.streamelements.com/*/tip*"
+      ],
+      "css": [
+        "support-form.css"
+      ],
+      "js": [
+        "support-data.js",
+        "support-frame.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     },
     {
       "matches": [
@@ -74,6 +99,8 @@
         "clip-bridge.js",
         "x-post-data.js",
         "x-posts.js",
+        "media-data.js",
+        "media-embeds.js",
         "reply-preview.js",
         "chat-frame.js"
       ],
@@ -92,25 +119,28 @@
     }
   ],
   "web_accessible_resources": [
-    {
-      "resources": [
-        "ui.css",
-        "vendor/hls.light.mjs"
-      ],
-      "matches": [
-        "https://kick.com/*",
-        "https://www.kick.com/*"
-      ]
-    }
+    "ui.css",
+    "vendor/hls.light.mjs"
   ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'"
-  },
+  "content_security_policy": "script-src 'self'; object-src 'none'",
   "background": {
     "scripts": [
       "x-post-data.js",
-      "x-background.js"
-    ]
+      "x-background.js",
+      "media-data.js",
+      "media-background.js",
+      "support-data.js",
+      "support-background.js"
+    ],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_title": "Immersion",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png"
+    }
   },
   "browser_specific_settings": {
     "gecko": {

@@ -8,6 +8,7 @@
     textOnly: false,
     chatClips: true,
     xEmbeds: true,
+    mediaEmbeds: true,
     chatWidth: 340,
     fontSize: 14,
     accent: 'mint',
@@ -16,7 +17,7 @@
   function normalize(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const result = { ...defaults };
-    for (const key of ['enabled', 'performance', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds']) {
+    for (const key of ['enabled', 'performance', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds', 'mediaEmbeds']) {
       if (typeof source[key] === 'boolean') result[key] = source[key];
     }
     for (const [key, min, max] of [['chatWidth', 280, 440], ['fontSize', 12, 18]]) {
@@ -41,7 +42,7 @@
   // Keep chat cards aligned even when Kick lays out a message with flex children.
   const chatEmbedCSS = `
     :host(:not([data-workspace])){display:block;width:100%;min-width:0;max-width:100%;flex:0 0 100%}
-    :host(:not([data-workspace])) .card{box-sizing:border-box;width:calc(100% - 4px);max-width:360px;margin:8px auto 6px;border:1px solid #ffffff14;border-radius:12px;background:#121216;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}
+    :host(:not([data-workspace])) .card{box-sizing:border-box;width:calc(100% - 16px);max-width:348px;margin:8px auto 6px;border:1px solid #ffffff14;border-radius:12px;background:#121216;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}
     :host(:not([data-workspace])) .card:focus-within{border-color:color-mix(in srgb,var(--kr-accent,#8cecc0) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}
     @media(hover:hover) and (pointer:fine){:host(:not([data-workspace])) .card:hover{border-color:color-mix(in srgb,var(--kr-accent,#8cecc0) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}}
     @media(prefers-reduced-motion:reduce){:host(:not([data-workspace])) .card{transition:none}}

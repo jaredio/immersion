@@ -17,6 +17,25 @@ test('metadata validates post identity, counts, and image hosts',()=>{
   assert.throws(()=>metadata({...fixture,tweet:{...fixture.tweet,id:'12'}},parse(href)));
   const bad=metadata({...fixture,tweet:{...fixture.tweet,likes:-5,retweets:'42',views:'1701',author:{screen_name:'binji_x',avatar_url:'https://pbs.twimg.com.evil.test/img'}}},parse(href));assert.equal(bad.likes,null);assert.equal(bad.reposts,null);assert.equal(bad.views,null);assert.equal(metadata({...fixture,tweet:{...fixture.tweet,views:undefined}},parse(href)).views,null);assert.equal(metadata({...fixture,tweet:{...fixture.tweet,views:0}},parse(href)).views,0);assert.equal(bad.avatar,'');
 });
+test('X videos use only the native video CDN and prefer a bounded MP4 rendition',()=>{
+ const item={url:'https://video.twimg.com/large.mp4',thumbnail_url:'https://pbs.twimg.com/poster.jpg',duration:15,formats:[{url:'https://video.twimg.com/large.mp4',height:1080,codec:'h264'},{url:'https://video.twimg.com/medium.mp4?tag=12',height:720,codec:'h264'},{url:'https://evil.test/video.mp4',height:720,codec:'h264'}]};
+ const result=metadata({...fixture,tweet:{...fixture.tweet,media:{videos:[item,{url:'https://video.twimg.com.evil.test/file.mp4'},null]}}},parse(href));assert.equal(result.videos.length,1);assert.equal(result.videos[0].src,'https://video.twimg.com/medium.mp4?tag=12');assert.equal(result.videos[0].duration,15);
+});
+test('X video renditions infer missing dimensions and fall back without selecting HEVC',()=>{
+ const root='https://video.twimg.com/amplify_video/123/vid/';
+ const url=path=>root+path+'/clip.mp4?tag=29';
+ const item={url:url('hvc1/3840x2160'),formats:[
+  {url:url('avc1/480x270'),codec:'h264'},
+  {url:url('avc1/1280x720'),codec:'h264'},
+  {url:url('avc1/640x360'),codec:'h264'},
+  {url:url('hvc1/3840x2160'),codec:'hevc'},
+  {url:url('avc1/1920x1080'),codec:'h264'},null
+ ]};
+ const result=metadata({...fixture,tweet:{...fixture.tweet,media:{videos:[item]}}},parse(href)).videos[0];
+ assert.equal(result.src,url('avc1/1280x720'));
+ assert.deepEqual(Array.from(result.sources),['avc1/1280x720','avc1/640x360','avc1/480x270','avc1/1920x1080'].map(url));
+ assert.equal(metadata({...fixture,tweet:{...fixture.tweet,media:{videos:[{url:url('hvc1/1920x1080'),codec:'hevc'}]}}},parse(href)).videos.length,0);
+});
 test('background restricts senders, deduplicates, caches, and omits cookies',async()=>{
   let listener,requests=0,options,endpoint;
   const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async(url,opts)=>{requests++;options=opts;endpoint=url;return new Response(JSON.stringify(fixture));}});

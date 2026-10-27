@@ -16,6 +16,7 @@ A sleek dark theme and built-in multistream experience for Kick.
 - Saved viewing sessions and a collapsible icon toolbar with hover tooltips.
 - Click-to-play Kick clip cards in chat, with a movable/resizable floating player and fullscreen.
 - Drag clip cards into the workspace to watch alongside live streams or feature a clip.
+- A native-style Support button with a compact tip popover, Powerchat/KickBot/StreamElements detection, Firefox embedding, and per-channel saved links.
 
 ## Install
 
@@ -47,11 +48,25 @@ Live notifications use a compact dark card and a **Watch** button. Their origina
 
 The main viewing area handles vertical workspace scrolling; chat keeps its own scroll. Columns layout scrolls horizontally, with the original Kick player aligned and clipped to its tile. Workspace layout changes do not animate player positioning or automatically adjust the scroll anchor.
 
-Channel details load from Kick's public endpoint and are cached for one minute. If Kick blocks a request, available sidebar details remain visible. Social links appear only when supplied by Kick. Image panels load when you expand a profile and are cached for two minutes.
+Channel details load from Kick's public endpoint and are cached for one minute. If Kick blocks a request, available sidebar details remain visible. Social links appear only when supplied by Kick. Panel text and links are cached for two minutes and shared with support discovery; panel images load when you expand a profile.
+
+**Support** appears beside the channel's native Follow/Subscribe actions and on workspace channel cards. It finds published Powerchat, KickBot and StreamElements URLs in channel bios, panels, and native pinned messages with a broadcaster/moderator badge. It never guesses a tip address from the Kick username. Creator aliases and different services remain separate destinations, with source and recipient shown. Viewer-paid pins do not qualify by themselves. When several services are published, choose one in the popover. If no link is available, save the creator's published tip-page URL for that channel locally.
+
+The real provider form opens in a compact centered popover inside Kick. Powerchat uses its native embeddable page; Firefox also attempts KickBot and StreamElements directly in this popover. Its compatibility hook removes only framing restrictions from one selected tip-page response in the current Kick tab; it preserves the other CSP directives, cookies, payment requests and nested payment frames. Providers that cannot embed retain a separate checkout-window option. The displayed channel and recipient stay fixed while the popover is open, even if you switch channels. A slow or missing readiness signal never discards an open checkout or typed input.
+
+The Firefox package uses the supported Manifest V2 format because Firefox's Manifest V3 webRequest implementation rejects changes to these framing headers. The add-on ID and local storage keys are unchanged, and its background remains an event page. Reload/reinstall the Firefox package and grant the Kick, KickBot and StreamElements site/request permissions to enable this integration. The Chromium build remains Manifest V3.
+
+Amount limits, voices, media options, terms, moderation and payments remain controlled by the provider. No payment details or form values are stored or relayed by Immersion. Provider pages load only when opening Support or explicitly opening checkout. Closing the panel removes the embedded page and cancels any unused framing exception.
+
+Powerchat and KickBot share the same dark cards, input treatment, spacing and mint controls. StreamElements uses the same palette through its public tipping app's stable layout hooks. Provider login, cookie consent, terms, errors, payment options and native checkout validation remain available. The popover has compact service selection and tooltip icons for reloading, opening a checkout window and opening a normal tab. Checkout windows opened through Immersion opt into the same form styling with a URL fragment; ordinary provider tabs are unchanged. The redesign uses local CSS and adds no UI framework or remote widget scripts.
+
+Powerchat's live form has been checked inside the packaged Chromium extension, without submitting payment. KickBot and StreamElements framing compatibility is checked with the installed Firefox add-on against local HTTPS fixtures that send both X-Frame-Options and CSP framing restrictions; other CSP rules and unrelated tip pages remain protected. StreamElements may require its own sign-in. Payment completion remains unverified. Provider changes may require **Open in new tab**; some payment methods may open their own authentication/payment windows. The extension does not manufacture payment confirmations.
 
 To update, reload the extension and refresh Kick.
 
 Hover a message's **Replying to** line to read the original author and quote. The preview sits beside that line, shrinks for short replies, and wraps longer messages within the chat width. Move onto the preview to read or select text; Escape or scrolling closes it. It reads the quote already rendered by Kick and makes no message-history requests.
+
+Clip and X cards recover when Kick assigns message IDs late or replaces the chat container while retaining the old one. X cards removed by chat rendering are recreated from their remaining links. These checks are event driven; metadata remains lazy and cached.
 
 Clip links in regular and popout chat get a compact player card. Press **Play clip** to load the video. **Pop out clip player** moves it into a floating player without restarting it; return it to chat, resize it, or use fullscreen. Only one clip plays per page/frame. Inline playback stops when its card scrolls out of view or the message is removed; an explicitly popped-out clip can keep playing after its message disappears.
 
@@ -73,6 +88,7 @@ npm run build
 npm test
 npm run test:clips
 npm run test:posts
+npm run test:media
 ```
 
 Builds and installable ZIPs are created in `dist/`.
@@ -83,6 +99,10 @@ Clip browser checks use a small generated HLS video under `tests/clip-media/`. S
 
 Settings are stored locally. No analytics or custom backend. Independent project; not affiliated with Kick.
 
-X/Twitter status links (including links with `?s=20`) get compact previews in regular and popout chat: author, text, images, reposts, likes and views, plus copy/open controls. Counts are a cached snapshot, not live counters; unavailable counts show a dash. Brand and engagement icons use locally bundled SVG paths from X. Video posts show a thumbnail that opens on X. Disable **X post previews** or enable **Hide chat images** to restore the links.
+X/Twitter posts and profiles, TikTok videos and profiles (including short links), and YouTube videos and Shorts get matching compact cards in regular, workspace and popout chat. Cards use platform logos, author details, copy/open controls and available engagement counts. Clips share the same width and subtle hover treatment; all chat cards leave a small inset from the edges.
 
-Visible X posts load metadata through the public FxEmbed API (`api.fxtwitter.com`); their public handle and post ID are sent without cookies. Images load directly from `pbs.twimg.com` without a referrer. There are no X widget scripts or autoplay. Requests are deduplicated, limited to two at once, and cached for two minutes. Unavailable/private/deleted posts retain their original link. FxEmbed availability and its access to X can change independently of Immersion. The packages request access only to that metadata API in addition to their existing Kick content scripts.
+Playable X videos use native video controls. TikTok and YouTube players load only when you press Play and support fullscreen; closing the player or scrolling it out of view releases it. Private, deleted, restricted or embedding-disabled media may remain unavailable. Original links remain available when metadata fails, with a retry control.
+
+Counts are cached snapshots, not live counters. TikTok cards show public counts when available; profiles show available follower/post totals. YouTube's lightweight oEmbed response does not expose engagement counts, so those are omitted. Disable **X posts & profiles**, **TikTok & YouTube embeds**, or enable **Hide chat images** to restore the respective links.
+
+Metadata requests use the public FxEmbed API (`api.fxtwitter.com`), public TikTok pages/oEmbed (including `vt.tiktok.com` and `vm.tiktok.com` redirects), and YouTube oEmbed. These hosts require extension access. Metadata is requested without cookies, deduplicated, limited to two concurrent jobs per preview service and cached for two minutes. Provider page HTML is parsed for data only; provider widget scripts are never inserted into Kick. Clicking Play creates the official TikTok or YouTube iframe, where provider playback policies apply. X video files load directly from `video.twimg.com`. Provider availability can change independently of Immersion.

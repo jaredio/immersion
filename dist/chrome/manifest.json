@@ -7,7 +7,11 @@
     "storage"
   ],
   "host_permissions": [
-    "https://api.fxtwitter.com/*"
+    "https://api.fxtwitter.com/*",
+    "https://www.tiktok.com/*",
+    "https://vt.tiktok.com/*",
+    "https://vm.tiktok.com/*",
+    "https://www.youtube.com/oembed*"
   ],
   "icons": {
     "16": "icons/16.png",
@@ -48,16 +52,39 @@
         "shared.js",
         "ui.js",
         "profile.js",
+        "support-data.js",
+        "support.js",
         "multiview.js",
         "chat-clips.js",
         "clip-bridge.js",
         "x-post-data.js",
         "x-posts.js",
+        "media-data.js",
+        "media-embeds.js",
         "reply-preview.js",
         "notices.js",
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://powerchat.live/*",
+        "https://www.powerchat.live/*",
+        "https://kickbot.com/tips/*",
+        "https://www.kickbot.com/tips/*",
+        "https://streamelements.com/*/tip*",
+        "https://www.streamelements.com/*/tip*"
+      ],
+      "css": [
+        "support-form.css"
+      ],
+      "js": [
+        "support-data.js",
+        "support-frame.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     },
     {
       "matches": [
@@ -74,6 +101,8 @@
         "clip-bridge.js",
         "x-post-data.js",
         "x-posts.js",
+        "media-data.js",
+        "media-embeds.js",
         "reply-preview.js",
         "chat-frame.js"
       ],

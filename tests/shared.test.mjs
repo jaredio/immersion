@@ -46,13 +46,16 @@ test('both packages contain only scoped permissions and local assets', async () 
   for (const browser of ['chrome', 'firefox']) {
     const manifest = JSON.parse(await readFile(new URL(`../dist/${browser}/manifest.json`, import.meta.url)));
     assert.equal(manifest.name,'Immersion');
-    assert.equal(manifest.action.default_title,'Immersion');
-    assert.deepEqual(manifest.permissions, ['storage']);
+    assert.equal((manifest.action||manifest.browser_action).default_title,'Immersion');
+    assert.equal(manifest.manifest_version,browser==='firefox'?2:3);
+    const metadataHosts=['https://api.fxtwitter.com/*','https://www.tiktok.com/*','https://vt.tiktok.com/*','https://vm.tiktok.com/*','https://www.youtube.com/oembed*'];
+    assert.deepEqual(manifest.permissions, browser==='firefox'?['storage','webRequest','webRequestBlocking',...metadataHosts,'https://kick.com/*','https://www.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*']:['storage']);
     assert.ok(!manifest.externally_connectable);
-    assert.deepEqual(manifest.host_permissions,['https://api.fxtwitter.com/*']);
-    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['x-post-data.js','x-background.js']}:{service_worker:'x-background.js'});
+    assert.deepEqual(manifest.host_permissions,browser==='firefox'?undefined:metadataHosts);
+    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['x-post-data.js','x-background.js','media-data.js','media-background.js','support-data.js','support-background.js'],persistent:false}:{service_worker:'x-background.js'});
     for (const script of manifest.content_scripts) {
-      for (const match of script.matches) assert.ok(['https://kick.com/*', 'https://www.kick.com/*', 'https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat', 'https://player.kick.com/*'].includes(match), match);
+      for (const match of script.matches) assert.ok(['https://kick.com/*', 'https://www.kick.com/*', 'https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat', 'https://player.kick.com/*','https://powerchat.live/*','https://www.powerchat.live/*','https://kickbot.com/tips/*','https://www.kickbot.com/tips/*','https://streamelements.com/*/tip*','https://www.streamelements.com/*/tip*'].includes(match), match);
+      if(script.matches.some(match=>match.includes('powerchat.live')||match.includes('kickbot.com')))assert.deepEqual(script.js,['support-data.js','support-frame.js'],'provider pages only receive the gated form stylesheet bridge');
       for (const file of [...(script.js || []), ...(script.css || [])]) await readFile(new URL(`../dist/${browser}/${file}`, import.meta.url));
     }
     if (browser === 'firefox') {

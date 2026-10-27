@@ -1,7 +1,7 @@
 /* Inline multiview. The native player stays in its React-owned DOM tree. */
 (() => {
     const { api, channelSlug, multiState, multiURL, channelDetails } = KickRefined;
-  function create({ getChannels, onKeydown }) {
+  function create({ getChannels, onKeydown, support }) {
     const iconPaths = {
       mix:'M4 7h16M7 4v6M4 17h16M16 14v6', manage:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 17h7m-3.5-3.5v7',
       mute:'m11 5-5 4H3v6h3l5 4zM16 9l5 6m0-6-5 6', sound:'m11 5-5 4H3v6h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',
@@ -151,8 +151,7 @@
       detailsQueue=detailsQueue.then(async()=>{
         if(!active||!state.channels.includes(slug))return;
         const controller=new AbortController();detailsControllers.add(controller);const timer=setTimeout(()=>controller.abort(),8000);
-        try{const response=await fetch(`${location.origin}/api/v2/channels/${encodeURIComponent(slug)}`,{credentials:'omit',signal:controller.signal});if(!response.ok)throw Error('Channel unavailable');
-          const data=channelDetails(await response.json(),slug);detailsCache.set(slug,{time:Date.now(),data});
+        try{let data;if(support)data=await support.channel(slug);else{const response=await fetch(`${location.origin}/api/v2/channels/${encodeURIComponent(slug)}`,{credentials:'omit',signal:controller.signal});if(!response.ok)throw Error('Channel unavailable');data=channelDetails(await response.json(),slug);}detailsCache.set(slug,{time:Date.now(),data});
           if(active&&state.channels.includes(slug))render();
         }catch{detailsCache.set(slug,{time:Date.now(),data:null});}finally{clearTimeout(timer);detailsControllers.delete(controller);}
       }).finally(()=>detailsPending.delete(slug));
@@ -160,9 +159,10 @@
     function requestPanels(slug){
       if(panelRequests.has(slug)||Date.now()-(panelCache.get(slug)?.time||0)<120000)return;
       panelRequests.add(slug);const controller=new AbortController();detailsControllers.add(controller);const timer=setTimeout(()=>controller.abort(),8000);
-      fetch(`${location.origin}/api/v1/channels/${encodeURIComponent(slug)}/links`,{credentials:'omit',signal:controller.signal}).then(async response=>{
-        if(!response.ok)throw Error('Panels unavailable');const data=await response.json();
-        panelCache.set(slug,{time:Date.now(),items:Array.isArray(data)?data.slice(0,30).map(item=>({title:typeof item.title==='string'?item.title.slice(0,300):'',description:typeof item.description==='string'?item.description.slice(0,20000):'',image:KickRefinedProfile.url(item.image?.url),href:KickRefinedProfile.url(item.link)})):[],error:false});
+      (support?support.panels(slug):fetch(`${location.origin}/api/v1/channels/${encodeURIComponent(slug)}/links`,{credentials:'omit',signal:controller.signal}).then(async response=>{
+        if(!response.ok)throw Error('Panels unavailable');const data=await response.json();return Array.isArray(data)?data.slice(0,30).map(item=>({title:typeof item.title==='string'?item.title.slice(0,300):'',description:typeof item.description==='string'?item.description.slice(0,20000):'',image:KickRefinedProfile.url(item.image?.url),href:KickRefinedProfile.url(item.link)})):[];
+      })).then(items=>{
+        panelCache.set(slug,{time:Date.now(),items,error:false});
       }).catch(()=>panelCache.set(slug,{time:Date.now(),items:[],error:true})).finally(()=>{clearTimeout(timer);detailsControllers.delete(controller);panelRequests.delete(slug);if(active&&expandedChannel===slug)renderDirectory();});
     }
     function renderProfile(slug,meta){
@@ -196,7 +196,7 @@
         stats.className='channel-stats';
         if(meta.category){const category=document.createElement('span');category.className='channel-category';category.textContent=meta.category;stats.append(category);}
         if(meta.viewers){const viewers=document.createElement('span');viewers.className='channel-viewers';viewers.innerHTML=icon('viewers');viewers.append(document.createTextNode(`${meta.viewers} viewers`));stats.append(viewers);}
-        text.append(name,title,stats);card.append(text);chevron.className='profile-chevron';chevron.innerHTML=icon('chevron');chevron.setAttribute('aria-hidden','true');card.append(chevron);entry.append(card);list.append(entry);
+        text.append(name,title,stats);card.append(text);chevron.className='profile-chevron';chevron.innerHTML=icon('chevron');chevron.setAttribute('aria-hidden','true');card.append(chevron);entry.append(card);if(support){const actions=document.createElement('div');actions.className='multi-channel-actions';actions.append(support.makeButton(slug));entry.append(actions);}list.append(entry);
         card.addEventListener('click',()=>{expandedChannel=expandedChannel===slug?'':slug;renderDirectory();if(expandedChannel){requestDetails(slug);requestPanels(slug);}});
         if(expandedChannel===slug){entry.append(renderProfile(slug,meta));requestPanels(slug);}requestDetails(slug);
         if(focusedButton===slug)card.focus({preventScroll:true});

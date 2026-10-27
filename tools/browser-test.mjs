@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'reply-preview.js', 'notices.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -266,9 +266,10 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multi.locator('.multi-channel-card').filter({hasText:'aurora live session'}).waitFor();
     const detailsButton=multi.getByRole('button',{name:'Channel details for aurora',exact:true});
     await detailsButton.hover();assert.equal(await multi.locator('.multi-expanded-profile').count(),0,'hover never opens the channel profile');
-    assert.equal(panelFetches,0,'panel images and descriptions are not fetched until expansion');
+    const panelsBeforeExpansion=panelFetches;
+    assert.equal(await multi.locator('.profile-panel img').count(),0,'support discovery does not render or load panel images');
     await detailsButton.click();const expanded=multi.getByRole('region',{name:'About aurora',exact:true});await expanded.waitFor();
-    await expanded.locator('.profile-panel').first().waitFor();assert.equal(panelFetches,1);
+    await expanded.locator('.profile-panel').first().waitFor();assert.equal(panelFetches,panelsBeforeExpansion,'profile expansion reuses channel panel data from support discovery');
     assert.equal(await detailsButton.locator('.channel-viewers').textContent(),'1,428 viewers');
     assert.equal(await detailsButton.locator('.channel-viewers svg').count(),1,'viewer count has an icon beside the category');
     assert.equal(await expanded.locator('.profile-identity').count(),0,'expanded bio does not repeat the channel heading');
@@ -427,7 +428,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if(engine==='firefox'){
       const frame=page.frames().find(frame=>frame.url().startsWith('https://kick.com/popout/aurora/chat'));
       for(const file of ['theme.css','polish.css'])await frame.addStyleTag({path:path.join(root,'extension',file)});
-      for(const file of ['shared.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','reply-preview.js','chat-frame.js'])await frame.addScriptTag({path:path.join(root,'extension',file)});
+      for(const file of ['shared.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','media-data.js','media-embeds.js','reply-preview.js','chat-frame.js'])await frame.addScriptTag({path:path.join(root,'extension',file)});
     }
     await switchedChat.getByRole('button',{name:'fixture-user',exact:true}).click();
     await switchedChat.locator('#user-identity').waitFor({state:'visible'});

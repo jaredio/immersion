@@ -9,13 +9,14 @@ const base = {
   version: '0.10.0',
   description: 'A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.',
   permissions: ['storage'],
-  host_permissions: ['https://api.fxtwitter.com/*'],
+  host_permissions: ['https://api.fxtwitter.com/*','https://www.tiktok.com/*','https://vt.tiktok.com/*','https://vm.tiktok.com/*','https://www.youtube.com/oembed*'],
   icons: { 16: 'icons/16.png', 48: 'icons/48.png', 128: 'icons/128.png' },
   action: { default_title: 'Immersion', default_popup: 'popup.html', default_icon: { 16: 'icons/16.png', 48: 'icons/48.png' } },
   content_scripts: [
     { matches: ['https://kick.com/*', 'https://www.kick.com/*'], js: ['scroll.js'], run_at: 'document_start', world: 'MAIN', all_frames: true },
-    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'reply-preview.js', 'notices.js', 'content.js'], run_at: 'document_idle' },
-    { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'reply-preview.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
+    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'content.js'], run_at: 'document_idle' },
+    { matches: ['https://powerchat.live/*', 'https://www.powerchat.live/*','https://kickbot.com/tips/*','https://www.kickbot.com/tips/*','https://streamelements.com/*/tip*','https://www.streamelements.com/*/tip*'], css:['support-form.css'], js: ['support-data.js', 'support-frame.js'], run_at: 'document_idle', all_frames: true },
+    { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
     { matches: ['https://player.kick.com/*'], js: ['player-frame.js'], run_at: 'document_start', all_frames: true }
   ],
   web_accessible_resources: [{ resources: ['ui.css', 'vendor/hls.light.mjs'], matches: ['https://kick.com/*', 'https://www.kick.com/*'] }],
@@ -32,11 +33,23 @@ for (const target of ['chrome', 'firefox']) {
   }
   for (const size of [16, 48, 128]) await copyFile(path.join(root, 'extension', 'icons', `${size}.png`), path.join(out, 'icons', `${size}.png`));
   const manifest = structuredClone(base);
-  manifest.background=target==='firefox'?{scripts:['x-post-data.js','x-background.js']}:{service_worker:'x-background.js'};
-  if (target === 'firefox') manifest.browser_specific_settings = { gecko: {
+  manifest.background=target==='firefox'?{scripts:['x-post-data.js','x-background.js','media-data.js','media-background.js']}:{service_worker:'x-background.js'};
+  if (target === 'firefox') {
+    // Firefox MV3 explicitly forbids relaxing framing headers through webRequest.
+    // Its supported MV2 build permits the one-response, per-checkout compatibility hook.
+    manifest.manifest_version=2;
+    manifest.permissions.push('webRequest','webRequestBlocking',...manifest.host_permissions,'https://kick.com/*','https://www.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*');
+    delete manifest.host_permissions;
+    manifest.background.scripts.push('support-data.js','support-background.js');
+    manifest.background.persistent=false;
+    manifest.browser_action=manifest.action;delete manifest.action;
+    manifest.content_security_policy=manifest.content_security_policy.extension_pages;
+    manifest.web_accessible_resources=manifest.web_accessible_resources.flatMap(item=>item.resources);
+    manifest.browser_specific_settings = { gecko: {
     id: 'kick-refined@local.extension', strict_min_version: '142.0',
     data_collection_permissions: { required: ['none'] }
-  } };
+    } };
+  }
   else manifest.minimum_chrome_version = '120';
   await writeFile(path.join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`Built dist/${target}`);

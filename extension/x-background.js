@@ -36,3 +36,4 @@ if(typeof importScripts==='function')importScripts('x-post-data.js');
     pending.get(post.id).then(respond);return true;
   });
 })();
+if(typeof importScripts==='function')importScripts('media-background.js');

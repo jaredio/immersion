@@ -235,12 +235,12 @@
       const next=enabled?document.getElementById('chatroom-messages'):null;
       if(next===list)return;
       observer.disconnect();visibility?.disconnect();for(const record of [...records])if(!record.workspace)release(record);dirty.clear();list=next;
-      if(list){visibility=new IntersectionObserver(entries=>{for(const entry of entries)if(!entry.isIntersecting&&active?.host===entry.target&&floating?.record!==active&&!active.workspace&&!active.dragging)reset(active);},{root:list});queue(list);observer.observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:['href','src']});schedule();}
+      if(list){visibility=new IntersectionObserver(entries=>{for(const entry of entries)if(!entry.isIntersecting&&active?.host===entry.target&&floating?.record!==active&&!active.workspace&&!active.dragging)reset(active);},{root:list});queue(list);observer.observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:['href','src','data-index']});schedule();}
     }
     function setEnabled(value){if(enabled===value)return;enabled=value;if(!enabled){for(const record of [...records])record.workspace?.remove();closeFloating();clearTimeout(timer);timer=0;}refresh();}
     function destroy(){disposed=true;clearTimeout(timer);for(const timer of feedbackTimers)clearTimeout(timer);feedbackTimers.clear();observer.disconnect();visibility?.disconnect();closeFloating();for(const record of [...records]){record.workspace?.remove();release(record);}cache.clear();dirty.clear();}
     const nativeStyle=document.createElement('style');nativeStyle.textContent='html[data-kr-enabled="true"] :is([data-kr-clip-native],[data-kr-clip-link]){display:none!important}';document.head.append(nativeStyle);
-    const routeObserver=new MutationObserver(()=>{if(enabled&&(!list||!list.isConnected))refresh();});routeObserver.observe(document.documentElement,{childList:true,subtree:true});
+    const routeObserver=new MutationObserver(()=>{if(enabled&&document.getElementById('chatroom-messages')!==list)refresh();});routeObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['id']});
     refresh();
     return {setEnabled,refresh,importItem,destroy(){destroy();routeObserver.disconnect();nativeStyle.remove();}};
   }

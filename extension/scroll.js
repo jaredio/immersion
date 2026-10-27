@@ -8,7 +8,7 @@
   // inside their shadow root. Trusted browser text editing still happens once;
   // a canceled local shortcut also cancels the original default action.
   if (typeof window !== 'undefined') {
-    const owners = new Set(['kr-root', 'kr-multi-root', 'kr-sidebar-filter']);
+    const owners = new Set(['kr-root', 'kr-multi-root', 'kr-sidebar-filter', 'kr-support-root']);
     for (const type of ['keydown','keypress','keyup']) window.addEventListener(type, event => {
       const path = event.composedPath(), target = path[0];
       const root = target?.getRootNode?.();

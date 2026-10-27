@@ -4,6 +4,7 @@
   let current;
   let clips;
   const xPosts=KickRefinedX.create({enabled:false});
+  const mediaCards=KickRefinedMedia.create({media:false,profiles:false});
   const replyPreviews=KickRefinedReplies.create({enabled:false});
   const bridge=KickRefinedClipBridge.create({getClips:()=>clips});
   clips=KickRefinedClips.create({enabled:false,onWorkspace:bridge.available?item=>bridge.add(item):null,onWorkspaceDrag:bridge.available?(event,item)=>bridge.drag(event,item):null});
@@ -12,6 +13,7 @@
     if (!root) return;
     clips.setEnabled(s.enabled&&s.chatClips&&!s.textOnly);
     xPosts.setEnabled(s.enabled&&s.xEmbeds&&!s.textOnly);
+    mediaCards.setOptions({media:s.enabled&&s.mediaEmbeds&&!s.textOnly,profiles:s.enabled&&s.xEmbeds&&!s.textOnly});
     replyPreviews.setEnabled(s.enabled);
     root.dataset.krEnabled = String(s.enabled); root.dataset.krPerformance = String(s.performance);
     root.dataset.krTextOnly = String(s.textOnly); root.dataset.krAccent = s.accent;
@@ -22,5 +24,5 @@
   api.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.settings) apply(changes.settings.newValue); });
   const observer = new MutationObserver(() => { if (current && document.documentElement.dataset.krEnabled !== String(current.enabled)) apply(current); });
   if (document.documentElement) observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-kr-enabled'] });
-  window.addEventListener('pagehide',event=>{if(!event.persisted){bridge.destroy();clips.destroy();xPosts.destroy();replyPreviews.destroy();observer.disconnect();}},{once:true});
+  window.addEventListener('pagehide',event=>{if(!event.persisted){bridge.destroy();clips.destroy();xPosts.destroy();mediaCards.destroy();replyPreviews.destroy();observer.disconnect();}},{once:true});
 })();

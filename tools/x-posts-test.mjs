@@ -55,11 +55,27 @@ try{
   assert.notEqual(after.border,before.border,'hover subtly highlights either embed');assert.equal(after.width,before.width,'hover never shifts the layout');
  }
  await page.mouse.move(0,0);await page.locator('#chatroom-messages').evaluate(el=>el.scrollTop=0);
+ await card.evaluate(host=>host.remove());await card.locator('.name').waitFor();assert.equal(await card.count(),1,'an X card removed by chat rendering is recreated without refreshing');
+ await page.evaluate(({href})=>{
+  const row=document.createElement('div');row.id='late-index-row';row.innerHTML=`<a href="${href}">post</a><a href="https://kick.com/sweatergxd/clips/clip_01M5VG3B8WEFY068DP0GCHKSGW">clip</a>`;
+  document.getElementById('chatroom-messages').prepend(row);
+ },{href});
+ await page.waitForTimeout(100);assert.equal(await page.locator('#late-index-row .kr-x-post,#late-index-row .kr-chat-clip').count(),0);
+ await page.locator('#late-index-row').evaluate(row=>row.dataset.index='99');
+ await page.locator('#late-index-row .kr-x-post .name').waitFor();await page.locator('#late-index-row .kr-chat-clip').waitFor();
  await mkdir(path.join(root,'artifacts'),{recursive:true});await page.screenshot({path:path.join(root,`artifacts/${engine}-x-posts.png`)});
  await setEnabled(false);await card.waitFor({state:'detached'});assert.equal(await page.locator('#message > a').first().isVisible(),true);
  await setEnabled(true);await card.locator('.name').waitFor();
  await page.locator('#message > a').evaluateAll(links=>links.forEach(link=>link.href='https://example.com/no-post'));await card.waitFor({state:'detached'});
  assert.equal(await page.locator('#message > a').first().isVisible(),true,'recycled message links are restored');
+ await page.evaluate(({href})=>{
+  document.getElementById('chatroom-messages').id='retained-old-chat';
+  const next=document.createElement('div');next.id='next-chat-without-final-id';next.innerHTML=`<div data-index="100"><a href="${href}">post</a><a href="https://kick.com/sweatergxd/clips/clip_01M5VG3B8WEFY068DP0GCHKSGW">clip</a></div>`;
+  document.querySelector('aside').prepend(next);
+ },{href});
+ await page.waitForTimeout(100);await page.locator('#next-chat-without-final-id').evaluate(node=>node.id='chatroom-messages');
+ await page.locator('#chatroom-messages .kr-x-post .name').waitFor();await page.locator('#chatroom-messages .kr-chat-clip').waitFor();
+ assert.equal(await page.locator('#retained-old-chat').count(),1,'embeds follow the replacement chat even while the old container remains connected');
  if(engine==='chromium'){
   await page.goto('https://kick.com/test');
   await page.locator('#message .kr-x-post .name').waitFor();

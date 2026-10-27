@@ -1,4 +1,40 @@
 :host, :root { color-scheme: dark; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f4f4f5; font-size: 13px; --accent: var(--kr-accent, #8cecc0); }
+/* Support panel: one quiet surface around the provider-owned checkout. */
+.support-dialog{width:min(480px,calc(100vw - 32px));height:min(700px,calc(100dvh - 48px));max-height:calc(100dvh - 48px);margin:auto;border-radius:16px;background:#121216;overflow:hidden;padding:0;color:#efeff5;border:1px solid #ffffff16;box-shadow:0 16px 64px #0006}
+.support-dialog[open]{display:flex;flex-direction:column}.support-dialog[data-checkout=window]{height:auto}
+.support-dialog::backdrop{background:#0003}
+.support-header{display:flex;align-items:center;gap:11px;padding:18px;flex-shrink:0}
+.support-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#8cecc00a;border:1px solid #8cecc01f;color:#a3edcd}
+.support-mark svg{width:17px;height:17px}.support-heading{flex:1;min-width:0}
+.support-heading h2{font-size:17px;line-height:1.3;font-weight:650;letter-spacing:-.35px;margin:0;overflow-wrap:anywhere}
+.support-heading p{color:#9292a2;font-size:11px;line-height:1.4;margin:4px 0 0}
+.support-dialog .support-icon-button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;flex:0 0 30px;border:1px solid transparent;border-radius:7px;background:transparent;color:#9999ab;text-decoration:none;transition:color .12s,background-color .12s,border-color .12s}
+.support-dialog .support-icon-button[hidden]{display:none}.support-dialog .support-icon-button:hover{background:#ffffff06;color:#e4e4ee;border-color:#ffffff0c}.support-icon-button svg{width:15px;height:15px}
+.support-icon-button:focus-visible{outline:2px solid #8cecc0;outline-offset:2px}
+.support-controls{padding:0 18px 12px;border-bottom:1px solid #ffffff0b;flex-shrink:0}
+.support-provider-row{display:flex;align-items:center;gap:8px}.support-provider-label{flex:1;min-width:0}
+.support-provider-label select{display:block;width:100%;max-width:none;min-width:0;height:36px;border-radius:8px;border:1px solid #ffffff12;background:#1b1b22;color:#e5e5ed;padding:6px 10px;font-size:12px;font-weight:550}
+#support-source{display:flex;align-items:center;gap:6px;color:#868698;font-size:10px;margin:8px 0 0;padding-left:2px}
+#support-source::before{content:'';width:4px;height:4px;border-radius:50%;background:#648c7a}
+#support-status{font-size:12px;line-height:1.6;color:#a8a8ba;padding:10px 18px;background:#ffffff02;flex-shrink:0}
+.support-frame-mount{flex:1;min-height:120px;overflow:hidden}.support-provider-frame{display:block;width:100%;height:100%;border:0;background:#121216;color-scheme:dark}
+.support-link-editor{border-top:1px solid #ffffff08;padding:11px 18px;flex-shrink:0;max-height:220px;overflow:auto}
+.support-link-editor summary{font-size:10px;color:#8f8fa2;cursor:pointer}.support-link-editor summary:hover{color:#c9c9d5}
+#support-link-form{margin-top:12px}#support-link-form label{font-size:11px;color:#a4a4b4}
+#support-link-form>div{display:flex;gap:8px;margin-top:6px}#support-link{width:100%;min-width:0;padding:9px 10px;border:1px solid #ffffff20;border-radius:8px;background:#1d1d25;color:#eee;font-size:12px}
+#support-forget{padding:0;border:0;background:transparent;color:#a6a6b7;font-size:11px;margin-top:10px}#support-link-error{margin:8px 0 0;font-size:11px;color:#efb8ac}
+.support-footer{display:flex;align-items:center;gap:4px;padding:8px 14px;border-top:1px solid #ffffff08;flex-shrink:0;font-size:10px;color:#858598}
+.support-footer>span{display:flex;align-items:center;gap:5px;flex:1}.support-footer strong{font-weight:500;color:#b0b0c0}
+.support-provider-dot{width:5px;height:5px;border-radius:50%;background:#83ba9e;margin-right:3px}
+.support-external-checkout{padding:28px 22px;text-align:center}.support-external-checkout[hidden]{display:none}
+.support-external-checkout h3{font-size:17px;margin:0 0 10px}.support-external-checkout p{font-size:12px;line-height:1.7;color:#a2a2b4;margin:0 auto 20px;max-width:340px}
+#support-checkout-window{background:#8cecc0;color:#10251b;border-color:transparent;font-weight:650;padding:10px 15px}
+.multi-channel-entry{position:relative}.multi-channel-actions{position:absolute;right:70px;top:50%;transform:translateY(-50%)}
+.multi-channel-entry:has(.multi-expanded-profile) .multi-channel-actions{top:46px}
+.multi-channel-entry:has(.multi-channel-actions) .multi-channel-card>div{padding-right:100px}
+.kr-support-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:8px 12px;border:1px solid #ffffff16;border-radius:7px;background:#24242b;color:#f0f0f5;font:600 13px/18px Inter,system-ui,sans-serif;white-space:nowrap}
+.kr-support-button svg{width:16px;height:16px;color:#a1e7c8}.kr-support-button:hover{background:#2b3731;border-color:#8cecc04d}
+@media(max-width:600px){.support-dialog{margin:8px;width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px)}.support-header{padding:16px}.support-footer{padding:12px;gap:8px}.multi-channel-actions{right:60px}.kr-support-button{padding:7px 9px}.multi-channel-entry:has(.multi-channel-actions) .multi-channel-card>div{padding-right:85px}}
 * { box-sizing: border-box; }
 body { margin: 0; background: #101013; }
 button, input, select { font: inherit; }
