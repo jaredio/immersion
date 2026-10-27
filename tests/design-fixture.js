@@ -63,11 +63,19 @@
   document.body.append(tooltip);
   const reply=document.createElement('div'); reply.id='fixture-reply-tooltip';reply.className='z-tooltip';reply.dataset.state='delayed-open';reply.dataset.side='top';reply.hidden=true;
   reply.style.cssText='position:fixed;right:26px;top:170px;z-index:2000;max-width:290px';
-  reply.innerHTML='<div class="text-neutralInverse-fg-default" style="color:#111"><span>Original message: this track has such a clean transition. What is the title?</span></div>';
+  reply.innerHTML='<div class="flex flex-col text-neutralInverse-fg-default" style="color:#111;display:flex;flex-direction:column"><span class="line-clamp-3">Original message: this track has such a clean transition. What is the title?</span></div>';
   document.body.append(reply);
-  const replyTrigger=document.createElement('button');replyTrigger.id='fixture-reply-trigger';replyTrigger.className='text-white/40';replyTrigger.textContent='↳ Replying to synthwave: Original message…';replyTrigger.style.cssText='display:block;background:transparent;border:0;padding:0;color:#ffffff66;font-size:11px';
+  // A portal shell can paint its own background even when its child is hidden.
+  const replyShell=document.createElement('div');replyShell.id='fixture-reply-shell';replyShell.setAttribute('data-radix-popper-content-wrapper','');replyShell.hidden=true;
+  replyShell.style.cssText='position:fixed;right:26px;top:170px;z-index:2000;background:#111;padding:12px;border-radius:8px';replyShell.append(reply);document.body.append(replyShell);
+  const replyTrigger=document.createElement('button');replyTrigger.id='fixture-reply-trigger';replyTrigger.className='text-white/40';replyTrigger.innerHTML='<span class="ml-1">Replying to <span>synthwave</span>: <span class="inline">Original message: this track has such a clean transition. What is the title?</span></span>';replyTrigger.style.cssText='display:block;background:transparent;border:0;padding:0;color:#ffffff66;font-size:11px;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
   document.querySelector('#chatroom-messages [data-index]:last-child').prepend(replyTrigger);
-  replyTrigger.addEventListener('pointerenter',()=>{reply.hidden=false;});replyTrigger.addEventListener('pointerleave',()=>{reply.hidden=true;});
+  replyTrigger.addEventListener('pointerenter',()=>{reply.hidden=false;replyShell.hidden=false;});replyTrigger.addEventListener('pointerleave',()=>{reply.hidden=true;replyShell.hidden=true;});
+  replyTrigger.addEventListener('focus',()=>{reply.hidden=false;replyShell.hidden=false;});replyTrigger.addEventListener('blur',()=>{reply.hidden=true;replyShell.hidden=true;});
+  replyTrigger.setAttribute('aria-describedby',reply.id);
+  const secondReply=replyTrigger.cloneNode(true);secondReply.id='fixture-second-reply';secondReply.querySelector('span > span').textContent='another_author';
+  document.querySelector('#chatroom-messages [data-index]:nth-last-child(2)').prepend(secondReply);
+  secondReply.addEventListener('pointerenter',()=>{reply.hidden=false;replyShell.hidden=false;});secondReply.addEventListener('pointerleave',()=>{reply.hidden=true;replyShell.hidden=true;});
   emote.addEventListener('pointerenter', () => { tooltip.hidden = false; });
   emote.addEventListener('pointerleave', () => { tooltip.hidden = true; });
 

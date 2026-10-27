@@ -6,6 +6,7 @@
       <div class="row"><div><label for="performance">Lean chat & motion</label><p class="help">Instant chat scroll. Fewer visual effects.</p></div><input id="performance" type="checkbox"></div>
       <div class="row"><div><label for="textOnly">Hide chat images</label><p class="help">Hide emotes, badges & media. Keep spacing.</p></div><input id="textOnly" type="checkbox"></div>
       <div class="row"><div><label for="chatClips">Playable chat clips</label><p class="help">Click to play Kick clips in chat or a floating player.</p></div><input id="chatClips" type="checkbox"></div>
+      <div class="row"><div><label for="xEmbeds">X post previews</label><p class="help">Author, post, likes, reposts & views. Uses FxEmbed for visible posts.</p></div><input id="xEmbeds" type="checkbox"></div>
       <p class="eyebrow">Workspace</p>
       <div class="row"><div><label for="compact">Compact sidebar</label><p class="help">More channels, less space.</p></div><input id="compact" type="checkbox"></div>
       <div class="row"><label for="hideRecommended">Hide recommendations</label><input id="hideRecommended" type="checkbox"></div>

@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'reply-preview.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -121,9 +121,35 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.screenshot({ path: path.join(root, `artifacts/${engine}-usercard-v2.png`) });
     await page.getByRole('button', { name: 'Close user card' }).click();
     await page.locator('#fixture-reply-trigger').hover();
-    const quoteColor=await page.locator('#fixture-reply-tooltip .text-neutralInverse-fg-default').evaluate(el=>getComputedStyle(el).color);
-    assert.equal(quoteColor,'rgb(232, 232, 240)','original replied-to messages remain readable on dark previews');
-    await page.screenshot({path:path.join(root,`artifacts/${engine}-reply-preview-v4.png`)});
+    const replyPreview=page.locator('.kr-reply-preview');
+    await replyPreview.waitFor();
+    assert.equal(await replyPreview.locator('header strong').textContent(),'synthwave','preview shows the original author');
+    assert.equal(await replyPreview.locator('.message').textContent(),'Original message: this track has such a clean transition. What is the title?','quote comes directly from the reply line');
+    assert.equal(await page.locator('#fixture-reply-tooltip').isVisible(),false,'native duplicate is suppressed');
+    assert.equal(await page.locator('#fixture-reply-shell').isVisible(),false,'the entire native portal is hidden, including its background');
+    const longWidth=(await replyPreview.boundingBox()).width;
+    const triggerBox=await page.locator('#fixture-reply-trigger').boundingBox();
+    assert.ok(Math.abs((await replyPreview.boundingBox()).x-triggerBox.x)<30,'preview stays aligned with the reply line');
+    await page.screenshot({path:path.join(root,`artifacts/${engine}-reply-preview-long.png`)});
+    await replyPreview.hover();await page.waitForTimeout(220);
+    assert.equal(await replyPreview.count(),1,'moving onto the preview keeps it open');
+    await page.mouse.move(0,0);await replyPreview.waitFor({state:'detached'});
+    await page.locator('#fixture-second-reply .inline').evaluate(el=>el.textContent='lol');
+    await page.locator('#fixture-second-reply').hover();await replyPreview.waitFor();
+    assert.equal(await replyPreview.locator('header strong').textContent(),'another_author');
+    assert.equal(await replyPreview.locator('.message').textContent(),'lol');
+    assert.ok((await replyPreview.boundingBox()).width<longWidth-40,'short replies shrink to their content');
+    await page.screenshot({path:path.join(root,`artifacts/${engine}-reply-preview-short.png`)});
+    await page.keyboard.press('Escape');await replyPreview.waitFor({state:'detached'});
+    await page.mouse.move(0,0);
+    await page.locator('#fixture-reply-shell').evaluate(el=>el.remove());
+    for(let attempt=0;attempt<3;attempt++){
+      await page.locator('#fixture-reply-trigger').hover();await replyPreview.waitFor();
+      assert.equal(await replyPreview.locator('header strong').textContent(),'synthwave','reopens consistently without a native tooltip');
+      await page.mouse.move(0,0);await replyPreview.waitFor({state:'detached'});
+    }
+    await page.locator('#fixture-reply-trigger').focus();await replyPreview.waitFor();
+    await page.locator('#fixture-reply-trigger').evaluate(el=>el.blur());await replyPreview.waitFor({state:'detached'});
     await button.click();
     const settings = page.locator('#kr-root #settings-dialog');
     await settings.waitFor({ state: 'visible' });

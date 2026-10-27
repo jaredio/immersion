@@ -44,7 +44,7 @@
       .float .workspace-focus-surface{display:none}
       .info{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 10px}.info>.title{grid-column:1/-1}.words{min-width:0}.words .channel,.words .credit{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.actions{grid-column:2;grid-row:2;align-self:center;gap:2px}.actions button,.actions a{width:24px;height:24px;padding:4px;border-radius:6px}.actions svg{width:14px;height:14px}:host([data-workspace]) .card{width:100%}:host([data-workspace]) .info>.title{display:none}:host([data-workspace]) .info{grid-template-columns:1fr}:host([data-workspace]) .actions{grid-column:1;grid-row:auto;justify-self:end}
     `;
-    function shadow(host){const root=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css;root.append(style);return root;}
+    function shadow(host){const root=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css+KickRefined.chatEmbedCSS;root.append(style);return root;}
     function button(label,symbol,action){const el=document.createElement('button');el.type='button';el.title=label;el.setAttribute('aria-label',label);el.innerHTML=icon(symbol);el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();action(el);});return el;}
     function status(record,text=''){record.status.textContent=text;}
     function setCredit(record,text){record.credit.textContent=text;if(floating?.record===record)floating.credit.textContent=text;}
@@ -162,7 +162,9 @@
       preview.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(performance.now()<(record.suppressClick||0))return;record.resume=null;void play(record);});
       // Isolate controls from Kick's message double-click/reply actions.
       for(const type of ['click','dblclick','keydown','keyup'])root.addEventListener(type,event=>event.stopPropagation());
-      if(native){native.setAttribute('data-kr-clip-native','');native.after(host);}else row.append(host);
+      if(native)native.setAttribute('data-kr-clip-native','');
+      // Match X cards at the virtual row level, outside Kick's padded message body.
+      row.append(host);
       records.add(record);
       visibility?.observe(host);
       return record;

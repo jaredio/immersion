@@ -4,7 +4,7 @@
   if (!api?.storage || document.getElementById('kr-root')) return;
   let root = document.documentElement;
   let settings = normalize();
-  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge;
+  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, xPosts, replyPreviews;
   let channels = [], shown = [], selected = 0;
   let refreshTimer, writeTimer, routeTimer, routeTimeout, previousFocus;
   let dockPosition = '';
@@ -33,6 +33,8 @@
     }
     updateSidebarRows();
     clips?.setEnabled(settings.enabled&&settings.chatClips&&!settings.textOnly);
+    xPosts?.setEnabled(settings.enabled&&settings.xEmbeds&&!settings.textOnly);
+    replyPreviews?.setEnabled(settings.enabled);
     if(drag?.kind==='clip'&&(!settings.chatClips||settings.textOnly))endDrag();
     if (!settings.enabled) { endDrag(); multi?.close(); }
   }
@@ -92,6 +94,8 @@
     multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut });
     clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
     clipBridge=KickRefinedClipBridge.create({getClips:()=>clips,multi,startDrag:startClipDrag,endDrag});
+    xPosts=KickRefinedX.create({enabled:settings.enabled&&settings.xEmbeds&&!settings.textOnly});
+    replyPreviews=KickRefinedReplies.create({enabled:settings.enabled});
     const localKeydown=event=>{
       if(event.key==='Escape' && (palette?.open || settingsDialog?.open)) { event.preventDefault();palette?.open?palette.close():settingsDialog.close(); }
       else handleShortcut(event);
@@ -416,7 +420,7 @@
   function dispose() {
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; abort.abort(); observer.disconnect(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
-    clipBridge?.destroy();clips?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
+    clipBridge?.destroy();clips?.destroy();xPosts?.destroy();replyPreviews?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
   }
   function handleShortcut(e) {
     if(e.key==='Escape' && drag) { e.preventDefault();endDrag();return; }

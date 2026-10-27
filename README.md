@@ -45,6 +45,8 @@ Channel details load from Kick's public endpoint and are cached for one minute. 
 
 To update, reload the extension and refresh Kick.
 
+Hover a message's **Replying to** line to read the original author and quote. The preview sits beside that line, shrinks for short replies, and wraps longer messages within the chat width. Move onto the preview to read or select text; Escape or scrolling closes it. It reads the quote already rendered by Kick and makes no message-history requests.
+
 Clip links in regular and popout chat get a compact player card. Press **Play clip** to load the video. **Pop out clip player** moves it into a floating player without restarting it; return it to chat, resize it, or use fullscreen. Only one clip plays per page/frame. Inline playback stops when its card scrolls out of view or the message is removed; an explicitly popped-out clip can keep playing after its message disappears.
 
 Disable **Playable chat clips** in settings to restore Kick's native previews. **Hide chat images** also disables clip cards. Metadata and the packaged HLS player load on demand, with no autoplay on message arrival. Existing native thumbnails may be reused. If a clip is deleted, blocked, or cannot play, the original Kick link remains available. This uses Kick's public clip endpoint, which can change independently of the extension.
@@ -64,6 +66,7 @@ npm ci
 npm run build
 npm test
 npm run test:clips
+npm run test:posts
 ```
 
 Builds and installable ZIPs are created in `dist/`.
@@ -73,3 +76,7 @@ Builds and installable ZIPs are created in `dist/`.
 Clip browser checks use a small generated HLS video under `tests/clip-media/`. Set `KR_ENGINE=firefox` to run the Firefox engine check. HLS playback uses the locally packaged Apache-2.0 licensed hls.js light build; no CDN script is loaded.
 
 Settings are stored locally. No analytics or custom backend. Independent project; not affiliated with Kick.
+
+X/Twitter status links (including links with `?s=20`) get compact previews in regular and popout chat: author, text, images, reposts, likes and views, plus copy/open controls. Counts are a cached snapshot, not live counters; unavailable counts show a dash. Brand and engagement icons use locally bundled SVG paths from X. Video posts show a thumbnail that opens on X. Disable **X post previews** or enable **Hide chat images** to restore the links.
+
+Visible X posts load metadata through the public FxEmbed API (`api.fxtwitter.com`); their public handle and post ID are sent without cookies. Images load directly from `pbs.twimg.com` without a referrer. There are no X widget scripts or autoplay. Requests are deduplicated, limited to two at once, and cached for two minutes. Unavailable/private/deleted posts retain their original link. FxEmbed availability and its access to X can change independently of Immersion. The packages request access only to that metadata API in addition to their existing Kick content scripts.

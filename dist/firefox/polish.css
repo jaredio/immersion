@@ -119,6 +119,8 @@ html[data-kr-enabled="true"] .z-tooltip :is(.text-neutralInverse-fg-default,.tex
 html[data-kr-enabled="true"] .z-tooltip .text-neutral { color: #b2b2c0 !important; }
 html[data-kr-enabled="true"] .z-tooltip .text-neutralInverse-fg-default a { color: var(--kr-accent) !important; text-decoration: underline; text-underline-offset: 2px; }
 html[data-kr-enabled="true"] .z-tooltip ::selection { color: #fff; background: rgba(var(--kr-accent-rgb),.3); }
+/* Reply previews read the quote directly; suppress Kick's delayed duplicate. */
+html[data-kr-enabled="true"][data-kr-reply-previews="true"] :is(.z-tooltip,[data-radix-popper-content-wrapper],[data-radix-popper-content-wrapper] > [data-side]):has(.text-neutralInverse-fg-default) { display:none !important; pointer-events:none !important; }
 html[data-kr-enabled="true"] #chatroom-messages button[class~="text-white/40"] { color: #a1a1ae !important; }
 html[data-kr-enabled="true"] :is([role="menu"],[role="listbox"],[data-radix-popper-content-wrapper] > [role="dialog"]) {
   background: #141418 !important;

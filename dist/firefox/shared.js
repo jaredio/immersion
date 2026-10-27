@@ -7,6 +7,7 @@
     hideRecommended: false,
     textOnly: false,
     chatClips: true,
+    xEmbeds: true,
     chatWidth: 340,
     fontSize: 14,
     accent: 'mint',
@@ -15,7 +16,7 @@
   function normalize(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const result = { ...defaults };
-    for (const key of ['enabled', 'performance', 'compact', 'hideRecommended', 'textOnly', 'chatClips']) {
+    for (const key of ['enabled', 'performance', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds']) {
       if (typeof source[key] === 'boolean') result[key] = source[key];
     }
     for (const [key, min, max] of [['chatWidth', 280, 440], ['fontSize', 12, 18]]) {
@@ -37,6 +38,14 @@
     } catch { return null; }
   }
   const api = typeof browser !== 'undefined' ? browser : typeof chrome !== 'undefined' ? chrome : null;
+  // Keep chat cards aligned even when Kick lays out a message with flex children.
+  const chatEmbedCSS = `
+    :host(:not([data-workspace])){display:block;width:100%;min-width:0;max-width:100%;flex:0 0 100%}
+    :host(:not([data-workspace])) .card{box-sizing:border-box;width:calc(100% - 4px);max-width:360px;margin:8px auto 6px;border:1px solid #ffffff14;border-radius:12px;background:#121216;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}
+    :host(:not([data-workspace])) .card:focus-within{border-color:color-mix(in srgb,var(--kr-accent,#8cecc0) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}
+    @media(hover:hover) and (pointer:fine){:host(:not([data-workspace])) .card:hover{border-color:color-mix(in srgb,var(--kr-accent,#8cecc0) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}}
+    @media(prefers-reduced-motion:reduce){:host(:not([data-workspace])) .card{transition:none}}
+  `;
   function multiState(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const channels = Array.isArray(source.channels) ? [...new Set(source.channels.filter(s => typeof s === 'string').map(s => channelSlug(`/${s}`)).filter(Boolean))].slice(0, 6) : [];
@@ -68,5 +77,5 @@
     let image='';try{const url=new URL(user.profile_pic);if(url.protocol==='https:'&&url.hostname.endsWith('.kick.com'))image=url.href;}catch{}
     return {title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:typeof user.bio==='string'?user.bio.trim().slice(0,20000):'',category:text(category),live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',image,socials};
   }
-  globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, multiState, multiURL, channelDetails });
+  globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, chatEmbedCSS, multiState, multiURL, channelDetails });
 })();

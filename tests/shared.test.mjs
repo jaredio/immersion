@@ -48,7 +48,9 @@ test('both packages contain only scoped permissions and local assets', async () 
     assert.equal(manifest.name,'Immersion');
     assert.equal(manifest.action.default_title,'Immersion');
     assert.deepEqual(manifest.permissions, ['storage']);
-    assert.ok(!manifest.background && !manifest.externally_connectable);
+    assert.ok(!manifest.externally_connectable);
+    assert.deepEqual(manifest.host_permissions,['https://api.fxtwitter.com/*']);
+    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['x-post-data.js','x-background.js']}:{service_worker:'x-background.js'});
     for (const script of manifest.content_scripts) {
       for (const match of script.matches) assert.ok(['https://kick.com/*', 'https://www.kick.com/*', 'https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat', 'https://player.kick.com/*'].includes(match), match);
       for (const file of [...(script.js || []), ...(script.css || [])]) await readFile(new URL(`../dist/${browser}/${file}`, import.meta.url));
