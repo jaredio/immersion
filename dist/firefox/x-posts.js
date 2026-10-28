@@ -17,11 +17,11 @@
     const nativeStyle=document.createElement('style');nativeStyle.textContent='[data-kr-x-link]{display:none!important}';document.head.append(nativeStyle);
     const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=[...records].find(r=>r.host===entry.target);if(record){if(entry.isIntersecting)load(record);else stopVideo(record);}}}, {rootMargin:'80px'});
     function stopVideo(record){const active=record.activeVideo;if(!active)return;record.activeVideo=null;if(active.video){active.video.pause();active.video.removeAttribute('src');active.video.load();}active.frame.remove();active.slot.replaceChildren(active.preview);}
-    function release(record){stopVideo(record);visibility.unobserve(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);clearTimeout(record.feedback);}
+    function release(record){stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);clearTimeout(record.feedback);}
     function hideLinks(record){for(const link of record.links)link.setAttribute('data-kr-x-link','');}
     function button(label,kind,click){const el=document.createElement('button');el.type='button';el.title=label;el.setAttribute('aria-label',label);el.innerHTML=svg(kind);el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();click(el);});return el;}
     function render(record,post){
-      const card=record.card;card.replaceChildren();
+      record.releaseMessage??=KickRefined.chatEmbedMessage(record.row);const card=record.card;card.replaceChildren();
       const body=document.createElement('div');body.className='body';
       const author=document.createElement('a');author.className='author';author.href=`https://x.com/${post.handle}`;author.target='_blank';author.rel='noopener noreferrer';
       if(post.avatar){const img=document.createElement('img');img.className='avatar';img.src=post.avatar;img.alt='';img.referrerPolicy='no-referrer';img.loading='lazy';author.append(img);}

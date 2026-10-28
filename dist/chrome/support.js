@@ -1,14 +1,17 @@
 /* Channel support discovery and a provider-owned form, loaded only on click. */
 (() => {
   const {parse,extract}=KickRefinedSupportData;
-  const heart='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0l-1 1-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M12 9v7m-3.5-3.5h7"/></svg>';
+  const dollar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20m5-16H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
   const glyph=path=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
   function create({enabled=true}={}){
     const {api,channelSlug,channelDetails}=KickRefined;
     const cache=new Map(),pending=new Map(),controllers=new Set(),buttons=new Map(),actionGroups=new Set();
-    let slug='',stored=Object.create(null),pinned=[],destroyed=false,session=null,dialog=null,shadow=null,host=null,frame=null,timeout=0,opener=null;
+    let slug='',stored=Object.create(null),pinned=[],destroyed=false,session=null,dialog=null,shadow=null,host=null,frame=null,timeout=0,opener=null,positionFrame=0,openerRect=null;
     const abort=new AbortController();
     const $=selector=>shadow.querySelector(selector);
+    function positionDialog(){positionFrame=0;if(!dialog?.open)return;if(opener?.isConnected)openerRect=opener.getBoundingClientRect();const anchor=openerRect;if(innerWidth<600||!anchor?.width){dialog.removeAttribute('data-anchored');return;}const size=dialog.getBoundingClientRect(),left=Math.max(8,Math.min(anchor.right-size.width,innerWidth-size.width-8)),below=anchor.bottom+8,top=below+size.height<=innerHeight-8?below:anchor.top-size.height-8>=8?anchor.top-size.height-8:Math.max(8,Math.min(below,innerHeight-size.height-8));dialog.setAttribute('data-anchored','');dialog.style.setProperty('--support-left',`${left}px`);dialog.style.setProperty('--support-top',`${top}px`);}
+    function schedulePosition(){if(!positionFrame&&dialog?.open)positionFrame=requestAnimationFrame(positionDialog);}
+    const panelResize=new ResizeObserver(schedulePosition);window.addEventListener('resize',schedulePosition,{signal:abort.signal});window.addEventListener('scroll',schedulePosition,{signal:abort.signal,passive:true,capture:true});
     const validSlug=value=>typeof value==='string'&&/^[a-z0-9_]{1,40}$/.test(value);
     async function embedRequest(message){try{return (await api.runtime.sendMessage(message))?.ok===true;}catch{return false;}}
     function endEmbed(){if(session?.item&&session.item.provider!=='powerchat')embedRequest({type:'immersion:tip-embed-end',token:session.token});}
@@ -68,7 +71,7 @@
     function makeButton(channel){
       for(const existing of buttons.keys())if(!existing.isConnected)buttons.delete(existing);
       const button=document.createElement('button');button.type='button';button.className='kr-support-button';button.dataset.krSupport=channel;
-      button.innerHTML=heart+'<span>Support</span>';button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-label',`Support ${channel}`);
+      button.innerHTML=dollar+'<span>Support</span>';button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-label',`Support ${channel}`);
       // The map is disposable housekeeping; a detached/reused card must keep its own recipient.
       buttons.set(button,channel);button.addEventListener('click',()=>open(channel,button));return button;
     }
@@ -77,13 +80,14 @@
       host=document.createElement('div');host.id='kr-support-root';shadow=host.attachShadow({mode:'open'});
       const css=document.createElement('link');css.rel='stylesheet';css.href=api.runtime.getURL('ui.css');shadow.append(css);
       dialog=document.createElement('dialog');dialog.className='support-dialog';dialog.setAttribute('aria-labelledby','support-title');
-      dialog.innerHTML=`<header class="support-header"><div class="support-mark">${heart}</div><div class="support-heading"><h2 id="support-title"></h2><p id="support-subtitle">Send a tip</p></div><button class="support-close support-icon-button" aria-label="Close support" title="Close">${glyph('m6 6 12 12M18 6 6 18')}</button></header><div class="support-controls"><div class="support-provider-row"><label class="support-provider-label"><select id="support-provider" aria-label="Tip service"></select></label><a id="support-destination" class="support-icon-button" target="_blank" rel="noopener noreferrer" aria-label="View tip page" title="View tip page">${glyph('M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5')}</a></div><p id="support-source"></p></div><div id="support-status" role="status"></div><div class="support-frame-mount"></div><section class="support-external-checkout" hidden><h3 id="support-external-title">Continue with the tip service</h3><p>You can open checkout in a separate window while your Kick stream stays open here.</p><button id="support-checkout-window" type="button">Open KickBot checkout &#8599;</button></section><details class="support-link-editor"><summary>Use a different support link</summary><form id="support-link-form"><label for="support-link">Tip-page URL</label><div><input id="support-link" type="url" required placeholder="https://powerchat.live/creator" maxlength="2048" autocomplete="off"><button type="submit">Save</button></div><button id="support-forget" type="button">Remove saved link</button><p id="support-link-error" role="status"></p></form></details><footer class="support-footer"><span><i class="support-provider-dot" aria-hidden="true"></i><strong id="support-handled">Tip service</strong> checkout</span><button id="support-retry" class="support-icon-button" aria-label="Reload form" title="Reload form" hidden>${glyph('M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.5-2L20 8M4 16l2.4 3A7 7 0 0 0 18 17')}</button><button id="support-popout" class="support-icon-button" aria-label="Open checkout window" title="Open checkout window" hidden>${glyph('M8 3h13v13H8zM3 8v13h13v-5M8 7h13')}</button><a id="support-external" class="support-icon-button" aria-label="Open in new tab" title="Open in new tab" target="_blank" rel="noopener noreferrer" hidden>${glyph('M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5')}</a></footer>`;
+      dialog.innerHTML=`<header class="support-header"><div class="support-mark">${dollar}</div><div class="support-heading"><h2 id="support-title"></h2><p id="support-subtitle">Send a tip</p></div><button class="support-close support-icon-button" aria-label="Close support" title="Close">${glyph('m6 6 12 12M18 6 6 18')}</button></header><div class="support-controls"><div class="support-provider-row"><label class="support-provider-label"><select id="support-provider" aria-label="Tip service"></select></label><a id="support-destination" class="support-icon-button" target="_blank" rel="noopener noreferrer" aria-label="View tip page" title="View tip page">${glyph('M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5')}</a></div><p id="support-source"></p></div><div id="support-status" role="status"></div><div class="support-frame-mount"></div><section class="support-external-checkout" hidden><h3 id="support-external-title">Continue with the tip service</h3><p>You can open checkout in a separate window while your Kick stream stays open here.</p><button id="support-checkout-window" type="button">Open KickBot checkout &#8599;</button></section><details class="support-link-editor"><summary>Use a different support link</summary><form id="support-link-form"><label for="support-link">Tip-page URL</label><div><input id="support-link" type="url" required placeholder="https://powerchat.live/creator" maxlength="2048" autocomplete="off"><button type="submit">Save</button></div><button id="support-forget" type="button">Remove saved link</button><p id="support-link-error" role="status"></p></form></details><footer class="support-footer"><span><i class="support-provider-dot" aria-hidden="true"></i><strong id="support-handled">Tip service</strong> checkout</span><button id="support-retry" class="support-icon-button" aria-label="Reload form" title="Reload form" hidden>${glyph('M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.5-2L20 8M4 16l2.4 3A7 7 0 0 0 18 17')}</button><button id="support-popout" class="support-icon-button" aria-label="Open checkout window" title="Open checkout window" hidden>${glyph('M8 3h13v13H8zM3 8v13h13v-5M8 7h13')}</button><a id="support-external" class="support-icon-button" aria-label="Open in new tab" title="Open in new tab" target="_blank" rel="noopener noreferrer" hidden>${glyph('M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5')}</a></footer>`;
       shadow.append(dialog);document.body.append(host);
+      panelResize.observe(dialog);
       $('.support-close').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>{if(!dialog.open)cleanup();});
       dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
       $('#support-provider').addEventListener('change',()=>loadForm(session.items[Number($('#support-provider').value)]));
       $('#support-retry').addEventListener('click',()=>{if(session?.item)loadForm(session.item);});
-      const popout=()=>{if(session?.item){const url=new URL(session.item.href);url.hash='immersion-checkout';window.open(url.href,'_blank','popup,width=540,height=800,noopener,noreferrer');}};
+      const popout=()=>{if(session?.item){const url=new URL(session.item.href);url.hash='immersion-checkout';window.open(url.href,'_blank','popup,width=460,height=700,noopener,noreferrer');}};
       $('#support-checkout-window').addEventListener('click',popout);$('#support-popout').addEventListener('click',popout);
       $('#support-link-form').addEventListener('submit',async event=>{
         event.preventDefault();if(!session)return;
@@ -103,8 +107,9 @@
       for(const type of ['keydown','keyup','keypress'])shadow.addEventListener(type,event=>event.stopPropagation());
     }
     function cleanup(){
+      cancelAnimationFrame(positionFrame);positionFrame=0;dialog?.removeAttribute('data-anchored');
       endEmbed();clearTimeout(timeout);frame?.remove();frame=null;session=null;
-      if(opener?.isConnected)opener.focus({preventScroll:true});opener=null;
+      if(opener?.isConnected)opener.focus({preventScroll:true});opener=null;openerRect=null;
     }
     function status(text){$('#support-status').textContent=text;$('#support-status').hidden=!text;}
     function showItems(items){
@@ -157,7 +162,7 @@
       $('#support-title').textContent=`Support ${channel}`;$('#support-link-error').textContent='';$('.support-controls').hidden=true;
       dialog.dataset.checkout='loading';$('.support-external-checkout').hidden=true;$('.support-frame-mount').hidden=true;
       $('.support-link-editor').open=false;$('#support-external').hidden=$('#support-retry').hidden=$('#support-popout').hidden=true;
-      status('Finding channel support links…');dialog.showModal();
+      status('Finding channel support links…');dialog.showModal();schedulePosition();
       await ready;if(session!==identity)return;scanPinned();
       const found=await discover(channel);if(session===identity)showItems(found);
     }
@@ -186,7 +191,7 @@
     function clearActionGroups(){for(const group of actionGroups)group.removeAttribute('data-kr-support-actions');actionGroups.clear();}
     return {refresh,open,makeButton,channel:channel=>request(channel,'channel'),panels:channel=>request(channel,'panels'),
       setEnabled(value){enabled=!!value;if(!enabled&&dialog?.open)dialog.close();refresh();},
-      destroy(){destroyed=true;abort.abort();for(const controller of controllers)controller.abort();for(const button of buttons.keys())button.remove();buttons.clear();clearActionGroups();if(dialog?.open)dialog.close();cleanup();host?.remove();cache.clear();}
+      destroy(){destroyed=true;abort.abort();panelResize.disconnect();for(const controller of controllers)controller.abort();for(const button of buttons.keys())button.remove();buttons.clear();clearActionGroups();if(dialog?.open)dialog.close();cleanup();host?.remove();cache.clear();}
     };
   }
   globalThis.KickRefinedSupport=Object.freeze({create});

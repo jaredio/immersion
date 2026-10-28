@@ -6,17 +6,21 @@ A sleek dark theme and built-in multistream experience for Kick.
 
 ## Features
 
-- Clean dark theme with customizable accent colors.
+- Clean dark theme with a pale Kick green default accent (`#B0FF8C`) and alternative accent colors.
 - Modern sidebars, search, tooltips, and chat styling.
 - Alt+K channel switcher with profile pictures and live status.
 - Drag channels into multiview with a subtle drop target and compact drag card.
 - Drag-to-resize layouts, quick chat tabs, and direct close, fullscreen, and reorder buttons.
 - Optional audio mixing with an indicator on each audible stream.
-- A focused channel card with an expandable profile, formatted bio, socials, and image panels.
+- Matching channel cards in single-stream and workspace views, with live avatar rings, badges, title, category, language/maturity tags and viewer counts.
+- Collapsible formatted bios, socials and responsive image panels, without repeating the channel heading.
+- Compact headers with a bottom-centred bio arrow and compact, fully wrapping titles. Ranking badges use a small icon and label. Replaced native panels stay hidden, including panels loaded later, and return when Immersion is disabled.
+- Native notifications, follow, gift, subscribe, share and report controls alongside Support. The page's channel uses Kick's existing handlers and states; account actions for other workspace channels open that channel's native controls in a separate window.
 - Saved viewing sessions and a collapsible icon toolbar with hover tooltips.
 - Click-to-play Kick clip cards in chat, with a movable/resizable floating player and fullscreen.
 - Drag clip cards into the workspace to watch alongside live streams or feature a clip.
 - A native-style Support button with a compact tip popover, Powerchat/KickBot/StreamElements detection, Firefox embedding, and per-channel saved links.
+- Support uses a dollar icon and shares a compact 420px surface with the native Subscribe and Gift Subs popovers. Native checkout prices, validation and selection handlers stay intact; long emote/badge lists scroll within their section. Support anchors to its channel action on desktop and fits the viewport on mobile.
 
 ## Install
 
@@ -89,6 +93,8 @@ npm test
 npm run test:clips
 npm run test:posts
 npm run test:media
+npm run test:channels
+npm run test:checkouts
 ```
 
 Builds and installable ZIPs are created in `dist/`.
@@ -100,6 +106,8 @@ Clip browser checks use a small generated HLS video under `tests/clip-media/`. S
 Settings are stored locally. No analytics or custom backend. Independent project; not affiliated with Kick.
 
 X/Twitter posts and profiles, TikTok videos and profiles (including short links), and YouTube videos and Shorts get matching compact cards in regular, workspace and popout chat. Cards use platform logos, author details, copy/open controls and available engagement counts. Clips share the same width and subtle hover treatment; all chat cards leave a small inset from the edges.
+
+TikTok previews show the whole frame within a 190px-high thumbnail; inline playback is capped at 300px, with fullscreen available. A faint alignment cue groups each chat card with its native sender and surrounding message, without adding another sender label or changing username actions.
 
 Playable X videos use native video controls. TikTok and YouTube players load only when you press Play and support fullscreen; closing the player or scrolling it out of view releases it. Private, deleted, restricted or embedding-disabled media may remain unavailable. Original links remain available when metadata fails, with a retry control.
 

@@ -11,12 +11,12 @@
       <p class="eyebrow">Workspace</p>
       <div class="row"><div><label for="compact">Compact sidebar</label><p class="help">More channels, less space.</p></div><input id="compact" type="checkbox"></div>
       <div class="row"><label for="hideRecommended">Hide recommendations</label><input id="hideRecommended" type="checkbox"></div>
-      <div class="row"><label for="accent">Accent</label><select id="accent"><option value="mint">Mint</option><option value="violet">Violet</option><option value="blue">Ice blue</option><option value="neutral">Neutral</option></select></div>
+      <div class="row"><label for="accent">Accent</label><select id="accent"><option value="mint">Kick green</option><option value="violet">Violet</option><option value="blue">Ice blue</option><option value="neutral">Neutral</option></select></div>
       <div class="range"><label for="chatWidth">Chat width <output for="chatWidth"></output></label><input id="chatWidth" type="range" min="280" max="440" step="10"></div>
       <div class="range"><label for="fontSize">Chat text <output for="fontSize"></output></label><input id="fontSize" type="range" min="12" max="18" step="1"></div>`;
     function update(settings) {
       if (!container.getRootNode().host) {
-        container.ownerDocument.documentElement.style.setProperty('--accent', { mint: '#8cecc0', violet: '#b8a2ff', blue: '#8bbcff', neutral: '#e4e4e7' }[settings.accent]);
+        container.ownerDocument.documentElement.style.setProperty('--accent', { mint: '#b0ff8c', violet: '#b8a2ff', blue: '#8bbcff', neutral: '#e4e4e7' }[settings.accent]);
       }
       for (const input of container.querySelectorAll('input,select')) {
         if (input.type === 'checkbox') input.checked = settings[input.id];

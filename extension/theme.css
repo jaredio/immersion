@@ -7,8 +7,13 @@ html[data-kr-enabled="true"] {
   --kr-raised: #16161b;
   --kr-border: #ffffff0d;
   --kr-muted: #96969f;
-  --kr-accent: #8cecc0;
-  --kr-accent-rgb: 140, 236, 192;
+  --kr-accent: #b0ff8c;
+  --kr-accent-rgb: 176, 255, 140;
+  --kr-checkout-width: 420px;
+  --kr-checkout-max-height: 620px;
+  --kr-checkout-radius: 14px;
+  --kr-checkout-surface: #121216;
+  --kr-checkout-border: #ffffff14;
   --chat-width: var(--kr-chat-width, 340px) !important;
   --chatroom-font-size: var(--kr-font-size, 14px) !important;
   --sidebar-expanded-width: 248px !important;

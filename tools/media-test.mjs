@@ -12,7 +12,7 @@ const item={id:ttId,desc:'TikTok video title',author:{uniqueId:'creator',nicknam
 const publicHTML=scope=>`<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify({__DEFAULT_SCOPE__:scope})}</script><script>window.providerScriptRan=true</script>`;
 const ttVideo=publicHTML({'webapp.video-detail':{itemInfo:{itemStruct:item}}}),ttProfile=publicHTML({'webapp.user-detail':{userInfo:{user:{uniqueId:'creator',nickname:'Creator',signature:'A public creator profile',avatarThumb:'https://p16.tiktokcdn.com/avatar.jpg'},stats:{followerCount:500,heartCount:1200,videoCount:33}}}});
 const youtube={title:'A YouTube video <script>no()</script>',author_name:'Creator',author_url:'https://www.youtube.com/@creator',thumbnail_url:`https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,html:'<script>window.providerScriptRan=true</script>'};
-const html=`<!doctype html><html><head><style>body{margin:0;background:#0b0b0e;color:#eee;font:14px system-ui}aside{width:360px;margin:10px auto}#chatroom-messages{height:730px;overflow:auto}[data-index]{padding:6px 10px}a{color:#a3eed2;overflow-wrap:anywhere}</style></head><body><aside><div id="chatroom-messages">${Object.entries(links).map(([key,href],index)=>`<div id="row-${key}" data-index="${index}"><b>viewer</b> <a href="${href}">${href}</a></div>`).join('')}</div></aside></body></html>`;
+const html=`<!doctype html><html><head><style>body{margin:0;background:#0b0b0e;color:#eee;font:14px system-ui}aside{width:360px;margin:10px auto}#chatroom-messages{height:730px;overflow:auto}[data-index]{padding:6px 10px}a{color:#a3eed2;overflow-wrap:anywhere}.sender{padding:0;border:0;background:none;color:#b8a2ff;font:600 13px system-ui;cursor:pointer}.message-body{line-height:1.55}</style></head><body><aside><div id="chatroom-messages">${Object.entries(links).map(([key,href],index)=>`<div id="row-${key}" data-index="${index}"><div class="native-message"><button class="sender" data-prevent-expand="true">viewer_${key}</button> <span class="message-body">${key==='tt'?'look at this ':''}<a href="${href}">${href}</a>${key==='tt'?' the ending is good':''}</span></div></div>`).join('')}</div></aside></body></html>`;
 const video=Buffer.concat(await Promise.all(['init.mp4','segment-0.m4s','segment-1.m4s'].map(name=>readFile(path.join(root,'tests/clip-media/vp9',name)))));
 let browser,context,playerRequests=0,videoRequests=0,failedVideoRequests=0,failAllVideos=false;
 if(engine==='chromium')context=await playwright.chromium.launchPersistentContext(path.join(root,'tmp/media-profile'),{executablePath:playwright.chromium.executablePath(),headless:true,viewport:{width:900,height:800},args:[`--disable-extensions-except=${path.join(root,'dist/chrome')}`,`--load-extension=${path.join(root,'dist/chrome')}`]});
@@ -53,6 +53,7 @@ try{
  await context.route('https://www.tiktok.com/player/v1/**',player);await context.route('https://www.youtube-nocookie.com/embed/**',player);
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto('https://kick.com/popout/test/chat');
+ await page.evaluate(()=>{window.senderClicks=0;document.querySelector('#row-tt .sender').addEventListener('click',()=>window.senderClicks++);});
  if(engine==='firefox'){
   for(const file of ['shared.js','x-post-data.js','x-posts.js','media-data.js','media-embeds.js'])await page.addScriptTag({path:path.join(root,'extension',file)});
   await page.evaluate(()=>{document.documentElement.dataset.krEnabled='true';window.testX=KickRefinedX.create();window.testMedia=KickRefinedMedia.create();});
@@ -63,10 +64,16 @@ try{
  assert.ok(videoRequests>0,'X video plays from a native video element');
  assert.equal(failedVideoRequests,1,'unsupported first rendition automatically falls back');
  const tt=page.locator('#row-tt .kr-media-embed');await page.locator('#row-tt').scrollIntoViewIfNeeded();await tt.locator('.name').waitFor();
+ const previewHeight=await tt.locator('.video-preview').evaluate(node=>node.getBoundingClientRect().height);assert.equal(previewHeight,190,'TikTok preview has a compact height');
+ assert.equal(await tt.locator('.video-preview img').evaluate(node=>getComputedStyle(node).objectFit),'contain','portrait previews retain the whole image');
+ assert.equal(await page.locator('#row-tt .message-body').innerText(),'look at this the ending is good','surrounding text stays together in the native message');
+ assert.equal(await page.locator('#row-tt').getAttribute('data-kr-embed-row'),'','embed is grouped with its native sender and text');
+ await page.locator('#row-tt .sender').click();assert.equal(await page.evaluate(()=>window.senderClicks),1,'native sender actions remain clickable');
  await page.locator('#row-tt').evaluate(node=>{node.scrollIntoView({block:'start'});document.getElementById('chatroom-messages').scrollTop+=100;});
  await x.locator('iframe').waitFor({state:'detached'});assert.equal(await tt.locator('[aria-label="12 likes"]').count(),1);assert.equal(await tt.locator('[aria-label="3 shares"]').count(),1);assert.equal(await tt.locator('[aria-label="100 views"]').count(),1);
  assert.equal(await tt.locator('.brand.tiktok svg').count(),1);await tt.getByRole('button',{name:'Play TikTok video'}).click();
  await tt.locator('iframe').waitFor();assert.ok((await tt.locator('iframe').getAttribute('src')).includes(`/player/v1/${ttId}`));
+ assert.equal(await tt.locator('.player').evaluate(node=>node.getBoundingClientRect().height),300,'inline TikTok playback stays compact');assert.equal(await tt.locator('iframe').getAttribute('allowfullscreen'),'');
  await tt.getByRole('button',{name:'Close embedded player'}).click();assert.equal(await tt.locator('iframe').count(),0);
  const yt=page.locator('#row-yt .kr-media-embed');await page.locator('#row-yt').scrollIntoViewIfNeeded();await yt.locator('.name').waitFor();
  assert.equal(await yt.locator('.brand.youtube svg').count(),1);assert.equal(await yt.locator('.stat').count(),0,'YouTube does not receive invented view/like counts');
@@ -88,6 +95,7 @@ try{
  assert.equal(await x.getByRole('link',{name:'Open on X',exact:true}).getAttribute('href'),links.x);
  if(engine==='chromium'){const worker=context.serviceWorkers()[0];await worker.evaluate(()=>chrome.storage.local.set({settings:{textOnly:true}}));}
  else await page.evaluate(()=>{testX.setEnabled(false);testMedia.setOptions({media:false,profiles:false});});
- await page.locator('.kr-media-embed,.kr-x-post').first().waitFor({state:'detached'});assert.equal(await page.locator('.kr-media-embed,.kr-x-post').count(),0);assert.equal(await page.locator('#row-tt>a').isVisible(),true,'disabling restores the original links');
+ await page.locator('.kr-media-embed,.kr-x-post').first().waitFor({state:'detached'});assert.equal(await page.locator('.kr-media-embed,.kr-x-post').count(),0);assert.equal(await page.locator('#row-tt .message-body>a').isVisible(),true,'disabling restores the original links');
+ assert.equal(await page.locator('[data-kr-embed-row]').count(),0,'disabling removes message grouping');
  assert.deepEqual(errors,[]);console.log(`${engine}: X video playback, TikTok short links/stats/profile, X profiles, YouTube videos/Shorts, lazy players, referrer, uniform widths and cleanup passed`);
 }finally{await context.close();await browser?.close();}

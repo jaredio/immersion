@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -270,11 +270,12 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('.profile-panel img').count(),0,'support discovery does not render or load panel images');
     await detailsButton.click();const expanded=multi.getByRole('region',{name:'About aurora',exact:true});await expanded.waitFor();
     await expanded.locator('.profile-panel').first().waitFor();assert.equal(panelFetches,panelsBeforeExpansion,'profile expansion reuses channel panel data from support discovery');
-    assert.equal(await detailsButton.locator('.channel-viewers').textContent(),'1,428 viewers');
-    assert.equal(await detailsButton.locator('.channel-viewers svg').count(),1,'viewer count has an icon beside the category');
+    const summary=multi.locator('.multi-channel-card[data-channel="aurora"]');
+    assert.equal(await summary.locator('.channel-viewers').textContent(),'1,428 watching');
+    assert.equal(await summary.locator('.channel-viewers svg').count(),1,'viewer count has an icon');
     assert.equal(await expanded.locator('.profile-identity').count(),0,'expanded bio does not repeat the channel heading');
     assert.equal(await expanded.getByText('1,428 viewers',{exact:true}).count(),0,'viewer count appears only in the summary');
-    assert.equal(await detailsButton.locator('.profile-chevron svg').count(),1,'expansion uses a chevron');
+    assert.equal(await detailsButton.locator('svg').count(),1,'expansion uses a chevron');
     assert.equal(await expanded.locator('.profile-socials a').count(),2,'only the validated social and channel link render');
     assert.equal(await expanded.getByRole('link',{name:'X',exact:true}).getAttribute('href'),'https://x.com/aurora_live');
     assert.equal(await expanded.locator('.profile-bio strong').textContent(),'About aurora');
@@ -532,7 +533,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.waitForFunction(() => !document.getElementById('kr-multi-root'));
     assert.equal(await page.title(),originalTabTitle,'the original tab title returns after closing multistream');
     assert.equal(await page.evaluate(()=>document.getElementById('video-player')===window.originalVideo && getComputedStyle(window.originalPlayer).position==='relative'),true);
-    assert.equal(await page.locator('.stream-info').isVisible(),true,'single-channel info returns on exit');
+    assert.equal(await page.locator('#kr-channel-root').isVisible(),true,'the matching single-channel panel returns on exit');
     assert.equal(await page.locator('main .below').isVisible(),true);
     // Recommendations use the same drag behavior, and removing the last added
     // stream returns directly to the original single-stream page.

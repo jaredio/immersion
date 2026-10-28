@@ -1,7 +1,7 @@
 /* Inline multiview. The native player stays in its React-owned DOM tree. */
 (() => {
     const { api, channelSlug, multiState, multiURL, channelDetails } = KickRefined;
-  function create({ getChannels, onKeydown, support }) {
+  function create({ getChannels, onKeydown, support, channelPanel }) {
     const iconPaths = {
       mix:'M4 7h16M7 4v6M4 17h16M16 14v6', manage:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 17h7m-3.5-3.5v7',
       mute:'m11 5-5 4H3v6h3l5 4zM16 9l5 6m0-6-5 6', sound:'m11 5-5 4H3v6h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',
@@ -30,6 +30,7 @@
       <div class="multi-options" hidden><div class="multi-tools"><form id="multi-add-form"><input id="multi-add" aria-label="Add channel to multiview" list="multi-suggestions" placeholder="Channel name or Kick URL" autocomplete="off" maxlength="120"><datalist id="multi-suggestions"></datalist><button type="submit">Add stream</button></form></div><div class="multi-footer"><div class="multi-save"><input id="multi-name" aria-label="Layout name" placeholder="Name this session" maxlength="48"><button id="multi-save">Save</button><select id="multi-sessions" aria-label="Saved multiview sessions"><option value="">Saved sessions…</option></select><button id="multi-delete" disabled>Delete saved</button></div><button id="multi-share">Copy link</button></div></div>
       <div id="multi-notice" class="multi-notice" role="status"></div><div class="multi-body"><div id="multi-grid" class="multi-grid"></div><aside class="multi-chat"><div class="multi-chat-mount"></div></aside></div>`;
     shadow.append(panel);
+    const channelStyle=document.createElement('style');channelStyle.textContent=KickRefinedChannelPanel.styles;shadow.append(channelStyle);let channelVersion=0;
     const directory=document.createElement('section');directory.className='multi-directory';directory.setAttribute('aria-label','Open stream channels');directory.innerHTML='<div id="multi-channel-list"></div>';panel.append(directory);
     for(const [selector,symbol] of [['#multi-mix','mix'],['#multi-manage','manage'],['#multi-mute','mute'],['#multi-fullscreen','fullscreen'],['.multi-exit','close'],['#multi-add-form button','add'],['#multi-save','save'],['#multi-delete','trash'],['#multi-share','link']]) {
       const button=panel.querySelector(selector),label=button.getAttribute('aria-label')||button.textContent;
@@ -165,42 +166,9 @@
         panelCache.set(slug,{time:Date.now(),items,error:false});
       }).catch(()=>panelCache.set(slug,{time:Date.now(),items:[],error:true})).finally(()=>{clearTimeout(timer);detailsControllers.delete(controller);panelRequests.delete(slug);if(active&&expandedChannel===slug)renderDirectory();});
     }
-    function renderProfile(slug,meta){
-      const profile=document.createElement('section');profile.className='multi-expanded-profile';profile.id=`multi-profile-${slug}`;profile.setAttribute('role','region');profile.setAttribute('aria-label',`About ${meta.title||slug}`);
-      const bio=document.createElement('div');bio.className='profile-rich-text profile-bio';KickRefinedProfile.formatted(bio,meta.bio||'No bio available.');profile.append(bio);
-      const socials=document.createElement('div');socials.className='profile-socials';for(const social of meta.socials||[]){const link=KickRefinedProfile.link(social.href);if(link){link.textContent=social.label;socials.append(link);}}
-      const open=KickRefinedProfile.link(`https://kick.com/${slug}`);open.textContent='Open channel \u2197';socials.append(open);profile.append(socials);
-      const panels=document.createElement('div');panels.className='profile-panels';const cached=panelCache.get(slug);
-      if(!cached){const loading=document.createElement('p');loading.className='profile-muted';loading.textContent='Loading channel panels...';panels.append(loading);}
-      else for(const item of cached.items){
-        if(!item.title&&!item.description&&!item.image)continue;
-        const article=document.createElement('article');article.className='profile-panel';
-        if(item.image){const image=KickRefinedProfile.image(item.image,item.title||'Channel panel');if(image){const link=KickRefinedProfile.link(item.href);if(link){link.append(image);article.append(link);}else article.append(image);}}
-        if(item.title){const heading=document.createElement('h4');heading.textContent=item.title;article.append(heading);}
-        if(item.description){const text=document.createElement('div');text.className='profile-rich-text';KickRefinedProfile.formatted(text,item.description);article.append(text);}panels.append(article);
-      }
-      if(cached?.error){const unavailable=document.createElement('p');unavailable.className='profile-muted';unavailable.textContent='Channel panels are unavailable right now.';panels.append(unavailable);}
-      profile.append(panels);return profile;
-    }
     function renderDirectory(){
-      const list=$('#multi-channel-list'),focusedButton=shadow.activeElement?.classList.contains('multi-channel-card')?shadow.activeElement.dataset.channel:'';list.replaceChildren();
-      const visible=state.layout==='focus'?[state.focus]:state.channels;
-      if(!visible.includes(expandedChannel))expandedChannel='';
-      directory.dataset.focused=String(state.layout==='focus');
-      for(const slug of visible){
-        if(!slug)continue;const meta=catalog.get(slug)||{},entry=document.createElement('div');entry.className='multi-channel-entry';
-        const card=document.createElement('button');card.className='multi-channel-card';card.dataset.channel=slug;card.setAttribute('aria-label',`Channel details for ${slug}`);card.setAttribute('aria-expanded',String(expandedChannel===slug));card.setAttribute('aria-controls',`multi-profile-${slug}`);
-        if(meta.image){const image=document.createElement('img');image.src=meta.image;image.alt='';card.append(image);}
-        const text=document.createElement('div'),name=document.createElement('strong'),title=document.createElement('span'),stats=document.createElement('small'),chevron=document.createElement('span');
-        name.textContent=meta.title||slug;title.textContent=meta.streamTitle||(meta.live==='offline'?'Offline':'Stream title unavailable');
-        stats.className='channel-stats';
-        if(meta.category){const category=document.createElement('span');category.className='channel-category';category.textContent=meta.category;stats.append(category);}
-        if(meta.viewers){const viewers=document.createElement('span');viewers.className='channel-viewers';viewers.innerHTML=icon('viewers');viewers.append(document.createTextNode(`${meta.viewers} viewers`));stats.append(viewers);}
-        text.append(name,title,stats);card.append(text);chevron.className='profile-chevron';chevron.innerHTML=icon('chevron');chevron.setAttribute('aria-hidden','true');card.append(chevron);entry.append(card);if(support){const actions=document.createElement('div');actions.className='multi-channel-actions';actions.append(support.makeButton(slug));entry.append(actions);}list.append(entry);
-        card.addEventListener('click',()=>{expandedChannel=expandedChannel===slug?'':slug;renderDirectory();if(expandedChannel){requestDetails(slug);requestPanels(slug);}});
-        if(expandedChannel===slug){entry.append(renderProfile(slug,meta));requestPanels(slug);}requestDetails(slug);
-        if(focusedButton===slug)card.focus({preventScroll:true});
-      }
+        const list=$('#multi-channel-list'),visible=state.layout==='focus'?[state.focus]:state.channels,focus=shadow.activeElement,focused=focus?.classList.contains('channel-expand')?focus.dataset.channel:'',action=focus?.dataset.kind,actionChannel=focus?.closest('.multi-channel-card')?.dataset.channel;list.replaceChildren();directory.dataset.focused=String(state.layout==='focus');if(!visible.includes(expandedChannel))expandedChannel='';
+        for(const slug of visible){if(!slug)continue;const meta=catalog.get(slug)||{};const entry=channelPanel.card(slug,meta,{expanded:expandedChannel===slug,panels:panelCache.get(slug)?.items,onToggle:()=>{expandedChannel=expandedChannel===slug?'':slug;renderDirectory();if(expandedChannel){requestDetails(slug);requestPanels(slug);}}});list.append(entry);if(expandedChannel===slug)requestPanels(slug);requestDetails(slug);if(focused===slug)entry.querySelector('.channel-expand')?.focus({preventScroll:true});else if(action&&actionChannel===slug)entry.querySelector(`.channel-action[data-kind="${action}"]`)?.focus({preventScroll:true});}channelVersion=channelPanel.version;
     }
     function nativeVideo() {
       const video=context?.player?.querySelector('video')||null;
@@ -479,7 +447,7 @@
       if(video&&native){video.muted=native.muted;if(restorePlayback&&native.wasPlaying&&native.pausedByUs&&video.paused)video.play().catch(()=>{});}
       titleObserver.disconnect();if(context?.slug===channelSlug(location.pathname,location.origin))document.title=singleTitle;else if(document.title===multiTitle)document.title='Kick';host.remove();native=null;context=null;audio.clear();
     }
-    function refresh(){if(active&&(!host.isConnected||(context?.player&&!context.player.isConnected)||context?.slug!==channelSlug(location.pathname,location.origin)))close({restorePlayback:false});else if(active){hideChannelInfo();schedulePosition();}}
+    function refresh(){if(active&&(!host.isConnected||(context?.player&&!context.player.isConnected)||context?.slug!==channelSlug(location.pathname,location.origin)))close({restorePlayback:false});else if(active){if(channelPanel&&channelVersion!==channelPanel.version)renderDirectory();hideChannelInfo();schedulePosition();}}
     function onMessage(event){
       if(!active||event.origin!=='https://player.kick.com')return;
       const entry=[...tiles].find(([,tile])=>tile.frame?.contentWindow===event.source);if(!entry)return;

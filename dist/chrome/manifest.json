@@ -54,6 +54,7 @@
         "profile.js",
         "support-data.js",
         "support.js",
+        "channel-panel.js",
         "multiview.js",
         "chat-clips.js",
         "clip-bridge.js",
@@ -63,6 +64,7 @@
         "media-embeds.js",
         "reply-preview.js",
         "notices.js",
+        "checkouts.js",
         "content.js"
       ],
       "run_at": "document_idle"

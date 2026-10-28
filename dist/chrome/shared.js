@@ -43,11 +43,17 @@
   const chatEmbedCSS = `
     :host(:not([data-workspace])){display:block;width:100%;min-width:0;max-width:100%;flex:0 0 100%}
     :host(:not([data-workspace])) .card{box-sizing:border-box;width:calc(100% - 16px);max-width:348px;margin:8px auto 6px;border:1px solid #ffffff14;border-radius:12px;background:#121216;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}
-    :host(:not([data-workspace])) .card:focus-within{border-color:color-mix(in srgb,var(--kr-accent,#8cecc0) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}
-    @media(hover:hover) and (pointer:fine){:host(:not([data-workspace])) .card:hover{border-color:color-mix(in srgb,var(--kr-accent,#8cecc0) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}}
+    :host(:not([data-workspace])) .card:focus-within{border-color:color-mix(in srgb,var(--kr-accent,#b0ff8c) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}
+    @media(hover:hover) and (pointer:fine){:host(:not([data-workspace])) .card:hover{border-color:color-mix(in srgb,var(--kr-accent,#b0ff8c) 32%,transparent);background:#16161c;box-shadow:0 0 0 1px #ffffff03}}
     @media(prefers-reduced-motion:reduce){:host(:not([data-workspace])) .card{transition:none}}
   `;
-  function multiState(input = {}) {
+    const embedRows=new WeakMap();let embedMessageStyle;
+    function chatEmbedMessage(row){
+      if(!embedMessageStyle){embedMessageStyle=document.createElement('style');embedMessageStyle.textContent='#chatroom-messages [data-kr-embed-row]{flex-wrap:wrap;row-gap:0;overflow-wrap:anywhere;box-shadow:inset 2px 0 #ffffff10;border-radius:3px}#chatroom-messages [data-kr-embed-row]>:is(.kr-chat-clip,.kr-x-post,.kr-media-embed){margin-top:2px}';document.head.append(embedMessageStyle);}
+      embedRows.set(row,(embedRows.get(row)||0)+1);row.setAttribute('data-kr-embed-row','');
+      let released=false;return ()=>{if(released)return;released=true;const count=(embedRows.get(row)||1)-1;if(count)embedRows.set(row,count);else{embedRows.delete(row);row.removeAttribute('data-kr-embed-row');}};
+    }
+    function multiState(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const channels = Array.isArray(source.channels) ? [...new Set(source.channels.filter(s => typeof s === 'string').map(s => channelSlug(`/${s}`)).filter(Boolean))].slice(0, 6) : [];
     const sizes={};for(const slug of channels)if(Number.isFinite(source.sizes?.[slug]))sizes[slug]=Math.max(2,Math.min(6,Math.round(source.sizes[slug])));
@@ -76,7 +82,7 @@
       }catch{}
     }
     let image='';try{const url=new URL(user.profile_pic);if(url.protocol==='https:'&&url.hostname.endsWith('.kick.com'))image=url.href;}catch{}
-    return {title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:typeof user.bio==='string'?user.bio.trim().slice(0,20000):'',category:text(category),live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',image,socials};
+    return {title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:typeof user.bio==='string'?user.bio.trim().slice(0,20000):'',category:text(category),language:text(stream?.language).slice(0,30),mature:stream?.is_mature===true,verified:data.verified===true||!!data.verified&&typeof data.verified==='object',live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',image,socials};
   }
-  globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, chatEmbedCSS, multiState, multiURL, channelDetails });
+  globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, chatEmbedCSS, chatEmbedMessage, multiState, multiURL, channelDetails });
 })();

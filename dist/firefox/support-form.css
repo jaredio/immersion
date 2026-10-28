@@ -3,9 +3,9 @@ html[data-immersion-tip]{color-scheme:dark;background:#121216!important;--kb-can
 html[data-immersion-tip] body{margin:0!important;background:#121216!important;color:#ececf1!important;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif!important;font-size:14px;line-height:1.5}
 html[data-immersion-tip] :is(input,textarea,select,button){font-family:inherit}
 html[data-immersion-tip] :is(input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([role=combobox]),textarea,select){box-sizing:border-box;max-width:100%;min-height:42px;background:#1b1b22!important;color:#f0f0f5!important;border:1px solid #363640!important;border-radius:9px!important;padding:10px 12px!important;box-shadow:none!important;font-size:14px!important}
-html[data-immersion-tip] :is(input,textarea,select,button):focus-visible{outline:2px solid #8cecc0!important;outline-offset:2px}
+html[data-immersion-tip] :is(input,textarea,select,button):focus-visible{outline:2px solid #b0ff8c!important;outline-offset:2px}
 html[data-immersion-tip] input::placeholder,html[data-immersion-tip] textarea::placeholder{color:#9696a5!important;opacity:1}
-html[data-immersion-tip] input:is([type=checkbox],[type=radio]){accent-color:#8cecc0;flex-shrink:0}
+html[data-immersion-tip] input:is([type=checkbox],[type=radio]){accent-color:#b0ff8c;flex-shrink:0}
 html[data-immersion-tip] button{border-radius:8px!important;font-size:14px;transition:background-color .15s,border-color .15s}
 html[data-immersion-tip] a{color:#a0e9cc}
 html[data-immersion-tip] label{font-size:13px;font-weight:600;color:#d5d5df}
@@ -13,7 +13,7 @@ html[data-immersion-tip] :is(h1,h2,h3,h4){font-family:inherit!important}
 html[data-immersion-tip]{scrollbar-width:thin;scrollbar-color:#3b3b47 #121216}
 html[data-immersion-tip] :is(input,textarea,select){transition:border-color .12s,background-color .12s}
 html[data-immersion-tip] :is(input,textarea,select):hover{border-color:#494955!important}
-html[data-immersion-tip] :is(input,textarea,select):focus-visible{outline:2px solid #8cecc066!important;outline-offset:1px;border-color:#79b99c!important}
+html[data-immersion-tip] :is(input,textarea,select):focus-visible{outline:2px solid #b0ff8c66!important;outline-offset:1px;border-color:#79b99c!important}
 /* KickBot public tip page: stable section IDs, with native controls and handlers intact. */
 html[data-immersion-tip=kickbot] header.fixed:has(a[href="/"]),html[data-immersion-tip=kickbot] footer:has(nav[aria-label=Footer]){display:none!important}
 html[data-immersion-tip=kickbot] main{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:16px 18px 22px!important}
@@ -29,8 +29,8 @@ html[data-immersion-tip=kickbot] :is(#tip-amount-title,#tip-message-title,#tip-s
 html[data-immersion-tip=kickbot] section[aria-labelledby]>div>div{padding:13px 14px!important;border-color:#ffffff0a!important}
 html[data-immersion-tip=kickbot] section[aria-labelledby=tip-amount-title]>div>div:first-child{gap:7px!important}
 html[data-immersion-tip=kickbot] section[aria-labelledby=tip-amount-title] button{min-height:38px;background:#22222c!important;background-image:none!important;color:#d7d7e4!important;border:1px solid #ffffff10!important;box-shadow:none!important;font-size:13px!important;padding:8px!important}
-html[data-immersion-tip=kickbot] section[aria-labelledby=tip-amount-title] button:hover{border-color:#8cecc04d!important;background:#29372f!important}
-html[data-immersion-tip=kickbot] section[aria-labelledby=tip-amount-title] button[aria-pressed=true]{background:#233b30!important;color:#b9f3d5!important;border-color:#8cecc05c!important}
+html[data-immersion-tip=kickbot] section[aria-labelledby=tip-amount-title] button:hover{border-color:#b0ff8c4d!important;background:#29372f!important}
+html[data-immersion-tip=kickbot] section[aria-labelledby=tip-amount-title] button[aria-pressed=true]{background:#233b30!important;color:#b9f3d5!important;border-color:#b0ff8c5c!important}
 html[data-immersion-tip=kickbot] #custom-tip-amount{padding-left:32px!important;font-variant-numeric:tabular-nums}
 html[data-immersion-tip=kickbot] :is(#tip-name,#tip-message,#custom-tip-amount){background:#14141b!important;border-color:#ffffff17!important;font-size:13px!important}
 html[data-immersion-tip=kickbot] #tip-message{min-height:88px!important;line-height:1.6;resize:vertical}
@@ -45,8 +45,8 @@ html[data-immersion-tip=kickbot] aside[aria-labelledby=tip-summary-title] [class
 html[data-immersion-tip=kickbot] #tip-terms{color:#9696aa!important;font-size:11px!important;line-height:1.65!important}
 html[data-immersion-tip=kickbot] #tip-terms a{color:#a8dcc3!important;text-decoration-color:#a8dcc344!important}
 html[data-immersion-tip=kickbot] button[role=checkbox]{width:18px!important;height:18px!important;min-height:18px!important;padding:0!important;border:1px solid #ffffff45!important;border-radius:5px!important;box-shadow:none!important;background:#181820!important}
-html[data-immersion-tip=kickbot] button[role=checkbox][aria-checked=true]{background:#8cecc0!important;border-color:#8cecc0!important;color:#10251b!important}
-html[data-immersion-tip=kickbot] aside[aria-labelledby=tip-summary-title]>div>button{background:#8cecc0!important;color:#10251b!important;border:1px solid transparent!important;border-radius:9px!important;font-size:13px!important;min-height:42px!important}
+html[data-immersion-tip=kickbot] button[role=checkbox][aria-checked=true]{background:#b0ff8c!important;border-color:#b0ff8c!important;color:#10251b!important}
+html[data-immersion-tip=kickbot] aside[aria-labelledby=tip-summary-title]>div>button{background:#b0ff8c!important;color:#10251b!important;border:1px solid transparent!important;border-radius:9px!important;font-size:13px!important;min-height:42px!important}
 html[data-immersion-tip=kickbot] aside[aria-labelledby=tip-summary-title]>div>button:disabled{background:#262630!important;color:#858598!important;border-color:#ffffff09!important}
 html[data-immersion-tip=kickbot] :is(.bg-kb-canvas,.bg-kb-side){background:#121216!important}
 html[data-immersion-tip=kickbot] [role=dialog]{border-color:#ffffff18!important;border-radius:13px!important;box-shadow:0 10px 32px #0005!important}
@@ -98,7 +98,7 @@ html[data-immersion-tip=powerchat] .donation-amounts-container button{font-size:
 html[data-immersion-tip=powerchat] .donations-container form>.paid-chat-disclaimer{margin:0 0 -16px!important;padding:13px 14px 0!important;border:1px solid #ffffff0c!important;border-bottom:0!important;border-radius:11px 11px 0 0!important;background:#18181f!important}
 html[data-immersion-tip=powerchat] .donations-container form>.paid-chat-disclaimer+div{padding:14px;border:1px solid #ffffff0c;border-top:0;border-radius:0 0 11px 11px;background:#18181f}
 /* StreamElements' public tipping app provides stable data-slot hooks. Consent/login dialogs stay native. */
-html[data-immersion-tip=streamelements]{--background:#121216!important;--foreground:#ececf1!important;--card:#18181f!important;--card-foreground:#ececf1!important;--popover:#1c1c24!important;--popover-foreground:#ececf1!important;--primary:#8cecc0!important;--primary-foreground:#10251b!important;--muted:#22222c!important;--muted-foreground:#a0a0b2!important;--border:#30303b!important;--input:#30303b!important;--ring:#8cecc0!important}
+html[data-immersion-tip=streamelements]{--background:#121216!important;--foreground:#ececf1!important;--card:#18181f!important;--card-foreground:#ececf1!important;--popover:#1c1c24!important;--popover-foreground:#ececf1!important;--primary:#b0ff8c!important;--primary-foreground:#10251b!important;--muted:#22222c!important;--muted-foreground:#a0a0b2!important;--border:#30303b!important;--input:#30303b!important;--ring:#b0ff8c!important}
 html[data-immersion-tip=streamelements] [data-slot=page-background]{display:block!important;background:#121216!important;min-height:100%!important}
 html[data-immersion-tip=streamelements] [data-slot=page-background]>div{width:100%!important;max-width:none!important;padding:14px 18px 22px!important;gap:12px!important}
 html[data-immersion-tip=streamelements] [data-slot=tipping-page-nav]{position:static!important;padding:0!important;justify-content:flex-end!important}
@@ -113,12 +113,12 @@ html[data-immersion-tip=streamelements] [data-slot=tipping-form]{gap:16px!import
 html[data-immersion-tip=streamelements] [data-slot=tipping-form-group]{padding:13px 14px!important;border:1px solid #ffffff0c!important;border-radius:11px!important;background:#18181f!important;gap:14px!important}
 html[data-immersion-tip=streamelements] [data-slot=tip-preset-container]{gap:7px!important}
 html[data-immersion-tip=streamelements] [data-slot=tip-preset-button]{height:38px!important;min-height:38px!important;border:1px solid #ffffff10!important;border-radius:8px!important;box-shadow:none!important;background:#22222c!important;color:#d7d7e4!important;font-size:13px!important}
-html[data-immersion-tip=streamelements] [data-slot=tip-preset-button]:has(:checked){background:#233b30!important;color:#b9f3d5!important;border-color:#8cecc05c!important}
+html[data-immersion-tip=streamelements] [data-slot=tip-preset-button]:has(:checked){background:#233b30!important;color:#b9f3d5!important;border-color:#b0ff8c5c!important}
 html[data-immersion-tip=streamelements] [data-slot=input-group]{min-height:42px!important;border:1px solid #ffffff17!important;border-radius:9px!important;background:#14141b!important;box-shadow:none!important}
-html[data-immersion-tip=streamelements] [data-slot=input-group]:focus-within{border-color:#79b99c!important;outline:2px solid #8cecc066!important;outline-offset:1px}
+html[data-immersion-tip=streamelements] [data-slot=input-group]:focus-within{border-color:#79b99c!important;outline:2px solid #b0ff8c66!important;outline-offset:1px}
 html[data-immersion-tip=streamelements] [data-slot=input-group]>:is(input,textarea){border:0!important;outline:0!important;background:transparent!important;font-size:13px!important}
 html[data-immersion-tip=streamelements] [data-slot=payment-cta-bar]{position:static!important;padding:14px!important;border:1px solid #ffffff0c!important;border-radius:11px!important;background:#18181f!important;box-shadow:none!important}
-html[data-immersion-tip=streamelements] [data-slot=payment-cta-bar] button{background:#8cecc0!important;background-image:none!important;color:#10251b!important;border:0!important;border-radius:9px!important;box-shadow:none!important;min-height:42px!important}
+html[data-immersion-tip=streamelements] [data-slot=payment-cta-bar] button{background:#b0ff8c!important;background-image:none!important;color:#10251b!important;border:0!important;border-radius:9px!important;box-shadow:none!important;min-height:42px!important}
 html[data-immersion-tip=streamelements] [data-slot=dialog-content]{background:#18181f!important;color:#ececf1!important;border-color:#ffffff18!important;border-radius:13px!important;max-width:calc(100vw - 24px)!important;box-shadow:0 10px 32px #0005!important;transition:none!important;animation:none!important}
 html[data-immersion-tip=streamelements] :is([data-slot=connect-buttons-title],[data-slot=connect-buttons-secondary]){color:#c5c5d4!important}
 @media(prefers-reduced-motion:reduce){html[data-immersion-tip] *{transition:none!important;scroll-behavior:auto!important}}
