@@ -4,8 +4,15 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 const context=vm.createContext({URL});
 vm.runInContext(await readFile(new URL('../extension/chat-clips.js',import.meta.url),'utf8'),context);
-const {parseClip,metadata,mediaURL}=context.KickRefinedClips;
+const {parseClip,parseVOD,metadata,mediaURL}=context.KickRefinedClips;
 const id='clip_01M5VG3B8WEFY068DP0GCHKSGW';
+
+test('recordings accept only canonical HTTPS Kick watch routes',()=>{
+  const id='01a17936-c150-7263-8800-3dcf734e1a83',href=`https://kick.com/xqc/videos/${id}`;
+  assert.equal(parseVOD(href+'?ref=search').href,href);assert.equal(parseVOD(href).kind,'vod');
+  for(const value of [href.replace('kick.com','kick.com.evil.test'),href.replace('https:','http:'),href+'/other',href.replace(id,'not-a-video'),href.replace('kick.com','user@kick.com'),href.replace('kick.com','kick.com:444')])assert.equal(parseVOD(value),null,value);
+  assert.equal(parseClip(href),null,'recordings do not become automatic chat clip embeds');
+});
 test('chat clip links accept only exact HTTPS Kick origins and supported clip routes',()=>{
   const clip=parseClip(`https://kick.com/sweatergxd/clips/${id}?ref=test`);
   assert.equal(clip.id,id);assert.equal(clip.href,`https://kick.com/sweatergxd/clips/${id}`);

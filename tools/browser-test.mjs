@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -394,6 +394,23 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
     await featured.locator('.multi-tile-header').dblclick({position:{x:12,y:12}});
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
+    await multi.getByRole('slider',{name:'Volume for aurora',exact:true}).fill('53');
+    await multi.locator('.multi-tile[data-channel="nightshift"] .multi-tile-header').dblclick({position:{x:12,y:12}});
+    await page.waitForFunction(()=>!document.getElementById('video-player').muted&&Math.abs(document.getElementById('video-player').volume-.53)<.001);
+    await featured.locator('.multi-tile-header').dblclick({position:{x:12,y:12}});
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted&&Math.abs(document.querySelector('video').volume-.53)<.001);
+    await page.evaluate(()=>{const video=document.getElementById('video-player');video.muted=false;video.volume=0;});
+    await page.waitForFunction(()=>document.getElementById('video-player').muted===true);
+    await auroraPlayer.evaluate(()=>{const video=document.querySelector('video');video.muted=true;video.volume=0;});
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted&&Math.abs(document.querySelector('video').volume-.53)<.001);
+    assert.equal(await multi.getByRole('slider',{name:'Volume for aurora',exact:true}).inputValue(),'53','SDK mute/volume changes do not overwrite the selected level');
+    await multi.getByRole('button',{name:'Mute all',exact:true}).click();
+    await auroraPlayer.evaluate(()=>document.querySelector('video').muted=false);
+    await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted===true);
+    await multi.locator('#multi-layout').selectOption('grid');
+    await multi.locator('#multi-layout').selectOption('focus');
+    await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted&&Math.abs(document.querySelector('video').volume-.53)<.001);
+    assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),true,'entering focus through the layout selector enables only the focused stream');
     await multi.getByRole('button',{name:'Audio for nightshift',exact:true}).click();
     await page.waitForFunction(()=>document.getElementById('video-player').muted===false);
     await auroraPlayer.locator('html').dblclick();

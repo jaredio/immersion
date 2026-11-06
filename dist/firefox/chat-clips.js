@@ -24,6 +24,18 @@
     const creator=data.creator?.username||data.creator?.slug;
     return {src,poster:mediaURL(data.thumbnail_url,clip.id),title:typeof data.title==='string'?data.title.slice(0,300):'Kick clip',creator:typeof creator==='string'?creator.trim().slice(0,80):'',duration:Number.isFinite(data.duration)&&data.duration>0?data.duration:0};
   }
+  function parseVOD(value){
+    try{const url=new URL(value),match=url.pathname.match(/^\/([a-z0-9_]{1,40})\/videos\/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})\/?$/i);return url.protocol==='https:'&&['kick.com','www.kick.com'].includes(url.hostname)&&!url.port&&!url.username&&!url.password&&match?{id:match[2],channel:match[1],kind:'vod',href:`https://kick.com/${match[1]}/videos/${match[2]}`}:null;}catch{return null;}
+  }
+  function vodMetadata(html,vod){
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    const canonical=doc.querySelector('link[rel="canonical"]')?.getAttribute('href');
+    if(canonical&&parseVOD(canonical)?.id!==vod.id)throw Error('Recording unavailable');
+    const src=doc.querySelector('meta[property="og:video"]')?.getAttribute('content')||doc.querySelector('meta[property="og:video:url"]')?.getAttribute('content');
+    const url=new URL(src);
+    if(url.protocol!=='https:'||url.hostname!=='stream.kick.com'||url.port||url.username||url.password||!url.pathname.endsWith('/media/hls/master.m3u8'))throw Error('Recording unavailable');
+    return {src:url.href,title:(doc.querySelector('meta[property="og:title"]')?.getAttribute('content')||'Kick recording').slice(0,300),creator:'',credit:vod.channel,duration:0};
+  }
   let hlsModule;
   function create({enabled=true,onWorkspace=null,onWorkspaceDrag=null}={}) {
     const {api}=KickRefined;
@@ -55,7 +67,7 @@
         await navigator.clipboard.writeText(record.clip.href);
         if(disposed)return;
         control.innerHTML=icon('check');control.title='Link copied';control.setAttribute('aria-label','Link copied');
-        const timer=setTimeout(()=>{feedbackTimers.delete(timer);if(control.isConnected){control.innerHTML=icon('copy');control.title='Copy clip link';control.setAttribute('aria-label','Copy clip link');}},2000);feedbackTimers.add(timer);
+        const timer=setTimeout(()=>{feedbackTimers.delete(timer);if(control.isConnected){control.innerHTML=icon('copy');control.title=record.clip.kind==='vod'?'Copy recording link':'Copy clip link';control.setAttribute('aria-label',control.title);}},2000);feedbackTimers.add(timer);
       }catch{status(record,'Could not copy the link. Open the clip on Kick to copy its address.');}
     }
     function reset(record){
@@ -83,13 +95,13 @@
     function popout(record){
       if(floating?.record===record)return;
       closeFloating();
-      if(active!==record)void play(record);
+      if(!record.video)void play(record);
       const host=document.createElement('div');host.className='kr-clip-floating';host.style.cssText='position:fixed;right:20px;bottom:20px;width:min(440px,calc(100vw - 24px));height:290px;min-width:260px;min-height:190px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);resize:both;overflow:hidden;z-index:2147483645';
-      const root=shadow(host),panel=document.createElement('div');panel.className='float';panel.setAttribute('role','region');panel.setAttribute('aria-label','Floating clip player');
+      const root=shadow(host),panel=document.createElement('div');panel.className='float';panel.setAttribute('role','region');panel.setAttribute('aria-label',record.clip.kind==='vod'?'Floating recording player':'Floating clip player');
       const header=document.createElement('header'),heading=document.createElement('div'),title=document.createElement('strong'),credit=document.createElement('div');heading.className='float-heading';credit.className='credit';title.textContent=record.title.textContent;credit.textContent=record.credit.textContent;heading.append(title,credit);header.append(heading);
-      const returnLabel=record.workspace?'Return clip to workspace':'Return clip to chat';
+      const noun=record.clip.kind==='vod'?'recording':'clip',returnLabel=record.workspace?`Return ${noun} to workspace`:`Return ${noun} to chat`;
       const back=button(returnLabel,'dock',()=>dock(record));back.disabled=!record.host.isConnected;
-      header.append(back,button('Copy clip link','copy',control=>copyLink(record,control)),button('Fullscreen clip','full',()=>fullscreen(record)),button('Close clip player','close',closeFloating));
+      header.append(back,button(`Copy ${noun} link`,'copy',control=>copyLink(record,control)),button(`Fullscreen ${noun}`,'full',()=>fullscreen(record)),button(`Close ${noun} player`,'close',closeFloating));
       panel.append(header,record.media,record.status);root.append(panel);document.body.append(host);floating={record,host,back,title,credit};record.pop.disabled=true;
       const outside=document.createElement('div');outside.className='outside';outside.textContent='Playing in popout';const restore=button(returnLabel,'dock',()=>dock(record));outside.append(restore);record.viewport.replaceChildren(outside);
       let position;
@@ -98,12 +110,14 @@
       for(const event of ['pointerup','pointercancel','lostpointercapture'])header.addEventListener(event,()=>{position=null;});
     }
     async function play(record){
-      if(active&&active!==record){active.workspace?.audio(false);if(floating?.record===active)closeFloating();else reset(active);}
-      reset(record);active=record;
-      const revision=record.revision,video=document.createElement('video');record.video=video;video.controls=true;video.playsInline=true;video.preload='none';video.setAttribute('aria-label','Kick clip video');record.media.replaceChildren(video);record.full.disabled=false;focusSurface(record);
+      // Only ordinary chat previews are exclusive. Workspace tiles own their
+      // players independently; multiview controls which of them are audible.
+      if(active&&active!==record&&!active.workspace){if(floating?.record===active)closeFloating();else reset(active);}
+      reset(record);if(!record.workspace)active=record;
+      const revision=record.revision,video=document.createElement('video');record.video=video;video.controls=true;video.playsInline=true;video.preload='none';video.setAttribute('aria-label',record.clip.kind==='vod'?'Kick recording video':'Kick clip video');record.media.replaceChildren(video);record.full.disabled=false;focusSurface(record);
       const valid=()=>!disposed&&enabled&&record.revision===revision&&!!record.video&&(record.host.isConnected||floating?.record===record||!!record.workspace);
-      const fail=()=>{if(valid()){reset(record);status(record,'Could not load this clip. Retry Play or open it on Kick.');}};
-      video.addEventListener('error',fail,{once:true});status(record,'Loading clip…');
+      const fail=reason=>{if(valid()){const detail=typeof reason==='string'?reason:video.error?.message||'Video playback failed';reset(record);record.status.title=detail;status(record,/codec|SourceBuffer|not supported/i.test(detail)?'This browser could not decode the video. Open it on Kick or try another browser.':'Could not load this video. Retry Play or open it on Kick.');}};
+      video.addEventListener('error',()=>fail(),{once:true});status(record,record.clip.kind==='vod'?'Loading recording…':'Loading clip…');
       video.addEventListener('volumechange',()=>{if(record.workspace&&record.video===video&&video.muted!==record.workspaceMuted){record.workspaceMuted=video.muted;record.workspace.audio(!video.muted);}});
       video.addEventListener('ended',()=>record.workspace?.ended());
       video.addEventListener('loadedmetadata',()=>{if(record.workspace&&Number.isFinite(video.duration))record.workspace.info({...record.info,duration:video.duration});});
@@ -114,7 +128,7 @@
         let data=cache.get(record.clip.id);
         if(!data||Date.now()-data.time>300000){
           const controller=new AbortController();record.controller=controller;const timeout=setTimeout(()=>controller.abort(),10000);
-          try{const response=await fetch(`${location.origin}/api/v2/clips/${record.clip.id}`,{credentials:'omit',signal:controller.signal});if(!response.ok)throw Error('Clip unavailable');data={...metadata(await response.json(),record.clip),time:Date.now()};cache.set(record.clip.id,data);if(cache.size>50)cache.delete(cache.keys().next().value);}
+          try{const vod=record.clip.kind==='vod',response=await fetch(vod?record.clip.href:`${location.origin}/api/v2/clips/${record.clip.id}`,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw Error('Media unavailable');const body=await response.text();if(body.length>3000000)throw Error('Response too large');data={...(vod?vodMetadata(body,record.clip):metadata(JSON.parse(body),record.clip)),time:Date.now()};cache.set(record.clip.id,data);if(cache.size>50)cache.delete(cache.keys().next().value);}
           finally{clearTimeout(timeout);if(record.controller===controller)record.controller=null;}
         }
         if(!valid())return;
@@ -126,11 +140,32 @@
           hlsModule ||= import(api.runtime.getURL('vendor/hls.light.mjs')).catch(error=>{hlsModule=null;throw error;});
           const {default:Hls}=await hlsModule;if(!valid())return;
           if(!Hls.isSupported()){if(video.canPlayType('application/vnd.apple.mpegurl')){video.src=data.src;start();return;}throw Error('Playback unsupported');}
-          const hls=new Hls({enableWorker:false,maxBufferLength:15,maxMaxBufferLength:30});record.hls=hls;
-          hls.on(Hls.Events.ERROR,(_event,data)=>{if(data.fatal){console.warn('[Immersion] Clip playback failed:',data.details);fail();}});
+          // Firefox's imported-module XHR cannot attach an Origin. Fetch from the
+          // content script instead; preserve HLS byte ranges and abort on teardown.
+          class MediaLoader extends Hls.DefaultConfig.loader {
+            load(context,config,callbacks){
+              this.context=context;this.callbacks=callbacks;this.controller=new AbortController();this.stats.loading.start=performance.now();
+              const headers={...context.headers};if(context.rangeEnd)headers.Range=`bytes=${context.rangeStart||0}-${context.rangeEnd-1}`;
+              this.requestTimeout=setTimeout(()=>{this.stats.aborted=true;this.controller.abort();callbacks.onTimeout(this.stats,context,this.response);},config.loadPolicy?.maxLoadTimeMs||config.timeout||20000);
+              fetch(context.url,{headers,credentials:'omit',referrerPolicy:'no-referrer',signal:this.controller.signal}).then(async response=>{
+                this.response=response;if(!response.ok)throw Error(`HTTP ${response.status}`);this.stats.loading.first=performance.now();
+                const data=context.responseType==='arraybuffer'?await response.arrayBuffer():await response.text();if(this.stats.aborted)return;
+                clearTimeout(this.requestTimeout);this.stats.loading.end=performance.now();this.stats.loaded=this.stats.total=typeof data==='string'?data.length:data.byteLength;
+                this.stats.bwEstimate=this.stats.total*8000/Math.max(1,this.stats.loading.end-this.stats.loading.first);
+                callbacks.onProgress?.(this.stats,context,data,response);
+                callbacks.onSuccess({url:response.url,data,code:response.status},this.stats,context,response);
+              }).catch(error=>{clearTimeout(this.requestTimeout);if(!this.stats.aborted)callbacks.onError({code:this.response?.status||0,text:error.message},context,this.response,this.stats);});
+            }
+            abort(){if(this.stats.aborted)return;this.stats.aborted=true;clearTimeout(this.requestTimeout);this.controller?.abort();this.callbacks?.onAbort?.(this.stats,this.context,this.response);}
+            destroy(){this.callbacks=null;if(!this.stats.loading.end)this.abort();this.context=this.response=null;}
+            getResponseHeader(name){return this.response?.headers.get(name)||null;}
+            getCacheAge(){return Number(this.getResponseHeader('age'))||0;}
+          }
+          const hls=new Hls({loader:MediaLoader,enableWorker:false,maxBufferLength:15,maxMaxBufferLength:30});record.hls=hls;
+          hls.on(Hls.Events.ERROR,(_event,data)=>{if(data.fatal){console.warn('[Immersion] Video playback failed:',data.details,data.error?.message||data.reason||'');fail(`${data.details}: ${data.error?.message||data.reason||''}`);}});
           hls.on(Hls.Events.MANIFEST_PARSED,start);hls.loadSource(data.src);hls.attachMedia(video);
         }
-      }catch{fail();}
+      }catch(error){console.warn('[Immersion] Video setup failed:',record.clip.kind||'clip',error?.message||String(error));fail(error?.message||String(error));}
     }
     function release(record){
       record.releaseMessage?.();record.releaseMessage=null;
@@ -181,7 +216,7 @@
     }
     function snapshot(record){const video=record.video;return {href:record.clip.href,time:video?(video.ended?0:video.currentTime||0):record.lastSnapshot?.time||0,paused:video?!video.ended&&video.paused:record.lastSnapshot?.paused??false,volume:video?.volume??record.lastSnapshot?.volume??1};}
     function workspaceItem(record){
-      return {id:record.clip.id,href:record.clip.href,title:record.title.textContent,
+      return {id:record.clip.id,kind:record.clip.kind||'clip',href:record.clip.href,title:record.title.textContent,
         popout:()=>popout(record),
         snapshot:()=>snapshot(record),
         freeze:()=>{const state=snapshot(record);record.video?.pause();return state;},
@@ -191,7 +226,7 @@
           if(disposed||!enabled)throw Error('Clip players are disabled');
           if(record.workspace)throw Error('Clip is already in a workspace');
           if(floating?.record===record)dock(record);
-          const before=snapshot(record);record.workspace=hooks;record.workspaceMuted=true;
+          const before=snapshot(record);record.workspace=hooks;record.workspaceMuted=true;if(active===record)active=null;
           const placeholder=document.createElement('div');placeholder.className='kr-clip-location';const root=shadow(placeholder),label=document.createElement('div');label.className='location';label.textContent='Clip is in the workspace';const show=button('Show clip in workspace','workspace',()=>record.host.scrollIntoView({block:'nearest'}));label.append(show);root.append(label);
           if(record.host.isConnected)record.host.before(placeholder);record.placeholder=placeholder;
           record.host.dataset.workspace='true';container.append(record.host);hooks.info({...record.info,title:record.title.textContent,credit:record.credit.textContent,duration:Number.isFinite(record.video?.duration)?record.video.duration:record.info?.duration||0});
@@ -204,12 +239,12 @@
     }
     function importItem(state){
       if(disposed||!enabled)throw Error('Clip players are disabled');
-      const clip=parseClip(state?.href);if(!clip||!Number.isFinite(state.time)||state.time<0||state.time>86400||typeof state.paused!=='boolean'||!Number.isFinite(state.volume)||state.volume<0||state.volume>1)throw Error('Invalid clip transfer');
-      const row=document.createElement('div'),anchor=document.createElement('a');anchor.href=clip.href;row.append(anchor);const record=add(row,anchor,clip);record.resume={time:state.time,paused:state.paused};record.lastSnapshot={...state};return workspaceItem(record);
+      const clip=parseClip(state?.href)||parseVOD(state?.href);if(!clip||!Number.isFinite(state.time)||state.time<0||state.time>86400||typeof state.paused!=='boolean'||!Number.isFinite(state.volume)||state.volume<0||state.volume>1)throw Error('Invalid media transfer');
+      const row=document.createElement('div'),anchor=document.createElement('a');anchor.href=clip.href;row.append(anchor);const record=add(row,anchor,clip);record.imported=true;if(clip.kind==='vod')for(const element of record.host.shadowRoot.querySelectorAll('[aria-label],[title]'))for(const name of ['aria-label','title'])if(element.hasAttribute(name))element.setAttribute(name,element.getAttribute(name).replace(/clip/g,'recording'));record.title.textContent=typeof state.title==='string'?state.title.slice(0,300):clip.kind==='vod'?'Kick recording':'Kick clip';record.resume={time:state.time,paused:state.paused};record.lastSnapshot={...state};return workspaceItem(record);
     }
     function flush(){
       timer=0;if(disposed||!enabled)return;
-      for(const record of records)if(!record.workspace&&(!record.row.isConnected||!record.host.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))release(record);
+      for(const record of records)if(!record.workspace&&!record.imported&&(!record.row.isConnected||!record.host.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))release(record);
       for(const record of records)if(record.workspace&&(!record.row.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))record.placeholder?.remove();
       for(const record of records)for(const anchor of record.links)if(!record.row.contains(anchor)||parseClip(anchor.href)?.id!==record.clip.id){anchor.removeAttribute('data-kr-clip-link');record.links.delete(anchor);}
       for(const row of dirty){
@@ -246,5 +281,5 @@
     refresh();
     return {setEnabled,refresh,importItem,destroy(){destroy();routeObserver.disconnect();nativeStyle.remove();}};
   }
-  globalThis.KickRefinedClips=Object.freeze({parseClip,mediaURL,metadata,create});
+  globalThis.KickRefinedClips=Object.freeze({parseClip,parseVOD,vodMetadata,mediaURL,metadata,create});
 })();

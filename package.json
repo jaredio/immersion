@@ -9,9 +9,13 @@
     "test:browser": "node tools/browser-test.mjs",
     "test:clips": "node tools/chat-clips-test.mjs",
     "test:posts": "node tools/x-posts-test.mjs",
+    "test:search": "node tools/search-test.mjs",
     "test:checkouts": "node tools/checkouts-test.mjs",
     "test:channels": "node tools/channel-panel-test.mjs",
+    "test:channel-markup": "node tools/channel-header-current-test.mjs",
+    "test:chat-notices": "node tools/chat-notices-test.mjs",
     "test:media": "node tools/media-test.mjs",
+    "test:media:firefox-live": "python tools/media-firefox-live-test.py",
     "test:support": "node tools/support-test.mjs",
     "test:support:firefox-installed": "python tools/support-firefox-test.py"
   },

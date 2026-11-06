@@ -49,7 +49,7 @@ test('both packages contain only scoped permissions and local assets', async () 
     assert.equal((manifest.action||manifest.browser_action).default_title,'Immersion');
     assert.equal(manifest.manifest_version,browser==='firefox'?2:3);
     const metadataHosts=['https://api.fxtwitter.com/*','https://www.tiktok.com/*','https://vt.tiktok.com/*','https://vm.tiktok.com/*','https://www.youtube.com/oembed*'];
-    assert.deepEqual(manifest.permissions, browser==='firefox'?['storage','webRequest','webRequestBlocking',...metadataHosts,'https://kick.com/*','https://www.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*']:['storage']);
+    assert.deepEqual(manifest.permissions, browser==='firefox'?['storage','webRequest','webRequestBlocking',...metadataHosts,'https://kick.com/*','https://www.kick.com/*','https://clips.kick.com/*','https://stream.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*']:['storage']);
     assert.ok(!manifest.externally_connectable);
     assert.deepEqual(manifest.host_permissions,browser==='firefox'?undefined:metadataHosts);
     assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['x-post-data.js','x-background.js','media-data.js','media-background.js','support-data.js','support-background.js'],persistent:false}:{service_worker:'x-background.js'});

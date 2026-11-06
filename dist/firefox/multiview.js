@@ -62,13 +62,13 @@
     function selectedChat(){return clipTiles.size?retainedChat||state.chat:state.chat;}
     function chatChannels(){return [...new Set([...state.channels,...(clipTiles.size&&retainedChat?[retainedChat]:[])])];}
     function discardClips(){for(const [key,tile]of clipTiles){resize.unobserve(tile.player);tile.item.release();tile.card.remove();audio.delete(key);}clipTiles.clear();clipFocus='';clipReturn=null;retainedChat='';}
-    const audioSession=crypto.randomUUID();let controlRevision=0,nativeStatusFrame=0;
+    const audioSession=crypto.randomUUID();let controlRevision=0,nativeStatusFrame=0,listeningVolume=1,savedVolume=false;
     const hiddenInfo=new Map();let mainMarker=null,resizing=null,resizeOwner=divider;
     const nativeOverlaySelector='#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal]';
     const detailsCache=new Map(),detailsPending=new Set(),detailsControllers=new Set();let detailsQueue=Promise.resolve(),expandedChannel='';const panelCache=new Map(),panelRequests=new Set();
     const resize = new ResizeObserver(() => {railDirty=true;schedulePosition();});
-    const loaded = api.storage.local.get(['multiview','multiSessions','multiToolbarHidden']).then(data => {
-      toolbarHidden=data.multiToolbarHidden===true;updateToolbar();
+    const loaded = api.storage.local.get(['multiview','multiSessions','multiToolbarHidden','multiVolume']).then(data => {
+      if(Number.isFinite(data.multiVolume)&&data.multiVolume>0&&data.multiVolume<=1){listeningVolume=data.multiVolume;savedVolume=true;}toolbarHidden=data.multiToolbarHidden===true;updateToolbar();
       state = multiState(data.multiview);
       sessions = Array.isArray(data.multiSessions) ? data.multiSessions.filter(s=>s && typeof s.name==='string').slice(0,10).map(s=>({name:s.name.slice(0,48),state:multiState(s.state)})) : [];
     }).catch(()=>{});
@@ -82,7 +82,7 @@
     toolbarToggle.addEventListener('click',()=>{toolbarHidden=!toolbarHidden;updateToolbar();persist();});
     updateToolbar();
     function persist() {
-      const snapshot = { multiview:multiState(state), multiToolbarHidden:toolbarHidden, multiSessions:sessions.map(s=>({name:s.name,state:multiState(s.state)})) };
+      const snapshot = { multiVolume:listeningVolume, multiview:multiState(state), multiToolbarHidden:toolbarHidden, multiSessions:sessions.map(s=>({name:s.name,state:multiState(s.state)})) };
       writes=writes.then(()=>api.storage.local.set(snapshot)).catch(()=>notice('Could not save this workspace.'));
     }
     function canonical(input) {
@@ -179,8 +179,8 @@
           nativeStatusFrame=requestAnimationFrame(()=>{
             nativeStatusFrame=0;if(!active||nativeVideo()!==video)return;
             const tile=tiles.get(context.slug);if(!tile)return;
-            tile.volume=video.volume;if(tile.volume>0)tile.lastVolume=tile.volume;tile.playing=!video.paused&&!video.ended;
-            tile.lastSettings=`${!audio.has(tile.slug)}:${tile.volume}`;updateControls(tile);
+            tile.playing=!video.paused&&!video.ended;
+            if(video.muted!==!audio.has(tile.slug)||Math.abs(video.volume-tile.volume)>.001)command(tile,!audio.has(tile.slug),{force:true});else updateControls(tile);
           });
         });
       }
@@ -228,6 +228,7 @@
     function schedulePosition() { if(active && !layoutFrame) layoutFrame=requestAnimationFrame(positionNative); }
     function mountNative() {
       const video=context.player.querySelector('video');
+      if(!savedVolume&&video?.volume>0)listeningVolume=video.volume;
       native={muted:video?.muted??true,wasPlaying:video?!video.paused:false,pausedByUs:false};
       if(getComputedStyle(context.main).position==='static') style(context.main,'position','relative');
       context.player.dataset.krNativePlayer='true';
@@ -237,7 +238,8 @@
     }
     function command(tile,muted,{action='',force=false}={}) {
       const signature=`${muted}:${tile.volume}`;
-      if(!force&&!action&&signature===tile.lastSettings)return;
+      const actual=isNative(tile.slug)?nativeVideo():null;
+      if(!force&&!action&&signature===tile.lastSettings&&(!isNative(tile.slug)||(actual&&actual.muted===muted&&Math.abs(actual.volume-tile.volume)<=.001)))return;
       if(action)tile.pendingAction=action;
       const nextAction=action||(force?tile.pendingAction:'');
       tile.lastSettings=signature;tile.commandRevision=++controlRevision;
@@ -267,7 +269,7 @@
     }
     function selectAudio(slug,{enable=!(audio.has(slug)&&(tiles.get(slug)?.volume??1)>0)}={}){
       if(!state.mixAudio)audio.clear();if(enable)audio.add(slug);else audio.delete(slug);notice();
-      const tile=tiles.get(slug);if(enable&&tile&&tile.volume<=0)tile.volume=tile.lastVolume||.5;
+      const tile=tiles.get(slug);if(enable&&tile){if(!state.mixAudio)tile.volume=listeningVolume;else if(tile.volume<=0)tile.volume=tile.lastVolume||.5;tile.lastVolume=tile.volume;}
       syncAudio();if(enable&&tile)command(tile,false,{action:'play'});
     }
     function focusStream(slug){
@@ -295,7 +297,12 @@
     }
     function beginResize(element,event){if(event.button!==0)return false;finishResize();event.preventDefault();resizing=event.pointerId;resizeOwner=element;element.setPointerCapture(event.pointerId);stage.dataset.resizing='true';schedulePosition();return true;}
     function syncAudio() {
-      for(const [slug,tile] of tiles) { command(tile,!audio.has(slug));updateControls(tile); }
+      for(const slug of audio)if(!tiles.has(slug)&&!clipTiles.has(slug))audio.delete(slug);
+      if(!state.mixAudio&&audio.size>1){const selected=audio.has(focusKey())?focusKey():[...audio].at(-1);audio.clear();if(selected)audio.add(selected);}
+      // Silence previous owners before enabling the selected stream.
+      for(const [key,tile]of clipTiles)if(!audio.has(key))tile.item.setMuted(true);
+      for(const [slug,tile]of tiles)if(!audio.has(slug)){command(tile,true);updateControls(tile);}
+      for(const [slug,tile]of tiles)if(audio.has(slug)){command(tile,false);updateControls(tile);}
       for(const [key,tile]of clipTiles){tile.item.setMuted(!audio.has(key));tile.card.dataset.audio=String(audio.has(key));updateAudioButton(tile.listen,audio.has(key),`clip ${tile.item.id}`,tile.item.snapshot().volume);}
       if(context?.player&&!state.channels.includes(context.slug)) { const video=nativeVideo(); if(video&&!video.muted)video.muted=true; }
       updateAudioLabel();
@@ -330,7 +337,7 @@
       const player=document.createElement('div'); player.className='multi-player';
       const controls=document.createElement('div'); controls.className='multi-tile-controls';
       const video=isNative(slug)?nativeVideo():null;
-      const tile={slug,card,player,frame:null,listen:null,pause:null,volume:video?.volume??1,lastVolume:video?.volume>0?video.volume:.5,playing:!!video&&!video.paused,lastSettings:'',commandRevision:0,pendingAction:'',slider:null,level:null};
+      const tile={slug,card,player,frame:null,listen:null,pause:null,volume:video?.volume??listeningVolume,lastVolume:video?.volume>0?video.volume:listeningVolume,playing:!!video&&!video.paused,lastSettings:'',commandRevision:0,pendingAction:'',slider:null,level:null};
       const quick=document.createElement('div');quick.className='multi-quick-actions';header.append(quick);
       tile.audible=document.createElement('span');tile.audible.className='multi-audible';tile.audible.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg>';tile.audible.setAttribute('role','img');tile.audible.setAttribute('aria-label',`Audio enabled for ${slug}`);tile.audible.title='Audio enabled';tile.audible.hidden=true;quick.append(tile.audible);
       const button=(label,text,action,target=controls)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;decorate(el,({'Listen to':'sound',Play:'play',Focus:'focus','Move left':'left','Move right':'right',Fullscreen:'fullscreen',Remove:'close'})[label],label,true);el.addEventListener('click',action);target.append(el);return el;};
@@ -340,10 +347,11 @@
       tile.slider=document.createElement('input');tile.slider.type='range';tile.slider.min='0';tile.slider.max='100';tile.slider.step='1';tile.slider.setAttribute('aria-label',`Volume for ${slug}`);
       tile.level=document.createElement('output');tile.level.textContent='100%';volume.append(tile.slider,tile.level);audioControl.append(volume);
       tile.slider.addEventListener('input',()=>{
-        tile.volume=Number(tile.slider.value)/100;if(tile.volume>0)tile.lastVolume=tile.volume;
+        tile.volume=Number(tile.slider.value)/100;if(tile.volume>0){tile.lastVolume=tile.volume;if(!state.mixAudio){listeningVolume=tile.volume;savedVolume=true;}}
         if(tile.volume>0){if(!state.mixAudio)audio.clear();audio.add(slug);}else audio.delete(slug);
         syncAudio();
       });
+      tile.slider.addEventListener('change',persist);
       tile.pause=button('Play','Play',()=>{if(isNative(slug)&&native)native.pausedByUs=false;command(tile,!audio.has(slug),{action:tile.playing?'pause':'play'});});
       tile.focus=button('Focus','▣',()=>focusStream(slug));
       for(const [label,text,direction] of [['Move left','←',-1],['Move right','→',1]]){const move=button(label,text,()=>{const i=state.channels.indexOf(slug),j=i+direction;if(j>=0&&j<state.channels.length){[state.channels[i],state.channels[j]]=[state.channels[j],state.channels[i]];render();persist();}});move.classList.add('multi-order-control');tile[direction<0?'moveLeft':'moveRight']=move;}
@@ -435,7 +443,7 @@
         active=true;singleTitle=document.title;titleObserver.observe(document.head,{childList:true,subtree:true,characterData:true});if(context.player)context.player.before(host);else context.main.prepend(host);if(context.player)mountNative();else audio.clear();
       } else if(shared){discardClips();state=multiState(shared);audio.clear();paused.clear();}
       for(const slug of seeds)if(!state.channels.includes(slug))add(slug);
-      render();persist();
+      render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();
     }
     function close({restorePlayback=true}={}) {
       if(!active)return;finishResize();expandedChannel='';for(const controller of detailsControllers)controller.abort();active=false;cancelAnimationFrame(layoutFrame);layoutFrame=0;resize.disconnect();
@@ -457,7 +465,7 @@
       if(data?.type!=='kick-refined:status'||data.session!==audioSession||data.revision!==tile.commandRevision)return;
       if(data.hasVideo)tile.pendingAction='';
       if(typeof data.playing==='boolean')tile.playing=data.playing;
-      if(Number.isFinite(data.volume)&&data.volume>=0&&data.volume<=1){tile.volume=data.volume;if(tile.volume>0)tile.lastVolume=tile.volume;tile.lastSettings=`${!audio.has(slug)}:${tile.volume}`;}
+      if(data.hasVideo&&(data.muted!==!audio.has(slug)||(Number.isFinite(data.volume)&&Math.abs(data.volume-tile.volume)>.001)))command(tile,!audio.has(slug),{force:true});
       updateControls(tile);
       if(data.error==='NotAllowedError'&&audio.has(slug))notice(`Click “Enable playback” inside ${catalog.get(slug)?.title||slug} to allow sound in Firefox.`);
     }
@@ -470,7 +478,7 @@
     $('.multi-exit').addEventListener('click',()=>close());
     $('#multi-manage').addEventListener('click',()=>{const show=$('.multi-options').hidden;$('.multi-options').hidden=!show;$('#multi-manage').setAttribute('aria-expanded',String(show));schedulePosition();});
     $('#multi-add-form').addEventListener('submit',e=>{e.preventDefault();if(add($('#multi-add').value))$('#multi-add').value='';});
-    $('#multi-layout').addEventListener('change',e=>{state.layout=e.target.value;if(state.layout!=='focus')clipFocus='';render();persist();});
+    $('#multi-layout').addEventListener('change',e=>{state.layout=e.target.value;if(state.layout!=='focus')clipFocus='';render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();});
     sizing.querySelector('input').addEventListener('input',event=>{state.focusSize=Number(event.target.value);applySizing();});
     sizing.querySelector('input').addEventListener('change',persist);
     divider.addEventListener('pointerdown',event=>{
@@ -485,13 +493,13 @@
     divider.addEventListener('dblclick',()=>{state.focusSize=67;applySizing();persist();});
     const dividerKey=event=>{const step=event.shiftKey?5:1;if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();state.focusSize=event.key==='Home'?45:event.key==='End'?80:Math.max(45,Math.min(80,state.focusSize+(event.key==='ArrowRight'?step:-step)));applySizing();persist();}};
     for(const type of ['keydown','kick-refined-keydown'])divider.addEventListener(type,dividerKey);
-    $('#multi-mix').addEventListener('click',()=>{state.mixAudio=!state.mixAudio;if(!state.mixAudio&&audio.size>1){const first=audio.values().next().value;audio.clear();audio.add(first);}syncAudio();persist();});
+    $('#multi-mix').addEventListener('click',()=>{state.mixAudio=!state.mixAudio;if(!state.mixAudio&&state.layout==='focus'&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});else{if(!state.mixAudio&&audio.size>1){const selected=[...audio].at(-1);audio.clear();audio.add(selected);}syncAudio();}persist();});
     $('#multi-mute').addEventListener('click',()=>{audio.clear();syncAudio();});
     $('#multi-chat-toggle').addEventListener('click',()=>{state.chatVisible=!state.chatVisible;render();persist();});
     $('#multi-chat-channel').addEventListener('change',e=>{state.chat=e.target.value;if(clipTiles.size)retainedChat=state.chat;render();persist();});
     $('#multi-fullscreen').addEventListener('click',()=>{const target=context?.main;if(!target)return;const request=document.fullscreenElement===target?document.exitFullscreen():target.requestFullscreen();request.catch(()=>notice('Use the browser fullscreen shortcut if fullscreen is unavailable.'));});
     $('#multi-save').addEventListener('click',()=>{const name=$('#multi-name').value.trim().slice(0,48);if(!name||!state.channels.length)return notice('Add a stream and name this session before saving.');const i=sessions.findIndex(s=>s.name===name),session={name,state:multiState(state)};if(i>=0)sessions[i]=session;else sessions=[session,...sessions].slice(0,10);persist();render();notice(`Saved “${name}”.`);});
-    $('#multi-sessions').addEventListener('change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions[Number(e.target.value)];if(!session)return;discardClips();state=multiState(session.state);paused.clear();audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();persist();notice(`Loaded “${session.name}”.`);});
+    $('#multi-sessions').addEventListener('change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions[Number(e.target.value)];if(!session)return;discardClips();state=multiState(session.state);paused.clear();audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();notice(`Loaded “${session.name}”.`);});
     $('#multi-delete').addEventListener('click',()=>{const choice=$('#multi-sessions').value;if(choice==='')return;sessions.splice(Number(choice),1);$('#multi-sessions').value='';persist();render();notice('Saved session deleted.');});
     $('#multi-share').addEventListener('click',async()=>{if(!state.channels.length)return notice('Add a stream before sharing.');const url=multiURL(state);try{await navigator.clipboard.writeText(url);notice('Link copied. Recipients need Immersion installed.');}catch{$('#multi-add').value=url;$('#multi-add').select();notice('Copy the selected link.');}});
     function canAddClip(id){return !clipTiles.has(`clip:${id}`)&&(active?tileCount():(findContext()?.slug?1:0))<6&&!!findContext();}
@@ -502,20 +510,20 @@
       render();persist();
     }
     async function addClip(item,mode='alongside'){
-      if(!item||!KickRefinedClips.parseClip(item.href)||!canAddClip(item.id)){notice('This clip is already here, or the workspace has six tiles.');return false;}
+      if(!item||!(KickRefinedClips.parseClip(item.href)||KickRefinedClips.parseVOD(item.href))||!canAddClip(item.id)){notice('This video is already here, or the workspace has six tiles.');return false;}
       const wasActive=active;await activate([],channelSlug(location.pathname,location.origin),null,!active);if(!active||destroyed||!canAddClip(item.id))return false;
       if(!clipReturn){clipReturn={active:wasActive,layout:state.layout,focus:state.focus,audio:[...audio]};retainedChat=state.chat||context.slug||'';}
-      const key=`clip:${item.id}`,card=document.createElement('section');card.className='multi-tile multi-clip-tile';card.dataset.clip=item.id;card.dataset.kind='clip';
+      const key=`clip:${item.id}`,card=document.createElement('section');card.className='multi-tile multi-clip-tile';card.dataset.clip=item.id;card.dataset.kind=item.kind==='vod'?'vod':'clip';
       const header=document.createElement('div');header.className='multi-tile-header';const identity=document.createElement('div');identity.className='multi-tile-identity';const words=document.createElement('div'),title=document.createElement('a'),credit=document.createElement('span');title.href=item.href;title.target='_blank';title.rel='noopener noreferrer';title.textContent=item.title||'Kick clip';words.append(title,credit);identity.append(words);
-      const badge=document.createElement('span');badge.className='multi-clip-badge';badge.textContent='CLIP';
+      const badge=document.createElement('span');badge.className='multi-clip-badge';const kind=item.kind==='vod'?'VOD':'CLIP';badge.textContent=kind;
       const player=document.createElement('div');player.className='multi-clip-player';const tile={slug:key,card,player,item};
-      const control=(label,symbol,action)=>{const button=document.createElement('button');button.setAttribute('aria-label',label);decorate(button,symbol,label,true);button.title={sound:'Choose clip audio',focus:'Feature clip',close:'Remove clip',pop:'Pop out clip player'}[symbol]||label;button.addEventListener('click',action);return button;};
-      tile.listen=control(`Listen to clip ${item.id}`,'sound',()=>{const enabled=!audio.has(key);if(!state.mixAudio)audio.clear();if(enabled)audio.add(key);syncAudio();});
+      const control=(label,symbol,action)=>{const button=document.createElement('button');button.setAttribute('aria-label',label);decorate(button,symbol,label,true);button.title=({sound:'Choose video audio',focus:'Feature video',close:'Remove video',pop:'Pop out video player'})[symbol]||label;button.addEventListener('click',action);return button;};
+      tile.listen=control(`Listen to ${kind.toLowerCase()} ${item.id}`,'sound',()=>{const enabled=!audio.has(key);if(!state.mixAudio)audio.clear();if(enabled)audio.add(key);syncAudio();});
       const toggleFocus=()=>{const featured=state.layout==='focus'&&clipFocus===key;if(!state.mixAudio)audio.clear();audio.add(key);item.resume({paused:false});clipFocus=featured?'':key;state.layout=featured?'grid':'focus';render();};
-      tile.focus=control(`Focus clip ${item.id}`,'focus',toggleFocus);
+      tile.focus=control(`Focus ${kind.toLowerCase()} ${item.id}`,'focus',toggleFocus);
       header.addEventListener('dblclick',event=>{if(event.target.closest('a,button,input'))return;event.preventDefault();toggleFocus();});
-      header.append(identity,badge,tile.listen,control(`Pop out clip ${item.id}`,'pop',()=>item.popout()),tile.focus,control(`Remove clip ${item.id}`,'close',()=>removeClip(key)));card.append(header,player);clipTiles.set(key,tile);$('#multi-grid').append(card);resize.observe(player);
-      try{item.mount(player,{focus:toggleFocus,remove:()=>removeClip(key),audio:enabled=>{if(enabled&&!state.mixAudio)audio.clear();if(enabled)audio.add(key);else audio.delete(key);syncAudio();},ended:()=>{audio.delete(key);if(!state.mixAudio){for(const source of clipReturn?.audio||[])if(state.channels.includes(source)){audio.add(source);break;}}syncAudio();},info:data=>{title.textContent=data.title||item.title||'Kick clip';credit.textContent=data.creator?`Clipped by ${data.creator}`:data.credit||'';badge.textContent=data.duration?`CLIP · ${Math.round(data.duration)}s`:'CLIP';schedulePosition();}});}catch{removeClip(key);return false;}
+      header.append(identity,badge,tile.listen,control(`Pop out ${kind.toLowerCase()} ${item.id}`,'pop',()=>item.popout()),tile.focus,control(`Remove ${kind.toLowerCase()} ${item.id}`,'close',()=>removeClip(key)));card.append(header,player);clipTiles.set(key,tile);$('#multi-grid').append(card);resize.observe(player);
+      try{item.mount(player,{focus:toggleFocus,remove:()=>removeClip(key),audio:enabled=>{if(enabled&&!state.mixAudio)audio.clear();if(enabled)audio.add(key);else audio.delete(key);syncAudio();},ended:()=>{audio.delete(key);if(!state.mixAudio){for(const source of clipReturn?.audio||[])if(state.channels.includes(source)){audio.add(source);break;}}syncAudio();},info:data=>{title.textContent=data.title||item.title||'Kick clip';credit.textContent=data.creator?`Clipped by ${data.creator}`:data.credit||'';badge.textContent=data.duration?`${kind} · ${kind==='VOD'?KickRefinedSearch.duration(data.duration):Math.round(data.duration)+'s'}`:kind;schedulePosition();}});}catch{removeClip(key);return false;}
       if(mode==='featured'){clipFocus=key;state.layout='focus';}else if(!wasActive){state.layout='focus';clipFocus='';}
       if(!item.snapshot().paused){if(!state.mixAudio)audio.clear();audio.add(key);}render();return true;
     }

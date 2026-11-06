@@ -196,6 +196,40 @@ html[data-kr-enabled="true"][data-kr-performance="true"] #chatroom-messages * {
 html[data-kr-enabled="true"][data-kr-performance="true"] #channel-chatroom { transition: none !important; }
 html[data-kr-enabled="true"][data-kr-performance="true"] #sidebar-wrapper * { animation: none !important; }
 html[data-kr-enabled="true"][data-kr-text-only="true"] #chatroom-messages [data-index] :is(img,video,canvas) { visibility: hidden !important; }
+/* Native chat cards share the channel-header surface; React retains all controls. */
+html[data-kr-enabled="true"] #channel-chatroom :is(
+  [data-testid="pinned-message-modal"] > div,
+  .border-2:has([data-testid="poll-title"]),
+  .relative.z-absolute:has(> [aria-controls="prediction-details"]),
+  .relative.z-absolute:has(> .absolute.bottom-0)
+) {
+  box-sizing:border-box!important;
+  min-width:0;
+  max-width:100%;
+  border:1px solid #ffffff10!important;
+  border-radius:14px!important;
+  background:linear-gradient(125deg,#16161c,#101014)!important;
+  color:#e7e7ed!important;
+  box-shadow:none!important;
+  overflow:hidden;
+}
+html[data-kr-enabled="true"] #channel-chatroom :is([data-testid="pinned-message-modal"] > div,.border-2:has([data-testid="poll-title"])) { padding:12px!important; }
+html[data-kr-enabled="true"] #channel-chatroom :is([data-testid="sent-by"],[data-testid="pinned-by"]) { color:#a1a1b0!important;font-size:11px!important;line-height:1.5!important; }
+html[data-kr-enabled="true"] #channel-chatroom :is([data-testid="pinned-message-content"],[data-testid="poll-title"]) { color:#e3e3ed!important;font-size:13px!important;line-height:1.5!important;font-weight:500!important;overflow-wrap:anywhere; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="pinned-message-content"] a { color:var(--kr-accent)!important;text-underline-offset:3px; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] { gap:7px!important; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] > * { border:1px solid #ffffff10!important;border-radius:8px!important;background:#ffffff05!important;color:#c7c7d3!important;font-size:12px!important;min-width:0; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] > :is([data-state="checked"],[aria-checked="true"],[class*="bg-kick-voltGreen"]) { background:color-mix(in srgb,var(--kr-accent) 12%,#101014)!important;border-color:color-mix(in srgb,var(--kr-accent) 30%,transparent)!important;color:var(--kr-accent)!important; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] > :hover { border-color:#ffffff26!important; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] > * > .absolute { background:color-mix(in srgb,var(--kr-accent) 16%,transparent)!important; }
+html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] svg { color:inherit!important; }
+html[data-kr-enabled="true"] #channel-chatroom :is([data-testid="pinned-message-modal"],.border-2:has([data-testid="poll-title"]),.relative.z-absolute:has(>[aria-controls="prediction-details"])) button:not([role="radio"]) { border-radius:8px!important; }
+html[data-kr-enabled="true"] #channel-chatroom :is([data-testid="poll-expand-collapse-button"],[data-testid="pinned-expand-button"]) { background:transparent!important;color:#a1a1b0!important; }
+html[data-kr-enabled="true"] #channel-chatroom .relative.z-absolute:has(>[aria-controls="prediction-details"]) button { border:1px solid #ffffff12!important;background:#ffffff05!important;color:var(--kr-accent)!important;font-size:12px!important; }
+html[data-kr-enabled="true"] #channel-chatroom .relative.z-absolute > .absolute.bottom-0,
+html[data-kr-enabled="true"] #channel-chatroom [aria-controls="prediction-details"] > .absolute.bottom-0 { background:#ffffff0b!important; }
+html[data-kr-enabled="true"] #channel-chatroom .relative.z-absolute > .absolute.bottom-0 > div,
+html[data-kr-enabled="true"] #channel-chatroom [aria-controls="prediction-details"] > .absolute.bottom-0 > div { background:var(--kr-accent)!important; }
 /* Preserve image boxes for the native virtualizer; labels remain available on hover. */
 @media (max-width: 1023px) {
   html[data-kr-enabled="true"] { --chat-width: 100% !important; }

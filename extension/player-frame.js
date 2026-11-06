@@ -37,7 +37,7 @@
     scanTimer=0;let added=false;
     for(const video of videos())if(!wired.has(video)){
       wired.add(video);added=true;settings(video);
-      for(const event of ['volumechange','play','pause','ended','loadedmetadata','error'])video.addEventListener(event,scheduleStatus);
+      for(const event of ['volumechange','play','pause','ended','loadedmetadata','error'])video.addEventListener(event,()=>{for(const item of videos())settings(item);scheduleStatus();});
     }
     if(added){send('kick-refined:ready');if(action){const next=action;action=null;execute(next);}scheduleStatus();}
   }

@@ -77,7 +77,7 @@ try{
   assert.equal(counts.panels,1,'opening support shares the cached panel request');
   await page.evaluate(()=>{history.pushState({},'', '/nightshift');document.querySelector('h1').textContent='nightshift';});
   await page.waitForFunction(()=>document.querySelector('main [data-kr-support]')?.dataset.krSupport==='nightshift');
-  assert.equal(await dialog.locator('#support-title').textContent(),'Support aurora','navigation cannot retarget an open form');
+  assert.equal(await dialog.locator('#support-title').textContent(),'Donate to aurora','navigation cannot retarget an open form');
   const providerBefore=counts.provider;
   await dialog.locator('#support-provider').selectOption('1');await dialog.getByRole('button',{name:'Open KickBot checkout'}).waitFor();
   assert.equal(await dialog.locator('iframe').count(),0,'KickBot never loads a blocked iframe');
@@ -139,9 +139,9 @@ try{
    detachedSupport.makeButton('nightshift');detachedSupport.refresh();
    document.body.append(button);
   });
-  await detached.getByRole('button',{name:'Support aurora',exact:true}).click();
+  await detached.getByRole('button',{name:'Donate to aurora',exact:true}).click();
   await detached.getByRole('dialog').waitFor({timeout:2500});
-  assert.equal(await detached.locator('#kr-support-root').locator('#support-title').textContent(),'Support aurora','detached buttons keep their recipient and click handler');
+  assert.equal(await detached.locator('#kr-support-root').locator('#support-title').textContent(),'Donate to aurora','detached buttons keep their recipient and click handler');
   await detached.close();
   assert.deepEqual(errors,[]);console.log(`${engine}: support discovery, lazy embedded form, styling, recipient binding, error fallback, manual links, trusted pins and cleanup passed.`);
  }

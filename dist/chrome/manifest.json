@@ -65,6 +65,7 @@
         "reply-preview.js",
         "notices.js",
         "checkouts.js",
+        "search.js",
         "content.js"
       ],
       "run_at": "document_idle"

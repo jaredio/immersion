@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="380" viewBox="0 0 1280 380" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">Immersion</title>
+  <desc id="description">Your streams. Your space. A dark canvas with an abstract stream layout in soft green.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1280" y2="380" gradientUnits="userSpaceOnUse"><stop stop-color="#141419"/><stop offset="1" stop-color="#09090C"/></linearGradient>
+    <linearGradient id="screen" x1="775" y1="95" x2="1100" y2="270" gradientUnits="userSpaceOnUse"><stop stop-color="#203322"/><stop offset="1" stop-color="#121617"/></linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(1030 185) scale(365 250)" gradientUnits="userSpaceOnUse"><stop stop-color="#B0FF8C" stop-opacity=".07"/><stop offset="1" stop-color="#B0FF8C" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="1" y="1" width="1278" height="378" rx="24" fill="url(#surface)" stroke="#FFFFFF" stroke-opacity=".08"/>
+  <rect x="2" y="2" width="1276" height="376" rx="23" fill="url(#glow)"/>
+  <g font-family="Inter, Segoe UI, Arial, sans-serif">
+    <rect x="64" y="65" width="7" height="7" rx="3.5" fill="#B0FF8C"/>
+    <text x="83" y="75" fill="#A1A1AF" font-size="13" font-weight="600" letter-spacing="2.6">A BETTER VIEW OF KICK</text>
+    <text x="59" y="176" fill="#F2F2F7" font-size="82" font-weight="650" letter-spacing="-4">Immersion</text>
+    <text x="64" y="231" fill="#B0FF8C" font-size="27" font-weight="400" letter-spacing="-.4">Your streams. Your space.</text>
+    <text x="64" y="310" fill="#737382" font-size="14" letter-spacing=".3">Settle in. Stay a while.</text>
+  </g>
+  <g>
+    <rect x="741" y="70" width="474" height="242" rx="16" fill="#101014" stroke="#FFFFFF" stroke-opacity=".09"/>
+    <path d="M742 110h472" stroke="#FFFFFF" stroke-opacity=".06"/>
+    <circle cx="762" cy="90" r="3" fill="#B0FF8C"/>
+    <rect x="775" y="87" width="62" height="6" rx="3" fill="#555D55"/>
+    <rect x="755" y="124" width="300" height="172" rx="10" fill="url(#screen)" stroke="#B0FF8C" stroke-opacity=".28"/>
+    <path d="M756 253c62-47 87-16 134-52s98-49 164-29v114a10 10 0 0 1-10 10H766a10 10 0 0 1-10-10z" fill="#B0FF8C" fill-opacity=".035"/>
+    <rect x="773" y="274" width="60" height="4" rx="2" fill="#B0FF8C" fill-opacity=".65"/>
+    <rect x="838" y="274" width="97" height="4" rx="2" fill="#FFFFFF" fill-opacity=".09"/>
+    <rect x="1067" y="124" width="134" height="80" rx="10" fill="#18181F" stroke="#FFFFFF" stroke-opacity=".07"/>
+    <path d="m1068 181 38-23 26 12 40-23 28 12v35a10 10 0 0 1-10 10h-112a10 10 0 0 1-10-10z" fill="#B8A2FF" fill-opacity=".055"/>
+    <rect x="1067" y="216" width="134" height="80" rx="10" fill="#14191A" stroke="#FFFFFF" stroke-opacity=".07"/>
+    <path d="m1068 273 36-13 34 8 36-28 26 16v30a10 10 0 0 1-10 10h-112a10 10 0 0 1-10-10z" fill="#8BBCFF" fill-opacity=".055"/>
+    <rect x="1173" y="87" width="25" height="6" rx="3" fill="#B0FF8C" fill-opacity=".45"/>
+  </g>
+</svg>

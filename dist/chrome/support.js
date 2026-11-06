@@ -1,7 +1,7 @@
 /* Channel support discovery and a provider-owned form, loaded only on click. */
 (() => {
   const {parse,extract}=KickRefinedSupportData;
-  const dollar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20m5-16H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const dollar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 6.5C17 4.6 14.8 4 12 4S7 5.3 7 7.5 9.2 11 12 12s5 2.3 5 4.5-2.2 3.5-5 3.5-5-.6-5-2.5"/></svg>';
   const glyph=path=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
   function create({enabled=true}={}){
     const {api,channelSlug,channelDetails}=KickRefined;
@@ -56,7 +56,7 @@
     }
     function notify(){
       for(const [button,channel] of buttons){
-        const count=candidates(channel).length;button.title=count?`Support ${channel}`:`Find a support link for ${channel}`;
+        const count=candidates(channel).length;button.title=count?`Donate to ${channel}`:`Find a donation link for ${channel}`;
       }
     }
     async function discover(channel){
@@ -71,7 +71,7 @@
     function makeButton(channel){
       for(const existing of buttons.keys())if(!existing.isConnected)buttons.delete(existing);
       const button=document.createElement('button');button.type='button';button.className='kr-support-button';button.dataset.krSupport=channel;
-      button.innerHTML=dollar+'<span>Support</span>';button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-label',`Support ${channel}`);
+      button.innerHTML=dollar+'<span>Donate</span>';button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-label',`Donate to ${channel}`);
       // The map is disposable housekeeping; a detached/reused card must keep its own recipient.
       buttons.set(button,channel);button.addEventListener('click',()=>open(channel,button));return button;
     }
@@ -159,7 +159,7 @@
       if(!enabled||!validSlug(channel)||destroyed)return;
       mount();if(dialog.open){dialog.close();cleanup();}opener=button||document.activeElement;
       const identity={slug:channel,items:[],item:null,token:''};session=identity;
-      $('#support-title').textContent=`Support ${channel}`;$('#support-link-error').textContent='';$('.support-controls').hidden=true;
+      $('#support-title').textContent=`Donate to ${channel}`;$('#support-link-error').textContent='';$('.support-controls').hidden=true;
       dialog.dataset.checkout='loading';$('.support-external-checkout').hidden=true;$('.support-frame-mount').hidden=true;
       $('.support-link-editor').open=false;$('#support-external').hidden=$('#support-retry').hidden=$('#support-popout').hidden=true;
       status('Finding channel support links…');dialog.showModal();schedulePosition();
