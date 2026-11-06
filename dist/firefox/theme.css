@@ -230,6 +230,31 @@ html[data-kr-enabled="true"] #channel-chatroom .relative.z-absolute > .absolute.
 html[data-kr-enabled="true"] #channel-chatroom [aria-controls="prediction-details"] > .absolute.bottom-0 { background:#ffffff0b!important; }
 html[data-kr-enabled="true"] #channel-chatroom .relative.z-absolute > .absolute.bottom-0 > div,
 html[data-kr-enabled="true"] #channel-chatroom [aria-controls="prediction-details"] > .absolute.bottom-0 > div { background:var(--kr-accent)!important; }
+/* Kick's finished-poll winner uses a layered !important utility. Important
+ * declarations in the earlier theme layer override it without changing votes. */
+@layer theme {
+  html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] [role="radio"] {
+    background:#ffffff05!important;
+    color:#f2f2f7!important;
+    opacity:1!important;
+    filter:none!important;
+  }
+  html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] [role="radio"]:is([data-state="checked"],[aria-checked="true"],[class*="bg-kick-voltGreen"]) {
+    background:color-mix(in srgb,var(--kr-accent) 12%,#101014)!important;
+    border-color:color-mix(in srgb,var(--kr-accent) 35%,transparent)!important;
+    color:#f2f2f7!important;
+  }
+  html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] [role="radio"] :is(span,svg) {
+    color:inherit!important;
+    opacity:1!important;
+  }
+  html[data-kr-enabled="true"] #channel-chatroom [data-testid="poll-option-list"] [role="radio"] > .absolute {
+    background:color-mix(in srgb,var(--kr-accent) 16%,transparent)!important;
+    opacity:1!important;
+  }
+  html[data-kr-enabled="true"] #channel-chatroom #prediction-details li { opacity:1!important; }
+  html[data-kr-enabled="true"] #channel-chatroom #prediction-details :is(p,span) { color:#e3e3ed!important; }
+}
 /* Preserve image boxes for the native virtualizer; labels remain available on hover. */
 @media (max-width: 1023px) {
   html[data-kr-enabled="true"] { --chat-width: 100% !important; }

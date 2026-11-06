@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/immersion-banner.svg" alt="Immersion ? Your streams. Your space." width="100%">
+  <img src="docs/immersion-banner.svg" alt="Immersion: Kick multistream with Ice Poseidon, xQc, and Adin Ross" width="100%">
 </p>
 
 <p align="center">
@@ -10,21 +10,19 @@
 
 <p align="center">
   <a href="https://github.com/jaredio/immersion/raw/refs/heads/main/dist/immersion-firefox.zip"><strong>Download for Firefox</strong></a>
-  &nbsp; ? &nbsp;
+  &nbsp; &middot; &nbsp;
   <a href="https://github.com/jaredio/immersion/raw/refs/heads/main/dist/immersion-chrome.zip"><strong>Download for Chrome / Edge</strong></a>
-  &nbsp; ? &nbsp;
+  &nbsp; &middot; &nbsp;
   <a href="https://github.com/jaredio/immersion/issues">Feedback &amp; issues</a>
 </p>
 
 ---
 
-## Make yourself at home.
+Immersion gives Kick a cleaner look and a more flexible way to watch. Channel details, goals, chat notices, polls, and predictions share a consistent dark design, with accents you can make your own.
 
-Immersion is a browser extension that brings a calmer, more cohesive design to Kick. Dark surfaces, softer accents, and thoughtful spacing make the stream feel like the center of the page.
+Bring several streams into one page, arrange the layout, and save your setup for next time. Focus a stream to switch its chat and audio, with your chosen volume carried across. Turn on Mix audio when you want to hear more than one.
 
-Watch one channel or settle into a few at once. Arrange your viewing space, follow the conversation, and move between streams without losing your place. The experience stays familiar, with Kick's own players and chat at its heart.
-
-Built for the tabs you leave open and the streams you keep coming back to.
+Search for channels, clips, and recordings, then drag them into your viewing space. Kick's native players, chat, and channel controls stay part of the experience.
 
 ## Get started
 
