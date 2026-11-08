@@ -81,8 +81,8 @@ test('shared multiview links carry only validated workspace settings on Kick', (
 
 test('Immersion layout preferences migrate safely and share only bounded sizes', () => {
   const {multiState,multiURL}=context.KickRefined;
-  assert.equal(multiState({channels:['a','b']}).focusSize,67);
-  assert.equal(multiState({focusSize:Infinity}).focusSize,67);
+  assert.equal(multiState({channels:['a','b']}).focusSize,74);
+  assert.equal(multiState({focusSize:Infinity}).focusSize,74);
   assert.equal(multiState({focusSize:900}).focusSize,80);
   assert.equal(multiState({focusSize:-900}).focusSize,45);
   const url=new URL(multiURL({channels:['a','b'],focusSize:72}));
@@ -92,7 +92,7 @@ test('Immersion layout preferences migrate safely and share only bounded sizes',
 test('player audio bridge rejects unrelated frames and untrusted commands', async () => {
   const source = await readFile(new URL('../extension/player-frame.js', import.meta.url), 'utf8');
   const sent=[],listeners = {}, parent = { postMessage(data) {sent.push(data);} }, video = { muted:true,volume:1,paused:true,addEventListener(){} };
-  const document = { documentElement: {}, querySelectorAll: () => [video] };
+  const document = { documentElement: {append(){}}, createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll: () => [video] };
   const window = { name: 'kick-refined:xqc', parent, top: {}, addEventListener: (name, cb) => { listeners[name] = cb; } };
   class Observer { observe() {} }
   vm.runInNewContext(source, { window, document, MutationObserver: Observer, setTimeout });
@@ -133,6 +133,7 @@ test('tile widths and audio mixing migrate safely into saved and shared layouts'
   const state=multiState({channels:['a','b'],mixAudio:true,sizes:{a:900,b:-1,evil:6}});
   assert.equal(state.sizes.a,6);assert.equal(state.sizes.b,2);assert.equal(state.sizes.evil,undefined);
   assert.equal(multiState({mixAudio:'true'}).mixAudio,false);
+  assert.equal(multiState().playerMode,'full');assert.equal(multiState({playerMode:'embed'}).playerMode,'embed');assert.equal(new URL(multiURL({channels:['a','b'],playerMode:'embed'})).searchParams.get('immersion-player'),'embed');assert.equal(multiState({playerMode:'full'}).playerMode,'full');assert.equal(multiState({playerMode:'invalid'}).playerMode,'full');assert.equal(new URL(multiURL({channels:['a','b'],playerMode:'full'})).searchParams.get('immersion-player'),'full');
   const url=new URL(multiURL(state));assert.equal(url.searchParams.get('immersion-mix'),'1');assert.deepEqual(JSON.parse(url.searchParams.get('immersion-tiles')),{a:6,b:2});
 });
 
@@ -144,11 +145,11 @@ test('a delayed player obeys the latest pause and avoids repeated media setters'
     get muted(){return muted;},set muted(value){mutations++;muted=value;},
     get volume(){return volume;},set volume(value){mutations++;volume=value;}};
   const window={name:'kick-refined:test',parent,top:{},addEventListener:(name,cb)=>{listeners[name]=cb;}};
-  const document={documentElement:{},querySelectorAll:()=>present?[video]:[]};
+  const document={documentElement:{append(){}},createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll:()=>present?[video]:[]};
   class Observer{constructor(callback){observer=callback;}observe(){}}
   vm.runInNewContext(source,{window,document,MutationObserver:Observer,setTimeout:callback=>{timers.push(callback);return timers.length;}});
   const send=(revision,action)=>listeners.message({source:parent,origin:'https://kick.com',data:{type:'kick-refined:control',session:'race-test',revision,muted:true,volume:1,action}});
-  send(1,'play');send(2,'pause');present=true;observer();
+  send(1,'play');send(2,'pause');present=true;observer([{target:{},addedNodes:[]}]);
   while(timers.length)timers.shift()();
   assert.equal(plays,0,'a stale queued play must not run when the video arrives');
   assert.equal(pauses,1);

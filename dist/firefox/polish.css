@@ -22,6 +22,16 @@ html[data-kr-enabled="true"] [data-kr-notice-close]:hover { background:#ffffff08
 html[data-kr-enabled="true"] [data-kr-notice-close] svg { width:15px!important;height:15px!important; }
 @media(max-width:480px) { html[data-kr-enabled="true"] [data-kr-live-notice] { padding:10px!important;gap:8px!important; } html[data-kr-enabled="true"] [data-kr-notice-watch] { padding:0 8px!important; } }
 #kr-multi-root { display:block;position:relative;flex:0 0 auto;width:100%;min-width:0; }
+/* Preserve Kick's timeline and player actions in one matching control strip. */
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0:has(button) { box-sizing:border-box!important;padding:6px 8px!important;gap:5px!important;background:linear-gradient(180deg,transparent,#09090bed 60%)!important; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0 button { border:1px solid #ffffff12!important;border-radius:8px!important;background:#ffffff05!important;color:#dcdce7!important;min-width:28px;min-height:28px; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0 button:hover { background:#ffffff12!important;color:var(--kr-accent)!important; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0 [class*="bg-kick-voltGreen"] { background-color:var(--kr-accent)!important; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] [data-kr-workspace-focus] { display:inline-grid;place-items:center;padding:5px;flex:none; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] [data-kr-workspace-focus] svg { width:16px;height:16px; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0:has(button),html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0 div:has(>button) { gap:8px!important; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0 button { box-sizing:border-box!important;width:auto!important;height:28px!important;min-width:28px!important;min-height:28px!important;padding:5px!important;flex-shrink:0!important;font-size:11px!important;border-radius:7px!important; }
+html[data-kr-enabled="true"] [data-kr-native-player="true"] .z-controls.bottom-0 button svg { width:16px!important;height:16px!important; }
 /* Native popup portals can mount under main alongside the channel panels. */
 main[data-kr-multi-active="true"] > [data-kr-single-info="true"]:not(:is(#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal])):not(:has(:is(#user-identity,[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-radix-popper-content-wrapper],[data-radix-portal],[data-floating-ui-portal]))) { display:none !important; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-kr-dragging="true"] { opacity:.5; }

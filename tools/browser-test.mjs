@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'player-controls.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -213,6 +213,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.match(await palette.getByRole('option').first().textContent(), /nightshift/);
     await page.screenshot({ path: path.join(root, `artifacts/${engine}-switcher.png`) });
     await search.press('Escape');
+    await palette.waitFor({state:'hidden'});
     await page.locator('main').click({position:{x:20,y:20}});
     await page.keyboard.press('t'); await page.keyboard.press('m');
     assert.deepEqual(await page.evaluate(()=>window.nativeHotkeys),['KeyT','KeyM'],'native shortcuts still work outside Refined');
@@ -288,7 +289,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.waitForTimeout(180);await expanded.screenshot({path:path.join(root,`artifacts/${engine}-expanded-profile-v10.png`)});
     await detailsButton.click();assert.equal(await multi.locator('.multi-expanded-profile').count(),0);
     assert.equal(await multi.locator('#multi-audio-source').count(),0);
-    for(const slug of ['aurora','nightshift'])for(const action of ['Remove','Fullscreen','Move left','Move right'])assert.equal(await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).isVisible(),true);
+    for(const slug of ['aurora','nightshift'])for(const action of ['Remove','Fullscreen'])assert.equal(await multi.getByRole('button',{name:`${action} ${slug}`,exact:true}).isVisible(),true);
     assert.doesNotMatch(await multi.textContent(),/Watching together|Drag channels here to add streams/);
     await page.waitForFunction(()=>{
       const native=window.originalPlayer.getBoundingClientRect(),target=document.getElementById('kr-multi-root').shadowRoot.querySelector('[data-channel="nightshift"] .multi-player').getBoundingClientRect();
@@ -316,11 +317,32 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.waitForFunction(() => [...document.querySelector('#kr-multi-root').shadowRoot.querySelectorAll('.multi-player iframe')].every(f => !!f.contentWindow));
     for (const frame of page.frames().filter(f => f.url().startsWith('https://player.kick.com/'))) {
       await frame.waitForSelector('video', { state: 'attached' });
-      if (engine === 'firefox') await frame.addScriptTag({ path: path.join(root, 'extension/player-frame.js') });
+      if (engine === 'firefox') for(const file of ['player-controls.js','player-frame.js']) await frame.addScriptTag({ path: path.join(root, 'extension',file) });
     }
     const auroraPlayer = page.frames().find(f => f.url().startsWith('https://player.kick.com/aurora'));
+    await page.evaluate(()=>{const bar=document.createElement('div');bar.className='z-controls bottom-0';bar.style.cssText='position:absolute;bottom:0;left:0;width:100%;height:40px';bar.innerHTML='<button aria-label="Quality" aria-haspopup="menu" aria-controls="test-native-quality">Quality</button>';bar.querySelector('button').onclick=()=>{const menu=document.createElement('div');menu.setAttribute('data-radix-popper-content-wrapper','');menu.style.cssText='position:fixed;right:30px;top:100px;z-index:2147483647;background:#24242c;padding:12px';menu.innerHTML='<div role="menu" id="test-native-quality"><button>1080p</button></div>';menu.querySelector('button').onclick=()=>{window.nativeQualitySelected=true;menu.remove();};document.body.append(menu);};document.querySelector('.stage').append(bar);});
+    await multi.locator('.multi-tile[data-channel=nightshift][data-native-chrome=true]').waitFor();assert.equal(await page.locator('.stage .z-controls button').first().evaluate(node=>getComputedStyle(node).borderRadius),'7px','native controls share workspace styling');
+    await page.locator('.stage .z-controls').getByRole('button',{name:'Quality',exact:true}).click();
+    await page.locator('#test-native-quality').getByRole('button',{name:'1080p',exact:true}).click();
+    await page.evaluate(()=>{const input=document.createElement('input');input.type='range';input.setAttribute('aria-label','Native volume');input.value='100';input.oninput=()=>{const video=document.getElementById('video-player');video.volume=Number(input.value)/100;video.muted=false;};document.querySelector('.stage .z-controls').append(input);});
+    await page.locator('.stage [data-kr-unified-row]').getByRole('slider',{name:'Volume',exact:true}).dispatchEvent('pointerdown');await page.locator('.stage [data-kr-unified-row]').getByRole('slider',{name:'Volume',exact:true}).fill('51');
+    await page.waitForFunction(()=>document.getElementById('kr-multi-root').shadowRoot.querySelector('input[aria-label="Volume for nightshift"]').value==='51');
+    const nativeBarPosition=await page.locator('.stage .z-controls').evaluate(node=>({parent:node.parentElement===window.originalPlayer,position:getComputedStyle(node).position,offset:node.getBoundingClientRect().bottom-node.parentElement.getBoundingClientRect().bottom}));
+    assert.equal(nativeBarPosition.parent,true,'native controls stay inside the original player');assert.equal(nativeBarPosition.position,'absolute','controls do not use a detached fixed overlay');assert.ok(Math.abs(nativeBarPosition.offset)<2,'native bar stays at the player bottom');
+    const mainOrder=await page.locator('.stage [data-kr-unified-row]').evaluate(row=>[...row.querySelectorAll('button')].map(button=>button.dataset.krAction));
+    assert.equal(await page.evaluate(()=>window.nativeQualitySelected),true,'native settings retain their handler');assert.equal(await page.locator('.stage [data-kr-workspace-focus]').count(),1,'workspace focus action shares the native player strip');await page.evaluate(()=>{document.querySelector('.stage .z-controls').remove();delete document.getElementById('kr-multi-root').shadowRoot.querySelector('.multi-tile[data-channel=nightshift]').dataset.nativeChrome;});
+
     assert.equal(page.frames().some(f=>f.url().startsWith('https://player.kick.com/nightshift')),false);
     await auroraPlayer.evaluate(() => { window.playerSentinel = 71; });
+    await auroraPlayer.evaluate(()=>{const bar=document.createElement('div');bar.className='z-controls bottom-0';bar.innerHTML='<button aria-label="Quality" aria-haspopup="menu" aria-controls="test-frame-quality">Quality</button>';bar.querySelector('button').onclick=()=>{const menu=document.createElement('div');menu.setAttribute('data-radix-popper-content-wrapper','');menu.style.cssText='position:fixed;right:30px;top:100px;z-index:2147483647;background:#24242c;padding:12px';menu.innerHTML='<div role="menu" id="test-frame-quality"><button>720p</button></div>';menu.querySelector('button').onclick=()=>{window.frameQualitySelected=true;menu.remove();};document.body.append(menu);};document.body.append(bar);});
+    await auroraPlayer.locator('.z-controls').getByRole('button',{name:'Quality',exact:true}).click();
+    await auroraPlayer.locator('#test-frame-quality').getByRole('button',{name:'720p',exact:true}).click();
+    assert.equal(await auroraPlayer.evaluate(()=>window.frameQualitySelected),true,'embedded player settings stay native too');
+    const frameOrder=await auroraPlayer.locator('[data-kr-unified-row]').evaluate(row=>[...row.querySelectorAll('button')].map(button=>button.dataset.krAction));
+    assert.deepEqual(frameOrder,mainOrder,'main and secondary streams use exactly the same control order');
+    assert.equal(await auroraPlayer.locator('[data-kr-unified-row] button').first().evaluate(node=>getComputedStyle(node).borderRadius),'7px');await auroraPlayer.locator('[data-kr-workspace-focus]').waitFor();await auroraPlayer.evaluate(()=>document.querySelector('.z-controls').remove());await page.evaluate(()=>delete document.getElementById('kr-multi-root').shadowRoot.querySelector('.multi-tile[data-channel=aurora]').dataset.nativeChrome);
+
+    await multi.locator('.multi-tile[data-channel=aurora]').hover();
     await multi.getByRole('button', { name: 'Audio for aurora', exact: true }).click();
     await auroraPlayer.waitForFunction(() => document.querySelector('video').muted === false);
     await multi.getByRole('button', { name: 'Audio for nightshift', exact: true }).click();
@@ -363,7 +385,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),false,'focusing preserves other audio when mixing');
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
     await multi.locator('.multi-tile[data-channel="aurora"] .multi-tile-header').dblclick({position:{x:12,y:12}});
-    await multi.locator('.multi-tile[data-channel="aurora"] .multi-audible').waitFor({state:'visible'});
+    assert.equal(await multi.locator('.multi-tile[data-channel="aurora"] .multi-audible').isVisible(),false,'extra speaker indicator stays hidden');
     await multi.getByRole('button',{name:'Mute all',exact:true}).click();
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
     await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
@@ -373,7 +395,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora','focusing a stream follows its chat');
     assert.equal(await multi.locator('.multi-channel-card').count(),1,'only the focused channel appears beneath the players');
     assert.equal(await multi.locator('.multi-channel-card').getAttribute('data-channel'),'aurora');
-    await streamAction('aurora','Move left');
+    assert.equal(await multi.getByRole('button',{name:/Move (left|right)/}).count(),0,'pane reorder arrows are removed');
     assert.equal(await auroraPlayer.evaluate(() => window.playerSentinel), 71, 'layout and reordering do not reload players');
     const featured=multi.locator('.multi-tile[data-channel="aurora"]');
     const featuredBefore=await featured.evaluate(el=>el.getBoundingClientRect().width);
@@ -416,12 +438,12 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await auroraPlayer.locator('html').dblclick();
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
     await page.waitForFunction(()=>document.getElementById('video-player').muted===true);
-    await multi.getByRole('button',{name:'Show nightshift chat',exact:true}).dblclick();
+    await multi.locator('.multi-tile[data-channel=nightshift] .multi-tile-header').dblclick({position:{x:12,y:12}});
     await page.waitForFunction(()=>document.getElementById('video-player').muted===false);
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
     await page.locator('.stage').dblclick({position:{x:20,y:25}});
     assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'nightshift');
-    await multi.getByRole('button',{name:'Show aurora chat',exact:true}).dblclick();
+    await multi.locator('.multi-tile[data-channel=aurora] .multi-tile-header').dblclick({position:{x:12,y:12}});
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
     await page.waitForFunction(()=>document.getElementById('video-player').muted===true);
     assert.equal(await multi.locator('#multi-chat-channel').inputValue(),'aurora');
@@ -438,9 +460,9 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multi.getByRole('button',{name:'Show settings bar',exact:true}).click();
     assert.equal(await multi.locator('.multi-header').isVisible(),true);
     assert.equal(await multi.locator('.multi-options').isVisible(),true,'expanded management controls are restored');
-    assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),true);
+    assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),false,'compact player labels show only name and photo');
     assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'hiding and showing settings retains the player');
-    await multi.getByRole('button', { name: 'Show aurora chat', exact: true }).click();
+    await page.locator('#kr-multi-chat-picker').getByRole('combobox',{name:'Chat channel'}).selectOption('aurora');
     assert.match(await page.locator('#kr-multi-chat iframe').getAttribute('src'), /\/popout\/aurora\/chat$/);
     const switchedChat=page.frameLocator('#kr-multi-chat iframe');
     if(engine==='firefox'){
@@ -460,7 +482,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await switchedChat.getByRole('button',{name:'Reply',exact:true}).click();
     assert.equal(await switchedChat.locator('body').evaluate(()=>window.frameReplies),1,'username cards remain interactive in switched chat');
     await switchedChat.getByRole('button',{name:'Close user card',exact:true}).click();
-    await multi.getByRole('button',{name:'Show nightshift chat',exact:true}).click();
+    await page.locator('#kr-multi-chat-picker').getByRole('combobox',{name:'Chat channel'}).selectOption('nightshift');
     assert.equal(await page.locator('#kr-multi-chat iframe').count(),0);
     assert.equal(await page.evaluate(()=>document.getElementById('channel-chatroom')===window.originalChat),true,'switching back preserves the native chat connection');
     await multi.getByRole('combobox',{name:'Multiview layout'}).selectOption('grid');
@@ -625,8 +647,8 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox').press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','minimal drop cue without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','collapsible settings bar','chat tabs','saved custom split','natural video height with three streams','direct close/fullscreen/reorder actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
+    report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','minimal drop cue without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','collapsible settings bar','native chat header dropdown','saved custom split','natural video height with three streams','direct close/fullscreen actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
-  } finally { await context.close(); if (browser) await browser.close(); }
+  } catch(error){for(const page of context.pages())if(page.url().startsWith('https://kick.com/'))await page.screenshot({path:path.join(root,`artifacts/${engine}-workspace-failure.png`)}).catch(()=>{});throw error;} finally { await context.close(); if (browser) await browser.close(); }
 }
 await writeFile(path.join(root, `artifacts/${process.env.KR_ENGINE}-results.json`), `${JSON.stringify(report, null, 2)}\n`);

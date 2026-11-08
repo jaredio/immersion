@@ -36,6 +36,14 @@ try{
   assert.equal(result.single,result.original,'single stream retains the exact native verification path');
   assert.equal(result.multi,result.original,'multistream retains the exact native verification path');
   assert.equal(result.fallback,result.original,'other channels use the exact native badge too');
+  const mentions=await page.evaluate(()=>{
+    const text='‼ 🌴 MIAMI IRL 🌴 ‼ w/ @sheep_xing, (@Other-Channel)! mail@example.com <b> @Third';
+    const card=testPanel.card('mentions',{title:'Mentions',streamTitle:text,live:'live'},{}),title=card.querySelector('.channel-title');
+    return {text:title.textContent,markup:title.querySelector('b')!==null,links:[...title.querySelectorAll('a')].map(a=>[a.textContent,a.href])};
+  });
+  assert.equal(mentions.text,'‼ 🌴 MIAMI IRL 🌴 ‼ w/ @sheep_xing, (@Other-Channel)! mail@example.com <b> @Third');
+  assert.equal(mentions.markup,false,'title content remains plain text');
+  assert.deepEqual(mentions.links,[['@sheep_xing','https://kick.com/sheep_xing'],['@Other-Channel','https://kick.com/other-channel'],['@Third','https://kick.com/third']]);
   assert.equal(await page.locator('#captured-native>[data-kr-channel-source]').isVisible(),false,'the actual native desktop header is replaced');
   const single=page.locator('#kr-channel-root'),multi=page.locator('#workspace');
   assert.equal(await single.evaluate(node=>node.parentElement.id),'channel-content','replacement mounts outside responsive native wrappers');

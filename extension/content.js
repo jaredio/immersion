@@ -1,4 +1,5 @@
 (() => {
+  if(window!==window.top&&/^kick-refined-full:[a-z0-9_]{1,40}$/.test(window.name))return;
   const { api, normalize, channelSlug } = KickRefined;
   if (/^\/popout\/[^/]+\/chat\/?$/.test(location.pathname)) return;
   if (!api?.storage || document.getElementById('kr-root')) return;
@@ -138,7 +139,7 @@
     for (const dialog of [settingsDialog, palette]) {
       dialog.querySelector('.close').addEventListener('click', () => dialog.close());
       dialog.addEventListener('click', event => { if (event.target === dialog && (event.clientX < dialog.getBoundingClientRect().left || event.clientX > dialog.getBoundingClientRect().right || event.clientY < dialog.getBoundingClientRect().top || event.clientY > dialog.getBoundingClientRect().bottom)) dialog.close(); });
-      dialog.addEventListener('close', () => { if(dialog===palette){clearTimeout(searchTimer);searchService.cancel();searchBusy=false;searchRevision++;searchBackdrop?.remove();searchBackdrop=null;placeToolbar();}if (previousFocus?.isConnected) previousFocus.focus(); });
+      dialog.addEventListener('close', () => { if(dialog===palette&&!palette.open){clearTimeout(searchTimer);searchService.cancel();searchBusy=false;searchRevision++;searchBackdrop?.remove();searchBackdrop=null;placeToolbar();}if (previousFocus?.isConnected) previousFocus.focus(); });
     }
     placeToolbar();
   }
@@ -174,7 +175,7 @@
     collectChannels(); selected = 0;
     shadow.querySelector('#channel-search').value = '';
     updateSearch();
-    if (!palette.open) {searchBackdrop=document.createElement('div');searchBackdrop.id='kr-search-backdrop';searchBackdrop.setAttribute('aria-hidden','true');searchBackdrop.style.cssText='position:fixed;inset:0;z-index:2147482999;background:#0008';searchBackdrop.addEventListener('click',()=>palette.close());document.body.append(searchBackdrop);palette.show();placeToolbar();}
+    if (!palette.open) {document.getElementById('kr-search-backdrop')?.remove();searchBackdrop=document.createElement('div');searchBackdrop.id='kr-search-backdrop';searchBackdrop.setAttribute('aria-hidden','true');searchBackdrop.style.cssText='position:fixed;inset:0;z-index:2147482999;background:#0008';searchBackdrop.addEventListener('click',()=>palette.close());document.body.append(searchBackdrop);palette.show();placeToolbar();}
     shadow.querySelector('#channel-search').focus();
   }
 
@@ -487,7 +488,7 @@
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);
       const params = new URL(location.href).searchParams;
-      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : 67, mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
+      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : 67, playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-kr-enabled'] });
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });

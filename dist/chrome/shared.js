@@ -57,13 +57,14 @@
     const source = input && typeof input === 'object' ? input : {};
     const channels = Array.isArray(source.channels) ? [...new Set(source.channels.filter(s => typeof s === 'string').map(s => channelSlug(`/${s}`)).filter(Boolean))].slice(0, 6) : [];
     const sizes={};for(const slug of channels)if(Number.isFinite(source.sizes?.[slug]))sizes[slug]=Math.max(2,Math.min(6,Math.round(source.sizes[slug])));
-    return { channels, sizes, mixAudio:source.mixAudio===true, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 67 };
+    return { channels, sizes, playerMode:source.playerMode==='embed'?'embed':'full',mixAudio:source.mixAudio===true, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 74 };
   }
   function multiURL(input) {
     const state = multiState(input), url = new URL('https://kick.com/');
     url.searchParams.set('refined-multi', state.channels.join(',')); url.searchParams.set('refined-layout', state.layout);
     url.searchParams.set('refined-chat', state.chat); url.searchParams.set('refined-focus', state.focus);
     url.searchParams.set('immersion-size',state.focusSize);
+    url.searchParams.set('immersion-player',state.playerMode);
     if(state.mixAudio)url.searchParams.set('immersion-mix','1');
     if(Object.keys(state.sizes).length)url.searchParams.set('immersion-tiles',JSON.stringify(state.sizes));
     if (!state.chatVisible) url.searchParams.set('refined-hide-chat', '1');

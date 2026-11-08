@@ -55,6 +55,7 @@
         "support-data.js",
         "support.js",
         "channel-panel.js",
+        "player-controls.js",
         "multiview.js",
         "chat-clips.js",
         "clip-bridge.js",
@@ -114,9 +115,23 @@
     },
     {
       "matches": [
+        "https://kick.com/*",
+        "https://www.kick.com/*"
+      ],
+      "js": [
+        "full-player-frame.js",
+        "player-controls.js",
+        "player-frame.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
         "https://player.kick.com/*"
       ],
       "js": [
+        "player-controls.js",
         "player-frame.js"
       ],
       "run_at": "document_start",
