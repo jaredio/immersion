@@ -132,7 +132,7 @@ try{
   });
   await detached.goto('https://support-test.invalid/aurora');
   await detached.evaluate(()=>window.browser={runtime:{getURL:file=>`https://support-test.invalid/${file}`},storage:{local:{get:async()=>({})}}});
-  for(const file of ['shared.js','profile.js','support-data.js','support.js'])await detached.addScriptTag({path:path.join(root,'extension',file)});
+  for(const file of ['shared.js','dom.js','profile.js','support-data.js','support.js'])await detached.addScriptTag({path:path.join(root,'extension',file)});
   await detached.evaluate(()=>{
    window.detachedSupport=KickRefinedSupport.create();
    const button=detachedSupport.makeButton('aurora');

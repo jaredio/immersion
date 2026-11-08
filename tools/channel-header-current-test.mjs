@@ -17,7 +17,7 @@ try{
   await page.goto('https://kick.com/soultravels');
   await page.addStyleTag({path:'extension/theme.css'});
   await page.evaluate(()=>{window.chrome={runtime:{getURL:file=>`https://kick.com/${file}`}};});
-  for(const file of ['shared.js','profile.js','channel-panel.js'])await page.addScriptTag({path:`extension/${file}`});
+  for(const file of ['shared.js','dom.js','profile.js','channel-panel.js'])await page.addScriptTag({path:`extension/${file}`});
   const result=await page.evaluate(()=>{
     const original=document.querySelector('[data-ds-icon=VerifiedBadge] path').getAttribute('d');
     const meta={title:'SoulTravels',live:'live',verified:true};

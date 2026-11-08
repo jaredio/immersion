@@ -44,10 +44,10 @@
     if(!root.hasAttribute('data-kr-full-player-root'))root.setAttribute('data-kr-full-player-root','');
   }
   const observer=new MutationObserver(records=>{
-    if(records.every(record=>record.target?.closest?.('#chatroom-messages')))return;
+    if(!records.some(record=>{const target=record.target.nodeType===1?record.target:record.target.parentElement;return !target?.closest?.('#chatroom-messages,[data-kr-unified-row]')&&[...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1);}))return;
     if(!timer)timer=setTimeout(scan,40);
   });
   function init(){scan();observer.observe(document,{childList:true,subtree:true});}
   if(document.documentElement)init();else document.addEventListener('DOMContentLoaded',init,{once:true});
-  window.addEventListener('pagehide',()=>{observer.disconnect();clearTimeout(timer);},{once:true});
+  window.addEventListener('pagehide',event=>{if(!event.persisted){observer.disconnect();clearTimeout(timer);}});
 })();

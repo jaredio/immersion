@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 ROOT = Path(__file__).resolve().parents[1]
-WORK = ROOT / 'tmp' / 'firefox-support-installed'
+WORK = ROOT / 'tmp' / ('firefox-support-installed-'+str(time.time_ns()))
 WORK.mkdir(parents=True, exist_ok=True)
 key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Immersion local test')])
@@ -27,7 +27,7 @@ now = datetime.datetime.now(datetime.timezone.utc)
 cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
         .serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1))
         .not_valid_after(now+datetime.timedelta(days=1)).add_extension(x509.SubjectAlternativeName([
-            x509.DNSName('kick.com'), x509.DNSName('kickbot.com'), x509.DNSName('streamelements.com')]), critical=False).sign(key, hashes.SHA256()))
+            x509.DNSName('kick.com'), x509.DNSName('kickbot.com'), x509.DNSName('streamelements.com'), x509.DNSName('www.google-analytics.com')]), critical=False).sign(key, hashes.SHA256()))
 (WORK/'key.pem').write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
 (WORK/'cert.pem').write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -36,6 +36,8 @@ fixture = (ROOT/'tests/fixture.html').read_text(encoding='utf-8').replace('<butt
 # Client-rendered checkout controls without a literal form reproduce the missed-ready regression.
 form = '''<!doctype html><html><head><title>KickBot checkout fixture</title><script>window.fixtureInlineScriptExecuted=true</script></head><body><header class="fixed"><a href="/">Provider navigation</a></header><main><div><div><section><div><h1>KickBot checkout fixture</h1><p>$1 for TTS</p></div></section><section aria-labelledby="tip-amount-title"><h2 id="tip-amount-title">Amount</h2><div><div><button aria-pressed="false">$5</button></div><div><label>Amount<input id="custom-tip-amount" name="amount" min="1" max="500"></label></div></div></section><section aria-labelledby="tip-message-title"><h2 id="tip-message-title">Your message</h2><div><div><label>Name<input id="tip-name" name="username"></label></div><div><textarea id="tip-message" maxlength="150"></textarea></div></div></section></div><aside aria-labelledby="tip-summary-title"><div><h2 id="tip-summary-title">Your tip</h2><button role="checkbox" aria-checked="false" aria-labelledby="tip-terms"></button><p id="tip-terms">Provider terms <a href="/terms">Terms of service</a></p><button id="test-payment" disabled>Continue to payment</button></div></aside></div></main><footer><nav aria-label="Footer">Provider navigation</nav></footer></body></html>'''
 se_form = '''<!doctype html><html><head><title>StreamElements checkout fixture</title><script>window.fixtureInlineScriptExecuted=true</script></head><body><div id="root"><div data-slot="page-background"><div><main data-slot="single-card"><form data-slot="tipping-form"><fieldset data-slot="tipping-form-group"><label data-slot="tip-preset-button"><input name="preset" type="radio" value="5">$5</label><label>Your name<div data-slot="input-group"><input name="tipperUsername"></div></label><label>Message<div data-slot="input-group"><textarea name="message"></textarea></div></label></fieldset><p>Provider terms</p><div data-slot="payment-cta-bar"><button disabled>Continue</button></div></form></main></div></div></div></body></html>'''
+
+telemetry_hits = 0
 
 class Proxy(BaseHTTPRequestHandler):
     def log_message(self, *_):
@@ -54,7 +56,10 @@ class Proxy(BaseHTTPRequestHandler):
         self.close_connection = True
 
     def do_GET(self):
+        global telemetry_hits
         host = self.headers.get('Host', '')
+        if host == 'www.google-analytics.com':
+            telemetry_hits += 1
         blocked = host in ['kickbot.com','streamelements.com']
         if blocked:
             body, content_type = se_form if host=='streamelements.com' else form, 'text/html'
@@ -151,6 +156,23 @@ try:
     wait("return !!document.querySelector('[data-kr-support]')")
     script("document.querySelector('#kr-root').shadowRoot.querySelector('#kr-settings').click();return true")
     assert script("return document.querySelector('#kr-root').shadowRoot.querySelector('#settings-dialog').open"), 'settings remain available in the Firefox build'
+    def probe_telemetry():
+        script("document.documentElement.dataset.telemetryProbe='pending';fetch('https://www.google-analytics.com/g/collect?test='+Math.random(),{mode:'no-cors',cache:'no-store'}).then(()=>document.documentElement.dataset.telemetryProbe='allowed',()=>document.documentElement.dataset.telemetryProbe='blocked');return true")
+        return wait("return document.documentElement.dataset.telemetryProbe!=='pending'&&document.documentElement.dataset.telemetryProbe")
+    assert probe_telemetry() == 'blocked', 'installed Firefox blocks telemetry before it reaches the network'
+    assert telemetry_hits == 0
+    script("document.querySelector('#kr-root').shadowRoot.querySelector('#blockTelemetry').click();return true")
+    deadline = time.monotonic()+5
+    while probe_telemetry() != 'allowed':
+        assert time.monotonic() < deadline, 'telemetry toggle did not disable blocking'
+        time.sleep(.1)
+    assert telemetry_hits > 0, 'disabling protection restores the request'
+    script("document.querySelector('#kr-root').shadowRoot.querySelector('#blockTelemetry').click();return true")
+    deadline = time.monotonic()+5
+    while probe_telemetry() != 'blocked':
+        assert time.monotonic() < deadline, 'telemetry toggle did not restore blocking'
+        time.sleep(.1)
+    print('PASS installed Firefox: telemetry request blocking and live preference toggles.')
     script("document.querySelector('#kr-root').shadowRoot.querySelector('#settings-dialog').close();return true")
     script("document.querySelector('[data-kr-support]').click();return true")
     wait("return !!document.querySelector('#kr-support-root')?.shadowRoot.querySelector('iframe')")

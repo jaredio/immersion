@@ -55,7 +55,7 @@ try{
  await page.goto('https://kick.com/popout/test/chat');
  await page.evaluate(()=>{window.senderClicks=0;document.querySelector('#row-tt .sender').addEventListener('click',()=>window.senderClicks++);});
  if(engine==='firefox'){
-  for(const file of ['shared.js','x-post-data.js','x-posts.js','media-data.js','media-embeds.js'])await page.addScriptTag({path:path.join(root,'extension',file)});
+  for(const file of ['shared.js','dom.js','x-post-data.js','x-posts.js','media-data.js','media-embeds.js'])await page.addScriptTag({path:path.join(root,'extension',file)});
   await page.evaluate(()=>{document.documentElement.dataset.krEnabled='true';window.testX=KickRefinedX.create();window.testMedia=KickRefinedMedia.create();});
  }
  const x=page.locator('#row-x .kr-x-post');await x.locator('.name').waitFor();assert.equal(videoRequests,0,'X videos do not preload on arrival');assert.equal(playerRequests,0,'external players do not load on arrival');

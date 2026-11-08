@@ -13,7 +13,7 @@ const fullFixture=slug=>`<!doctype html><html><head><meta charset="utf-8"><style
  </script></body></html>`;
 let browser,context;
 if(engine==='chromium'){
- context=await playwright.chromium.launchPersistentContext(path.join(root,'tmp/full-players-profile'),{executablePath:playwright.chromium.executablePath(),headless:true,viewport:{width:1600,height:1000},args:[`--disable-extensions-except=${path.join(root,'dist/chrome')}`,`--load-extension=${path.join(root,'dist/chrome')}`]});
+ context=await playwright.chromium.launchPersistentContext(path.join(root,`tmp/full-players-profile-${Date.now()}`),{executablePath:playwright.chromium.executablePath(),headless:true,viewport:{width:1600,height:1000},args:[`--disable-extensions-except=${path.join(root,'dist/chrome')}`,`--load-extension=${path.join(root,'dist/chrome')}`]});
  const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');await worker.evaluate(()=>chrome.storage.local.clear());
 }else{
  browser=await playwright.firefox.launch({headless:true});context=await browser.newContext({viewport:{width:1600,height:1000}});
@@ -31,7 +31,7 @@ try{
   return route.fulfill({contentType:'text/html',body:fixture});
  });
  await context.route('https://player.kick.com/**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><video src="${media}" loop autoplay muted></video>`}));
- const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto('https://kick.com/nightshift');
+ const page=await context.newPage(),errors=[];page.on('pageerror',error=>{if(engine==='firefox'&&error.message==='RPMGetBoolPref is not defined'&&error.stack?.includes('chrome://global/content/aboutNetError.mjs'))return;errors.push(error.message);});await page.goto('https://kick.com/nightshift');
  if(engine==='firefox'){for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of manifest.content_scripts.find(script=>script.js?.includes('content.js')).js)await page.addScriptTag({path:`extension/${file}`});}
  await page.getByRole('button',{name:'Open multiview',exact:true}).click();const workspace=page.locator('#kr-multi-root');
  await workspace.getByRole('button',{name:'Manage',exact:true}).click();

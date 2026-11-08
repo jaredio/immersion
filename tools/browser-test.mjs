@@ -87,7 +87,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'player-controls.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js', 'content.js']) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('content.js')).js) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -312,9 +312,11 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multiInput.fill(''); await page.evaluate(()=>{window.nativeHotkeys=[];}); await multiInput.pressSequentially('tm');
     assert.equal(await multiInput.inputValue(),'tm');assert.deepEqual(await page.evaluate(()=>window.nativeHotkeys),[]);
     await multiInput.fill('');
+    await multi.getByRole('combobox',{name:'Player mode',exact:true}).selectOption('embed');
     const addStream = async slug => { await multi.getByRole('combobox', { name: 'Add channel to multiview' }).fill(slug); await multi.getByRole('button', { name: 'Add stream', exact: true }).click(); };
     assert.equal(await multi.locator('.multi-player iframe').count(), 1,'the current stream reuses its native player');
     await page.waitForFunction(() => [...document.querySelector('#kr-multi-root').shadowRoot.querySelectorAll('.multi-player iframe')].every(f => !!f.contentWindow));
+    await multi.locator('.multi-player iframe').contentFrame().locator('video').waitFor({state:'attached'});
     for (const frame of page.frames().filter(f => f.url().startsWith('https://player.kick.com/'))) {
       await frame.waitForSelector('video', { state: 'attached' });
       if (engine === 'firefox') for(const file of ['player-controls.js','player-frame.js']) await frame.addScriptTag({ path: path.join(root, 'extension',file) });
@@ -468,7 +470,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if(engine==='firefox'){
       const frame=page.frames().find(frame=>frame.url().startsWith('https://kick.com/popout/aurora/chat'));
       for(const file of ['theme.css','polish.css'])await frame.addStyleTag({path:path.join(root,'extension',file)});
-      for(const file of ['shared.js','chat-clips.js','clip-bridge.js','x-post-data.js','x-posts.js','media-data.js','media-embeds.js','reply-preview.js','chat-frame.js'])await frame.addScriptTag({path:path.join(root,'extension',file)});
+      for (const file of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await frame.addScriptTag({path:path.join(root,'extension',file)});
     }
     await switchedChat.getByRole('button',{name:'fixture-user',exact:true}).click();
     await switchedChat.locator('#user-identity').waitFor({state:'visible'});

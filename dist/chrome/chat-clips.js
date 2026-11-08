@@ -266,20 +266,20 @@
       const row=node.closest('[data-index]');if(row)dirty.add(row);
       if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);
     }
-    const observer=new MutationObserver(changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:refresh,onMutations:changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();},attributes:['href','src','data-index']});
     function refresh(){
       if(disposed)return;
-      const next=enabled?document.getElementById('chatroom-messages'):null;
+      const next=enabled?KickRefinedDOM.chat:null;
       if(next===list)return;
-      observer.disconnect();visibility?.disconnect();for(const record of [...records])if(!record.workspace)release(record);dirty.clear();list=next;
-      if(list){visibility=new IntersectionObserver(entries=>{for(const entry of entries)if(!entry.isIntersecting&&active?.host===entry.target&&floating?.record!==active&&!active.workspace&&!active.dragging)reset(active);},{root:list});queue(list);observer.observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:['href','src','data-index']});schedule();}
+      visibility?.disconnect();for(const record of [...records])if(!record.workspace)release(record);dirty.clear();list=next;
+      if(list){visibility=new IntersectionObserver(entries=>{for(const entry of entries)if(!entry.isIntersecting&&active?.host===entry.target&&floating?.record!==active&&!active.workspace&&!active.dragging)reset(active);},{root:list});queue(list);schedule();}
     }
-    function setEnabled(value){if(enabled===value)return;enabled=value;if(!enabled){for(const record of [...records])record.workspace?.remove();closeFloating();clearTimeout(timer);timer=0;}refresh();}
-    function destroy(){disposed=true;clearTimeout(timer);for(const timer of feedbackTimers)clearTimeout(timer);feedbackTimers.clear();observer.disconnect();visibility?.disconnect();closeFloating();for(const record of [...records]){record.workspace?.remove();release(record);}cache.clear();dirty.clear();}
+    function setEnabled(value){if(enabled===value)return;enabled=value;if(!enabled){for(const record of [...records])record.workspace?.remove();closeFloating();clearTimeout(timer);timer=0;}subscription.setEnabled(enabled);refresh();}
+    function destroy(){disposed=true;subscription.destroy();clearTimeout(timer);for(const timer of feedbackTimers)clearTimeout(timer);feedbackTimers.clear();visibility?.disconnect();closeFloating();for(const record of [...records]){record.workspace?.remove();release(record);}cache.clear();dirty.clear();}
     const nativeStyle=document.createElement('style');nativeStyle.textContent='html[data-kr-enabled="true"] :is([data-kr-clip-native],[data-kr-clip-link]){display:none!important}';document.head.append(nativeStyle);
-    const routeObserver=new MutationObserver(()=>{if(enabled&&document.getElementById('chatroom-messages')!==list)refresh();});routeObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['id']});
+    subscription.setEnabled(enabled);
     refresh();
-    return {setEnabled,refresh,importItem,destroy(){destroy();routeObserver.disconnect();nativeStyle.remove();}};
+    return {setEnabled,refresh,importItem,destroy(){destroy();nativeStyle.remove();}};
   }
   globalThis.KickRefinedClips=Object.freeze({parseClip,parseVOD,vodMetadata,mediaURL,metadata,create});
 })();

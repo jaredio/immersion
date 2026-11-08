@@ -15,9 +15,10 @@
     let list,timer,disposed=false;
     const records=new Set(),dirty=new Set(),api=KickRefined.api;
     const nativeStyle=document.createElement('style');nativeStyle.textContent='[data-kr-x-link]{display:none!important}';document.head.append(nativeStyle);
-    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=[...records].find(r=>r.host===entry.target);if(record){if(entry.isIntersecting)load(record);else stopVideo(record);}}}, {rootMargin:'80px'});
+    const byHost=new WeakMap();
+    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting)load(record);else stopVideo(record);}}}, {rootMargin:'80px'});
     function stopVideo(record){const active=record.activeVideo;if(!active)return;record.activeVideo=null;if(active.video){active.video.pause();active.video.removeAttribute('src');active.video.load();}active.frame.remove();active.slot.replaceChildren(active.preview);}
-    function release(record){stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);clearTimeout(record.feedback);}
+    function release(record){stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);clearTimeout(record.feedback);}
     function hideLinks(record){for(const link of record.links)link.setAttribute('data-kr-x-link','');}
     function button(label,kind,click){const el=document.createElement('button');el.type='button';el.title=label;el.setAttribute('aria-label',label);el.innerHTML=svg(kind);el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();click(el);});return el;}
     function render(record,post){
@@ -71,15 +72,15 @@
         const result=await api.runtime.sendMessage({type:'immersion:x-post',href:record.post.href});
         if(!records.has(record)||!enabled||disposed)return;
         if(!result?.ok)throw Error('Unavailable');
-        record.loaded=true;render(record,result.post);
+        record.loaded=true;render(record,result.post);byHost.set(record.host,record);visibility.observe(record.host);
       }catch{
         if(!records.has(record)||!enabled||disposed)return;
-        visibility.unobserve(record.host);record.card.replaceChildren();const fallback=document.createElement('div');fallback.className='loading';fallback.textContent='X preview unavailable';const retry=document.createElement('button');retry.className='retry';retry.textContent='Retry';retry.addEventListener('click',()=>load(record));fallback.append(retry);record.card.append(fallback);
+        visibility.unobserve(record.host);byHost.delete(record.host);record.card.replaceChildren();const fallback=document.createElement('div');fallback.className='loading';fallback.textContent='X preview unavailable';const retry=document.createElement('button');retry.className='retry';retry.textContent='Retry';retry.addEventListener('click',()=>load(record));fallback.append(retry);record.card.append(fallback);
       }finally{record.loading=false;}
     }
     function add(row,anchor,post){
       const host=document.createElement('div');host.className='kr-x-post';const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=cardCSS+KickRefined.chatEmbedCSS;const card=document.createElement('div');card.className='card';const loading=document.createElement('div');loading.className='loading';loading.textContent='Loading X post…';card.append(loading);shadow.append(style,card);
-      const record={row,host,card,post,links:new Set([anchor])};records.add(record);row.append(host);visibility.observe(host);
+      const record={row,host,card,post,links:new Set([anchor])};records.add(record);byHost.set(host,record);row.append(host);visibility.observe(host);
     }
     function flush(){
       timer=0;if(!enabled||disposed)return;
@@ -95,10 +96,10 @@
     }
     function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const row of node.querySelectorAll('[data-index]'))dirty.add(row);}
     function schedule(){if(!timer&&enabled&&!disposed)timer=setTimeout(flush,60);}
-    const observer=new MutationObserver(changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();});
-    function refresh(){const next=enabled?document.getElementById('chatroom-messages'):null;if(next===list)return;observer.disconnect();for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);observer.observe(list,{subtree:true,childList:true,attributes:true,attributeFilter:['href','data-index']});schedule();}}
-    const routeObserver=new MutationObserver(()=>{if(enabled&&document.getElementById('chatroom-messages')!==list)refresh();});routeObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['id']});refresh();
-    return {setEnabled(value){if(enabled===value)return;enabled=value;clearTimeout(timer);timer=0;refresh();},destroy(){disposed=true;clearTimeout(timer);observer.disconnect();routeObserver.disconnect();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();}});
+    function refresh(){const next=enabled?KickRefinedDOM.chat:null;if(next===list)return;for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
+    subscription.setEnabled(enabled);refresh();
+    return {setEnabled(value){if(enabled===value)return;enabled=value;clearTimeout(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};
   }
   globalThis.KickRefinedX=Object.freeze({create});
 })();

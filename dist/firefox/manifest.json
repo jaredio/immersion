@@ -5,6 +5,7 @@
   "description": "A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.",
   "permissions": [
     "storage",
+    "declarativeNetRequest",
     "webRequest",
     "webRequestBlocking",
     "https://api.fxtwitter.com/*",
@@ -21,6 +22,15 @@
     "https://streamelements.com/*",
     "https://www.streamelements.com/*"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "kick-telemetry",
+        "enabled": true,
+        "path": "telemetry-rules.json"
+      }
+    ]
+  },
   "icons": {
     "16": "icons/16.png",
     "48": "icons/48.png",
@@ -44,18 +54,28 @@
         "https://kick.com/*",
         "https://www.kick.com/*"
       ],
+      "exclude_matches": [
+        "https://kick.com/popout/*/chat",
+        "https://www.kick.com/popout/*/chat"
+      ],
       "css": [
         "theme.css",
         "polish.css"
       ],
       "js": [
         "shared.js",
+        "dom.js",
         "ui.js",
         "profile.js",
         "support-data.js",
         "support.js",
         "channel-panel.js",
         "player-controls.js",
+        "multi-layout.js",
+        "multi-view.js",
+        "multi-metadata.js",
+        "multi-session.js",
+        "multi-player-bus.js",
         "multiview.js",
         "chat-clips.js",
         "clip-bridge.js",
@@ -101,6 +121,7 @@
       ],
       "js": [
         "shared.js",
+        "dom.js",
         "chat-clips.js",
         "clip-bridge.js",
         "x-post-data.js",
@@ -145,6 +166,7 @@
   "content_security_policy": "script-src 'self'; object-src 'none'",
   "background": {
     "scripts": [
+      "privacy-background.js",
       "x-post-data.js",
       "x-background.js",
       "media-data.js",

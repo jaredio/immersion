@@ -1,7 +1,7 @@
 /* Restyle native live alerts without replacing their links or dismiss handlers. */
 (() => {
   function create({enabled=true}={}){
-    const records=new Map(),dirty=new Set();let timer=0,disposed=false;
+    const records=new Map(),dirty=new Set();let timer=0,disposed=false,initialized=false,unsubscribe=()=>{};
     const selector='.max-w-xvw:has(> a[title="Watch now"])';
     function restore(record){
       if(record.label.textContent==='Watch')record.label.textContent='Watch now';
@@ -27,7 +27,7 @@
       for(const node of dirty){if(!node.isConnected)continue;const own=node.closest?.(selector);if(own)enhance(own);if(node.matches?.(selector))enhance(node);for(const root of node.querySelectorAll?.(selector)||[])enhance(root);}
       dirty.clear();
     }
-    const observer=new MutationObserver(changes=>{
+    const onMutations=changes=>{
       if(!enabled)return;
       for(const change of changes){
         const parent=change.target.nodeType===1?change.target:change.target.parentElement;
@@ -36,12 +36,13 @@
         for(const node of change.addedNodes)if(node.nodeType===1)dirty.add(node);
       }
       if(dirty.size&&!timer)timer=setTimeout(flush,30);
-    });
+    };
     function setEnabled(value){
-      enabled=value;observer.disconnect();clearTimeout(timer);timer=0;dirty.clear();
+      if(initialized&&enabled===value)return;initialized=true;
+      enabled=value;unsubscribe();unsubscribe=()=>{};clearTimeout(timer);timer=0;dirty.clear();
       if(!enabled){for(const record of records.values())restore(record);records.clear();return;}
       for(const root of document.querySelectorAll(selector))enhance(root);
-      observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+      unsubscribe=KickRefinedDOM.subscribePage(onMutations,{characterData:true});
     }
     setEnabled(enabled);
     return {setEnabled,destroy(){setEnabled(false);disposed=true;}};

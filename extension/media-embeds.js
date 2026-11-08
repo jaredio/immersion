@@ -11,8 +11,9 @@
     const allowed=item=>item.provider==='x'?profiles:media;
     const hidden=document.createElement('style');hidden.textContent='[data-kr-media-link]{display:none!important}';document.head.append(hidden);
     function stop(record){if(!record.frame)return;record.frame.remove();record.frame=null;record.slot?.querySelector('.player')?.remove();record.slot?.querySelector('.player-close')?.remove();if(record.preview)record.preview.hidden=false;}
-    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=[...records].find(record=>record.host===entry.target);if(record){if(entry.isIntersecting)load(record);else stop(record);}}},{rootMargin:'80px'});
-    function release(record){stop(record);record.releaseMessage?.();visibility.unobserve(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-media-link');clearTimeout(record.feedback);records.delete(record);}
+    const byHost=new WeakMap();
+    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting)load(record);else stop(record);}}},{rootMargin:'80px'});
+    function release(record){stop(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-media-link');clearTimeout(record.feedback);records.delete(record);}
     function button(label,icon,action){const node=document.createElement('button');node.type='button';node.title=label;node.setAttribute('aria-label',label);node.innerHTML=icon;node.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();action();});return node;}
     function open(href,label,icon){const node=document.createElement('a');node.href=href;node.target='_blank';node.rel='noopener noreferrer';node.className='open';node.title=label;node.setAttribute('aria-label',label);node.innerHTML=icon;return node;}
     function render(record,item){
@@ -52,7 +53,7 @@
     }
     function add(row,anchor,item){
       const host=document.createElement('div');host.className='kr-media-embed';host.dataset.provider=item.provider;const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=ui.css+KickRefined.chatEmbedCSS+'.video-preview[hidden]{display:none}:host([data-provider="tiktok"]) .video-slot.portrait{max-width:none;width:100%}:host([data-provider="tiktok"]) .video-preview{height:190px;min-height:0;max-height:none;aspect-ratio:auto;background:#0a0a0e}:host([data-provider="tiktok"]) .video-preview img{object-fit:contain}:host([data-provider="tiktok"]) .portrait .player{height:300px;min-height:0;max-height:300px;aspect-ratio:auto}:host([data-provider="tiktok"]) .embed-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-height:3em}';const card=document.createElement('div');card.className='card';const loading=document.createElement('div');loading.className='loading';loading.textContent=`Loading ${labels[item.provider]}…`;card.append(loading);shadow.append(style,card);
-      const record={row,host,card,item,key:item.key,links:new Set([anchor])};records.add(record);row.append(host);visibility.observe(host);
+      const record={row,host,card,item,key:item.key,links:new Set([anchor])};records.add(record);byHost.set(host,record);row.append(host);visibility.observe(host);
       for(const event of ['click','dblclick','keydown','keyup'])shadow.addEventListener(event,event=>event.stopPropagation());
     }
     function flush(){timer=0;if(disposed)return;
@@ -68,10 +69,10 @@
     }
     function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);}
     function schedule(){if(!timer&&!disposed&&(media||profiles))timer=setTimeout(flush,60);}
-    const observer=new MutationObserver(changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();});
-    function refresh(force=false){const next=media||profiles?document.getElementById('chatroom-messages'):null;if(next===list&&!force)return;observer.disconnect();for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);observer.observe(list,{subtree:true,childList:true,attributes:true,attributeFilter:['href','data-index']});schedule();}}
-    const routeObserver=new MutationObserver(()=>{if((media||profiles)&&document.getElementById('chatroom-messages')!==list)refresh();});routeObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['id']});refresh();
-    return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;clearTimeout(timer);timer=0;refresh(true);},destroy(){disposed=true;clearTimeout(timer);observer.disconnect();routeObserver.disconnect();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();}});
+    function refresh(force=false){const next=media||profiles?KickRefinedDOM.chat:null;if(next===list&&!force)return;for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
+    subscription.setEnabled(media||profiles);refresh();
+    return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;clearTimeout(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};
   }
   globalThis.KickRefinedMedia=Object.freeze({create});
 })();

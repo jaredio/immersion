@@ -54,6 +54,8 @@ You'll find **Immersion** at the bottom of Kick's sidebar. Make it yours from th
 
 Your preferences and saved viewing sessions stay in your browser. Immersion has no analytics or custom backend.
 
+Known analytics and marketing trackers on Kick are blocked by default. You can turn **Block Kick telemetry** off in settings; refresh Kick after changing it. Playback, chat, login and payment services are outside the initial rules. This does not remove all first-party or player telemetry. See the [code and network audit](docs/code-audit.md) for scope, measured samples and remaining performance work.
+
 Found something that feels off? [Open an issue](https://github.com/jaredio/immersion/issues) with your browser, what happened, and a screenshot if it helps. Kick changes often; real-world feedback keeps Immersion improving.
 
 <details>
@@ -68,6 +70,10 @@ npm test
 ```
 
 Source lives in `extension/`. Browser builds and installable ZIPs are written to `dist/`. Additional browser checks are listed in [`package.json`](package.json).
+
+The [upgrade roadmap](docs/upgrade-roadmap.md) describes the module boundaries,
+completed performance work and prioritized next improvements. Shared DOM
+subscription checks run with `npm run test:dom`.
 
 </details>
 

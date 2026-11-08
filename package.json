@@ -19,7 +19,10 @@
     "test:media": "node tools/media-test.mjs",
     "test:media:firefox-live": "python tools/media-firefox-live-test.py",
     "test:support": "node tools/support-test.mjs",
-    "test:support:firefox-installed": "python tools/support-firefox-test.py"
+    "test:support:firefox-installed": "python tools/support-firefox-test.py",
+    "test:privacy": "node tools/privacy-test.mjs",
+    "audit:network": "node tools/network-audit.mjs",
+    "test:dom": "node tools/dom-test.mjs"
   },
   "devDependencies": {
     "playwright": "1.56.1"

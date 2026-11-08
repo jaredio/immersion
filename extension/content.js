@@ -458,19 +458,13 @@
   function scheduleRefresh() {
     if (!refreshTimer && !disposed) refreshTimer = setTimeout(refresh, 180);
   }
-  const observer = new MutationObserver(records => {
-    // Chat is high traffic and already virtualized. Never scan it on message arrival.
-    for (const record of records) {
-      if (record.target.nodeType === 1 && record.target.closest?.('#chatroom-messages')) continue;
-      scheduleRefresh(); break;
-    }
-  });
+  let unsubscribeDOM=()=>{};
 
   function dispose() {
     clearTimeout(searchTimer);searchService.destroy();
     searchBackdrop?.remove();searchBackdrop=null;
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
-    disposed = true; abort.abort(); observer.disconnect(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
+    disposed = true; api.storage.onChanged.removeListener?.(onSettingsChanged); abort.abort(); unsubscribeDOM(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
     clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
   }
   function handleShortcut(e) {
@@ -481,6 +475,11 @@
     }
   }
 
+  function onSettingsChanged(changes,area){
+    if(disposed||area!=='local'||!changes.settings)return;
+    settings=normalize(changes.settings.newValue);apply();
+    if(palette.open){collectChannels();renderResults();}
+  }
   async function init() {
     try { settings = normalize((await api.storage.local.get('settings')).settings); } catch { /* Extension defaults also work if storage is temporarily unavailable. */ }
     apply(); refresh();
@@ -488,9 +487,9 @@
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);
       const params = new URL(location.href).searchParams;
-      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : 67, playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
+      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
-    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-kr-enabled'] });
+    unsubscribeDOM=KickRefinedDOM.subscribePage(scheduleRefresh);
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragover', trackDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragend', endDrag, { capture:true, signal:abort.signal });
@@ -508,11 +507,7 @@
     window.addEventListener('popstate', checkRoute, { signal: abort.signal });
     window.addEventListener('resize', scheduleRefresh, { passive: true, signal: abort.signal });
     window.addEventListener('pagehide', e => { if (!e.persisted) dispose(); }, { signal: abort.signal });
-    api.storage.onChanged.addListener((changes, area) => {
-      if (disposed || area !== 'local' || !changes.settings) return;
-      settings = normalize(changes.settings.newValue); apply();
-      if (palette.open) { collectChannels(); renderResults(); }
-    });
+    api.storage.onChanged.addListener(onSettingsChanged);
   }
   function idleInit() {
     // Avoid modifying the server-rendered tree during Kick's initial hydration.

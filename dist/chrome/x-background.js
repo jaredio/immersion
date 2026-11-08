@@ -1,5 +1,4 @@
 /* Event-driven metadata proxy, restricted to public X post IDs from Kick tabs. */
-if(typeof importScripts==='function')importScripts('x-post-data.js');
 (() => {
   const api=typeof browser!=='undefined'?browser:chrome;
   const {parse,metadata}=KickRefinedXData,cache=new Map(),pending=new Map(),queue=[];
@@ -36,4 +35,3 @@ if(typeof importScripts==='function')importScripts('x-post-data.js');
     pending.get(post.id).then(respond);return true;
   });
 })();
-if(typeof importScripts==='function')importScripts('media-background.js');

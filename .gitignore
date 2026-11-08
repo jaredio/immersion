@@ -20,6 +20,7 @@ __pycache__/
 !/dist/firefox/
 !/dist/immersion-chrome.zip
 !/dist/immersion-firefox.zip
+/dist/*/_metadata/
 
 # Local secrets
 .env

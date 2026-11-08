@@ -8,15 +8,16 @@ const base = {
   name: 'Immersion',
   version: '0.10.0',
   description: 'A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.',
-  permissions: ['storage'],
+  permissions: ['storage', 'declarativeNetRequest'],
+  declarative_net_request: { rule_resources: [{ id: 'kick-telemetry', enabled: true, path: 'telemetry-rules.json' }] },
   host_permissions: ['https://api.fxtwitter.com/*','https://www.tiktok.com/*','https://vt.tiktok.com/*','https://vm.tiktok.com/*','https://www.youtube.com/oembed*'],
   icons: { 16: 'icons/16.png', 48: 'icons/48.png', 128: 'icons/128.png' },
   action: { default_title: 'Immersion', default_popup: 'popup.html', default_icon: { 16: 'icons/16.png', 48: 'icons/48.png' } },
   content_scripts: [
     { matches: ['https://kick.com/*', 'https://www.kick.com/*'], js: ['scroll.js'], run_at: 'document_start', world: 'MAIN', all_frames: true },
-    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'player-controls.js', 'multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js', 'content.js'], run_at: 'document_idle' },
+    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], exclude_matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js','dom.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js', 'channel-panel.js', 'player-controls.js', 'multi-layout.js','multi-view.js','multi-metadata.js','multi-session.js','multi-player-bus.js','multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js', 'content.js'], run_at: 'document_idle' },
     { matches: ['https://powerchat.live/*', 'https://www.powerchat.live/*','https://kickbot.com/tips/*','https://www.kickbot.com/tips/*','https://streamelements.com/*/tip*','https://www.streamelements.com/*/tip*'], css:['support-form.css'], js: ['support-data.js', 'support-frame.js'], run_at: 'document_idle', all_frames: true },
-    { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
+    { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], css: ['theme.css', 'polish.css'], js: ['shared.js','dom.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
     { matches: ['https://kick.com/*','https://www.kick.com/*'], js:['full-player-frame.js','player-controls.js','player-frame.js'],run_at:'document_start',all_frames:true },
     { matches: ['https://player.kick.com/*'], js: ['player-controls.js','player-frame.js'], run_at: 'document_start', all_frames: true }
   ],
@@ -34,7 +35,7 @@ for (const target of ['chrome', 'firefox']) {
   }
   for (const size of [16, 48, 128]) await copyFile(path.join(root, 'extension', 'icons', `${size}.png`), path.join(out, 'icons', `${size}.png`));
   const manifest = structuredClone(base);
-  manifest.background=target==='firefox'?{scripts:['x-post-data.js','x-background.js','media-data.js','media-background.js']}:{service_worker:'x-background.js'};
+  manifest.background=target==='firefox'?{scripts:['privacy-background.js','x-post-data.js','x-background.js','media-data.js','media-background.js']}:{service_worker:'background.js'};
   if (target === 'firefox') {
     // Firefox MV3 explicitly forbids relaxing framing headers through webRequest.
     // Its supported MV2 build permits the one-response, per-checkout compatibility hook.

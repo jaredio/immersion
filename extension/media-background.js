@@ -1,5 +1,4 @@
 /* Public previews only. No cookies, provider scripts, private APIs or unrestricted fetch proxy. */
-if(typeof importScripts==='function')importScripts('media-data.js');
 (() => {
   const api=typeof browser!=='undefined'?browser:chrome,data=KickRefinedMediaData;
   const cache=new Map(),pending=new Map(),queue=[];let active=0;
