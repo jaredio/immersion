@@ -9,6 +9,24 @@ test('search parses multiple scopes, quoted phrases, exclusions and typed filter
  assert.equal(api.fits(api.normalize({clips:[clip]},'clips','cobbruvs')[0],q),true);assert.equal(api.parse('type:vods channel:xqc "late night"').type,'vods');assert.equal(api.parse('category:"Just Chatting" live:true').category,'just chatting');assert.equal(api.parse('https://kick.com/XQC').terms[0],'xqc');
  assert.equal(api.parse('clips:cobbruvs "title: chapter"').terms[0],'title: chapter','quoted text is literal rather than another operator');
 });
+
+test('visible search controls round-trip advanced filters without changing their meaning',()=>{
+ for(const value of ['clips:cobbruvs,xqc "road trip" -spoiler category:"Just Chatting" sort:views after:2026-10-01 before:2026-10-28 creator:clipper views:>100 duration:<60','remote live:true','vods:xqc time:week "title: chapter"']){
+  const query=api.parse(value);assert.deepEqual(api.parse(api.serialize(query)),query);
+ }
+});
+
+test('an unscoped media tab can prompt for a channel without inventing one',()=>{
+ assert.throws(()=>api.parse('type:clips'),/Choose a channel/);
+ const draft=api.parse('type:clips',{allowUnscoped:true});assert.equal(draft.type,'clips');assert.equal(draft.channels.length,0);
+ assert.equal(api.serialize(draft),'type:clips');
+});
+
+test('channel relevance favors exact names, then prefixes, with stable ties and numeric viewer sorting',()=>{
+ const rows=[{slug:'other',live:'live',views:10000},{slug:'remoteextra',views:12},{slug:'remote',views:4},{slug:'pinned',views:null}];
+ assert.deepEqual(Array.from(api.rank(rows,api.parse('remote'),['pinned']),row=>row.slug),['remote','remoteextra','pinned','other']);
+ assert.deepEqual(Array.from(api.rank(rows,api.parse('sort:views')),row=>row.slug),['other','remoteextra','remote','pinned']);
+});
 test('malformed and unsupported filters fail clearly before fetching',()=>{
  for(const query of ['clips:../../x','clips:cobbruvs vods:xqc','clips:cobbruvs,xqc,foo,bar','clips:cobbruvs after:2026-02-31','clips:cobbruvs after:2026-10-28 before:2026-10-01','duration:30','vods:xqc creator:foo','live:maybe','foo:bar','"unclosed','clips:cobbruvs views:>abc','clips:cobbruvs sort:bogus'])assert.throws(()=>api.parse(query),query);
 });

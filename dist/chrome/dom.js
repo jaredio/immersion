@@ -9,6 +9,38 @@
   let watchingChat = false;
   let chatAttributes = '';
   let pageCharacters = false;
+  let linkIndex = new WeakMap();
+
+  function recordRows(record) {
+    const rows = new Set();
+    const add = node => {
+      const element = node.nodeType === 1 ? node : node.parentElement;
+      const row = element?.closest?.('[data-index]'); if (row) rows.add(row);
+    };
+    add(record.target);
+    for (const node of record.addedNodes || []) {
+      add(node);
+      for (const row of node.querySelectorAll?.('[data-index]') || []) rows.add(row);
+    }
+    return rows;
+  }
+  function links(row) {
+    let anchors = linkIndex.get(row);
+    if (!anchors) {
+      anchors = [...row.querySelectorAll('a[href]')]; linkIndex.set(row, anchors);
+      globalThis.KickRefinedPerf?.count('chat.rowIndexBuilds');
+    }
+    return anchors;
+  }
+  function* drainRows(dirty, {maxRows = 24, budgetMs = 4} = {}) {
+    const start = performance.now(); let count = 0;
+    for (const row of dirty) {
+      dirty.delete(row); yield row; count++;
+      if (count >= maxRows || performance.now() - start >= budgetMs) break;
+    }
+    globalThis.KickRefinedPerf?.count('chat.rowsProcessed', count);
+    globalThis.KickRefinedPerf?.sample('chat.batchMs', performance.now() - start);
+  }
 
   function notify(callback, ...args) {
     if (!callback) return;
@@ -17,10 +49,14 @@
   }
 
   function dispatchChat(records) {
+    globalThis.KickRefinedPerf?.count('dom.chatBatches');
+    const indexed = new Map(records.map(record => [record, recordRows(record)]));
+    for (const rows of indexed.values()) for (const row of rows) linkIndex.delete(row);
     for (const subscriber of [...chats]) {
       if (!chats.has(subscriber)) continue;
       const relevant = records.filter(record => record.type !== 'attributes' || subscriber.attributes.has(record.attributeName));
-      if (relevant.length) notify(subscriber.onMutations, relevant);
+      const rows = new Set(relevant.flatMap(record => [...indexed.get(record)]));
+      if (relevant.length) notify(subscriber.onMutations, relevant, {rows});
     }
   }
   const chatObserver = new MutationObserver(dispatchChat);
@@ -49,7 +85,7 @@
     // Discard queued records for the old container; subscribers release its rows.
     chatObserver.disconnect();
     watchingChat = false;
-    currentChat = next;
+    currentChat = next;linkIndex=new WeakMap();
     observeChat();
     for (const subscriber of [...chats]) {
       if (chats.has(subscriber)) notify(subscriber.onContainer, currentChat);
@@ -57,6 +93,7 @@
   }
 
   function dispatchPage(records) {
+    globalThis.KickRefinedPerf?.count('dom.pageBatches');
     // Chat messages must never trigger document-wide feature refreshes.
     const relevant = records.filter(record => {
       if (record.type === 'attributes' && record.attributeName === 'id') return true;
@@ -130,5 +167,5 @@
     };
   }
 
-  globalThis.KickRefinedDOM = Object.freeze({subscribePage, subscribeChat, get chat() { return currentChat; }});
+  globalThis.KickRefinedDOM = Object.freeze({subscribePage, subscribeChat, links, drainRows, get chat() { return currentChat; }});
 })();

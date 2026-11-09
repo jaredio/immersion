@@ -208,6 +208,13 @@ html[data-kr-enabled="true"] #user-identity [class*="bg-surface-fg-decorative"] 
   html[data-kr-enabled="true"] :is(button,a,[data-kr-search-field],#chat-input-wrapper) { transition: none !important; }
 }
 
+/* Owned channel browser replaces native collection presentation reversibly. */
+html[data-kr-enabled="true"] [data-kr-library-source] { display:none!important; }
+html[data-kr-enabled="true"] [data-kr-library-shell] { display:contents!important; }
+html[data-kr-enabled="true"]:has(main[data-kr-multi-active="true"]) #kr-channel-library { display:none!important; }
+html[data-kr-enabled="true"] [data-kr-channel-about] { padding:22px!important;border:1px solid #ffffff0d;border-radius:14px;background:#121217;color:#b9b9c8;line-height:1.75; }
+html[data-kr-enabled="true"] [data-kr-channel-about] :is(h2,h3) { color:#eeeef5;font-size:19px!important;letter-spacing:-.02em; }
+html[data-kr-enabled="true"] [data-kr-channel-about] img { max-width:100%;height:auto;object-fit:contain;border-radius:8px; }
 /* Keep sidebar avatars clean; live state remains in the row's dot/text. */
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] img { outline:none !important;border:0 !important;box-shadow:none !important; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] [class*="ring-"]:has(img) { --tw-ring-shadow:0 0 #0000 !important;--tw-ring-offset-shadow:0 0 #0000 !important;box-shadow:none !important;border-color:transparent !important; }

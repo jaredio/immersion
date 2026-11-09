@@ -27,7 +27,7 @@ test('profile and oEmbed metadata validate identity and never invent counters',(
  const value=profile({code:200,user},parse('https://x.com/creator'));assert.equal(value.stats.followers,12);assert.equal(value.description,user.description);assert.throws(()=>profile({code:200,user:{...user,screen_name:'another'}},parse('https://x.com/creator')));
  const video=oembed({title:'Video',author_name:'Author',thumbnail_url:'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',html:'<script>bad()</script>'},parse(yt));assert.deepEqual(Object.keys(video.stats),[]);assert.equal(video.html,undefined);
  assert.throws(()=>oembed({title:'Video',author_name:'Wrong',author_url:'https://www.tiktok.com/@another'},parse(tt)));
- assert.ok(player(parse(yt+'&t=62')).includes('start=62'));assert.ok(player(parse(tt)).startsWith('https://www.tiktok.com/player/v1/'));assert.equal(player(parse('https://x.com/creator')),'');
+ assert.ok(player(parse(yt+'&t=62')).includes('start=62'));assert.equal(new URL(player(parse(yt))).searchParams.get('controls'),'1');assert.ok(player(parse(tt)).startsWith('https://www.tiktok.com/player/v1/'));assert.equal(player(parse('https://x.com/creator')),'');
 });
 test('metadata worker resolves short links, deduplicates and restricts senders',async()=>{
  let listener,requests=0;const options=[];

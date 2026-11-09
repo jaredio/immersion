@@ -15,13 +15,15 @@ try{
       disconnect(){super.disconnect();this.targets.clear();}
     };
   });
+  await page.addScriptTag({path:'extension/performance.js'});
   await page.addScriptTag({path:'extension/dom.js'});
   await page.evaluate(()=>{
+    KickRefinedPerf.configure(true);
     window.log={pages:0,containers:[[],[],[]],changes:[0,0,0]};
     window.stopPage=KickRefinedDOM.subscribePage(()=>log.pages++);
     window.clients=[0,1,2].map(index=>KickRefinedDOM.subscribeChat({
       onContainer:node=>log.containers[index].push(node?.id||null),
-      onMutations:records=>log.changes[index]+=records.length,
+      onMutations:(records,{rows})=>{log.changes[index]+=records.length;for(const row of rows)KickRefinedDOM.links(row);},
       attributes:index===0?['href','src','data-index']:['href','data-index']
     }));
     clients.forEach(client=>client.setEnabled(true));
@@ -34,6 +36,7 @@ try{
   const before=await page.evaluate(()=>log.pages);
   await page.evaluate(()=>{const row=document.createElement('div');row.dataset.index='1';row.innerHTML='<a href="https://example.com">link</a><img>';document.getElementById('chatroom-messages').append(row);});
   await page.waitForFunction(()=>log.changes.every(count=>count>0));
+  assert.equal(await page.evaluate(()=>KickRefinedPerf.snapshot().counters['chat.rowIndexBuilds']),1,'features share one row anchor scan per batch');
   assert.equal(await page.evaluate(()=>log.pages),before,'message arrival does not invoke page subscribers');
   const previous=await page.evaluate(()=>[...log.changes]);
   await page.evaluate(()=>document.querySelector('#chatroom-messages img').setAttribute('src','data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'));
@@ -52,6 +55,11 @@ try{
   await page.evaluate(()=>document.getElementById('late-chat').id='chatroom-messages');
   await page.waitForFunction(()=>KickRefinedDOM.chat===document.getElementById('chatroom-messages'));
   assert.equal(await page.locator('#old-chat').count(),1,'replacement is detected while the old container remains mounted');
+  assert.deepEqual(await page.evaluate(()=>{
+    const rows=Array.from({length:100},()=>document.createElement('div')),dirty=new Set(rows),first=[...KickRefinedDOM.drainRows(dirty,{maxRows:7,budgetMs:1000})];
+    const remaining=dirty.size;let total=first.length;while(dirty.size)total+=[...KickRefinedDOM.drainRows(dirty,{maxRows:7,budgetMs:1000})].length;
+    return {first:first.length,remaining,total};
+  }),{first:7,remaining:93,total:100},'bounded batches yield without losing rows');
   await page.evaluate(()=>{clients[1].setEnabled(true);clients.forEach(client=>client.destroy());stopPage();});
   assert.equal(await active(),0,'last unsubscribe disconnects both observers');
   assert.equal(await page.evaluate(()=>KickRefinedDOM.chat),null);

@@ -10,6 +10,7 @@
       if (disposed || !isActive()) return;
       const tile = sources.get(event.source);
       if (!tile || tile.frame?.contentWindow !== event.source || event.origin !== tile.frameOrigin) return;
+      globalThis.KickRefinedPerf?.count('frame.messagesReceived');
       const data = event.data;
       // Readiness is the only message before the parent has established a session.
       if (data?.type === 'kick-refined:ready') { onReady(tile); return; }
@@ -27,8 +28,10 @@
       attach(tile) { if (!disposed && tile.frame?.contentWindow) sources.set(tile.frame.contentWindow, tile); },
       detach(tile) { if (tile.frame?.contentWindow) sources.delete(tile.frame.contentWindow); },
       nextRevision() { return ++revision; },
+      snapshot: () => ({sources: sources.size}),
       send(tile, data) {
         if (disposed) return;
+        globalThis.KickRefinedPerf?.count('frame.commandsSent');
         tile.frame?.contentWindow?.postMessage({type: 'kick-refined:control', session, revision: tile.commandRevision, ...data}, tile.frameOrigin || 'https://player.kick.com');
       },
       destroy() {

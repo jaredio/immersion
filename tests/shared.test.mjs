@@ -149,7 +149,7 @@ test('a delayed player obeys the latest pause and avoids repeated media setters'
   class Observer{constructor(callback){observer=callback;}observe(){}}
   vm.runInNewContext(source,{window,document,MutationObserver:Observer,setTimeout:callback=>{timers.push(callback);return timers.length;}});
   const send=(revision,action)=>listeners.message({source:parent,origin:'https://kick.com',data:{type:'kick-refined:control',session:'race-test',revision,muted:true,volume:1,action}});
-  send(1,'play');send(2,'pause');present=true;observer([{target:{},addedNodes:[]}]);
+  send(1,'play');send(2,'pause');present=true;observer([{target:{},addedNodes:[{nodeType:1,matches:selector=>selector==='video',querySelectorAll:()=>[]}]}]);
   while(timers.length)timers.shift()();
   assert.equal(plays,0,'a stale queued play must not run when the video arrives');
   assert.equal(pauses,1);

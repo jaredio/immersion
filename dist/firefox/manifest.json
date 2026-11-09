@@ -42,8 +42,24 @@
         "https://kick.com/*",
         "https://www.kick.com/*"
       ],
+      "css": [
+        "theme.css",
+        "polish.css"
+      ],
       "js": [
-        "scroll.js"
+        "theme-start.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://kick.com/*",
+        "https://www.kick.com/*"
+      ],
+      "js": [
+        "scroll.js",
+        "native-search-bridge.js"
       ],
       "run_at": "document_start",
       "world": "MAIN",
@@ -58,17 +74,17 @@
         "https://kick.com/popout/*/chat",
         "https://www.kick.com/popout/*/chat"
       ],
-      "css": [
-        "theme.css",
-        "polish.css"
-      ],
       "js": [
+        "stream-clock.js",
+        "performance.js",
         "shared.js",
         "dom.js",
         "ui.js",
         "profile.js",
         "support-data.js",
         "support.js",
+        "channel-library.js",
+        "channel-page.js",
         "channel-panel.js",
         "player-controls.js",
         "multi-layout.js",
@@ -76,6 +92,13 @@
         "multi-metadata.js",
         "multi-session.js",
         "multi-player-bus.js",
+        "multi-startup.js",
+        "lifetime.js",
+        "player-state.js",
+        "multi-chat.js",
+        "multi-stream-player.js",
+        "multi-stream-tile.js",
+        "multi-clip-tile.js",
         "multiview.js",
         "chat-clips.js",
         "clip-bridge.js",
@@ -87,6 +110,8 @@
         "notices.js",
         "checkouts.js",
         "search.js",
+        "search-window.js",
+        "native-search.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -115,11 +140,9 @@
         "https://kick.com/popout/*/chat",
         "https://www.kick.com/popout/*/chat"
       ],
-      "css": [
-        "theme.css",
-        "polish.css"
-      ],
       "js": [
+        "stream-clock.js",
+        "performance.js",
         "shared.js",
         "dom.js",
         "chat-clips.js",
@@ -140,6 +163,8 @@
         "https://www.kick.com/*"
       ],
       "js": [
+        "stream-clock.js",
+        "performance.js",
         "full-player-frame.js",
         "player-controls.js",
         "player-frame.js"
@@ -152,6 +177,8 @@
         "https://player.kick.com/*"
       ],
       "js": [
+        "stream-clock.js",
+        "performance.js",
         "player-controls.js",
         "player-frame.js"
       ],

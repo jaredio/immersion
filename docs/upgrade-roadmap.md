@@ -27,30 +27,34 @@ player, channel-header, dialog, reply-preview and sidebar observers remain where
 their targets and lifetimes are different. This is not a claim of two observers
 for the entire Kick application.
 
-## P1 — highest-value next work
+## Delivered performance batch: items 1-12
 
-| # | Upgrade | Reason and acceptance evidence |
-| --- | --- | --- |
-| 1 | Local performance diagnostics | Add an explicit diagnostics mode with bounded counters for refreshes, dirty rows, layout passes, requests, storage writes and frame messages. Off by default; no remote collection. Export sanitized results. Establish a baseline before setting budgets. |
-| 2 | Repeatable 1/2/4/6-stream benchmarks | Compare Full Kick and standard embeds, grid/focus/columns, chat idle/flood, and background/foreground. Record hardware/browser, medians and tail latencies over repeated runs. Live tests require channels actually streaming and supported media decoding. |
-| 3 | Separate control discovery from state updates | `player-controls.js` currently searches native buttons during control synchronization. Cache discovered sources; rediscover on structural changes, update only changed state for volume/play/focus. Preserve native menu replacement. |
-| 4 | Keyed channel-directory rendering | `renderDirectory()` currently replaces all cards. Update existing cards by channel and data version; preserve focus, open details and popovers without rebuilding neighbors. |
-| 5 | Incremental toolbar/chat picker updates | Avoid rebuilding chat options, tabs, datalists and saved-session options on unrelated volume or playback changes. Invalidate only the affected view. |
-| 6 | Avoid repeated SVG/attribute writes | `decorate()` rebuilds icon markup on repeated audio/playback updates. Cache the rendered icon/label/state and skip unchanged DOM writes. Verify accessibility labels stay correct. |
-| 7 | Layout read/write phases | Collect geometry before style changes; cache viewport/chat rectangles for one frame. Handle rail-height corrections in a subsequent frame rather than forcing repeated layout. Verify columns scrolling and native overlays still align. |
-| 8 | Unified row indexing | Build a row-level anchor/identity index once per dirty batch, shared by chat enhancements. Invalidate on virtualized-row reuse and relevant attribute changes. Never cache solely by `data-index`. |
-| 9 | Bound chat processing per turn | Give dirty-row processing a measured time budget and resume pending rows later. Keep visible rows responsive under bursts; do not create an unbounded task or request queue. |
-| 10 | Reduce player status traffic | Send status when meaningful fields change and on handshake/recovery. Coalesce bursts; keep readiness and pause commands immediate. Verify dropped or delayed status cannot leave audio ownership wrong. |
-| 11 | Stagger full-player initialization | Limit concurrent full-page starts, prioritize the selected pane, and cancel queued starts when removed. Do not delay the retained native player or audio focus. Measure time-to-first-frame for all panes. |
-| 12 | Explicit lightweight viewing policy | Offer per-pane/player-mode choices with clear native-feature differences. A full Kick page includes React, hidden chat and background services. CSS cannot remove that runtime cost. Preserve the user's Full Kick default. |
+Items 1-12 now have implementations and regression coverage. See the
+[performance batch](performance-batch.md) for behavior, benchmark commands,
+measurement limits and the total-stream-time fix.
+
+| # | Delivered upgrade |
+| --- | --- |
+| 1 | Opt-in bounded local diagnostics and export |
+| 2 | Foreground and genuine-background fixture matrices |
+| 3 | Cached native-control discovery with structural invalidation |
+| 4 | Keyed channel-directory cards |
+| 5 | Content-keyed chat/session/suggestion menus |
+| 6 | Unchanged icon/text/attribute/style write suppression |
+| 7 | Scheduled geometry reads before layout writes |
+| 8 | Shared weak row/anchor indexes and per-row record lookup |
+| 9 | Cooperative dirty-row budgets with resumable queues |
+| 10 | Differential frame status with revision acknowledgements |
+| 11 | Prioritized, cancelable two-player startup queue |
+| 12 | Saved/shared per-pane full/embed choices |
 
 ## P2 — reliability and code quality
 
 | # | Upgrade | Reason and acceptance evidence |
 | --- | --- | --- |
-| 13 | Extract remaining controller responsibilities | Move chat mounting/picker behavior, stream-tile lifecycle, and clip placement into modules with small callback interfaces. Keep one orchestration owner for active workspace state and audio focus. |
-| 14 | Explicit workspace/player states | Document and encode loading, ready, blocked, offline, paused, closing and disposed transitions. Avoid adding more loosely related booleans. Test rapid add/remove/retry/mode changes. |
-| 15 | Structured lifetime scopes | Give each workspace/pane a disposal scope owning event listeners, observers, timers, animation frames and pending jobs. Teardown should be idempotent and leave no retained frame references. |
+| 13 | Delivered: extract remaining controller responsibilities | Move chat mounting/picker behavior, stream-tile lifecycle, and clip placement into modules with small callback interfaces. Keep one orchestration owner for active workspace state and audio focus. |
+| 14 | Delivered: explicit player phases and playback | Encode queued/loading/retrying/ready/blocked/offline/failed/disposed phases separately from playback. Reject replaced generations and exercise repeated mode changes and disposal. |
+| 15 | Delivered: structured lifetime scopes | Give each workspace/pane a disposal scope owning event listeners, observers, timers, animation frames and pending jobs. Teardown should be idempotent and leave no retained frame references. |
 | 16 | Request priorities and cancellation | Add a small bounded metadata queue with selected/visible channels first. Use generation tokens or consumer-aware cancellation so closing a pane does not abort a request another feature needs. |
 | 17 | Shared bounded response reader | Support/search currently check text size after buffering. Use one streaming byte-limited reader with timeout, content-type validation and consistent errors. Keep HTML catalog and JSON limits explicit. |
 | 18 | Atomic settings/session mutations across tabs | Per-tab write queues do not prevent two tabs replacing each other's snapshots. Serialize patches through a background owner or use explicit revision/conflict handling. Test two tabs saving distinct sessions concurrently. |
@@ -82,11 +86,11 @@ for the entire Kick application.
 
 ## Order of work
 
-The next implementation batch should be **diagnostics → control-state diffs →
-keyed directory/picker updates → layout phases → dirty-row budgeting**. Those
-target recurring work in the current source. Then benchmark player startup and
-resource policies. Bigger module moves should follow actual ownership boundaries,
-not just reduce the controller's line count.
+The performance foundation in items 1-12 is delivered. Use diagnostics and
+repeatable samples to identify the next bottleneck. The next architecture batch
+is remaining chat/tile ownership (13), explicit lifecycle states (14), and unified
+resource disposal (15), followed by request/storage robustness. Preserve one
+owner for each resource and avoid refactoring purely to reduce line counts.
 
 No blanket tracker-domain blocking, automatic decoder/quality changes, framework
 migration, new backend, or GPU service is needed for this roadmap. Treat them as

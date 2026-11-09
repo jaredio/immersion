@@ -1,5 +1,8 @@
 /* Workspace markup and icons; no player or session ownership. */
 (() => {
+  const text=(node,value)=>{value=String(value??'');if(node.textContent!==value)node.textContent=value;};
+  const attr=(node,name,value)=>{value=String(value);if(node.getAttribute(name)!==value)node.setAttribute(name,value);};
+  const css=(node,name,value)=>{value=String(value);if(node.style.getPropertyValue(name)!==value)node.style.setProperty(name,value);};
   function create({onKeydown,onPosition}) {
     const {api}=KickRefined;
     const iconPaths = {
@@ -14,7 +17,9 @@
       left:'m10 6-6 6 6 6M4 12h16', right:'m14 6 6 6-6 6M4 12h16', close:'m6 6 12 12M18 6 6 18', pop:'M8 3h13v13H8zM3 8v13h13v-5M8 7h13'
     };
     const icon = name => `<svg class="multi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${iconPaths[name]}"/></svg>`;
+    const decorated=new WeakMap();
     function decorate(button, symbol, label, iconOnly=false) {
+      const signature=`${symbol}:${label}:${iconOnly}`;if(decorated.get(button)===signature)return;decorated.set(button,signature);globalThis.KickRefinedPerf?.count('view.iconWrites');
       button.innerHTML=icon(symbol);
       if(iconOnly){if(!button.hasAttribute('aria-label'))button.setAttribute('aria-label',label);button.title=label;}
       if(!iconOnly){const text=document.createElement('span');text.textContent=label;button.append(text);}
@@ -27,7 +32,7 @@
     panel.innerHTML = `
       <div class="multi-header"><button id="multi-mix" aria-pressed="false" title="Allow sound from more than one stream">Mix audio</button><button id="multi-manage" aria-expanded="false">Manage</button><label class="multi-layout-label">Layout <select id="multi-layout" aria-label="Multiview layout"><option value="grid">Grid</option><option value="focus">Focus</option><option value="columns">Columns</option></select></label><button id="multi-mute">Mute all</button><button id="multi-fullscreen" aria-label="Fullscreen multiview">⛶</button><button class="multi-exit" aria-label="Close multiview">Single stream</button></div>
       <div class="multi-chat-bar"><label for="multi-chat-channel">Chat</label><select id="multi-chat-channel" aria-label="Chat channel"></select><a id="multi-chat-external" target="_blank" rel="noopener noreferrer" aria-label="Open chat in a new tab">↗</a><button id="multi-chat-toggle" aria-pressed="true">Hide chat</button></div>
-      <div class="multi-options" hidden><div class="multi-player-options"><label for="multi-player-mode">Player mode</label><select id="multi-player-mode" aria-label="Player mode"><option value="embed">Standard embeds</option><option value="full">Full Kick players (beta)</option></select><span>Full players use more memory. Your current channel keeps its existing player.</span></div><div class="multi-tools"><form id="multi-add-form"><input id="multi-add" aria-label="Add channel to multiview" list="multi-suggestions" placeholder="Channel name or Kick URL" autocomplete="off" maxlength="120"><datalist id="multi-suggestions"></datalist><button type="submit">Add stream</button></form></div><div class="multi-footer"><div class="multi-save"><input id="multi-name" aria-label="Layout name" placeholder="Name this session" maxlength="48"><button id="multi-save">Save</button><select id="multi-sessions" aria-label="Saved multiview sessions"><option value="">Saved sessions…</option></select><button id="multi-delete" disabled>Delete saved</button></div><button id="multi-share">Copy link</button></div></div>
+      <div class="multi-options" hidden><div class="multi-player-options"><label for="multi-player-mode">Player mode</label><select id="multi-player-mode" aria-label="Player mode"><option value="embed">Standard embeds</option><option value="full">Full Kick players (beta)</option></select><span>Full players include more native features. Standard embeds load just the player. Your current channel keeps its existing player.</span></div><div class="multi-tools"><form id="multi-add-form"><input id="multi-add" aria-label="Add channel to multiview" list="multi-suggestions" placeholder="Channel name or Kick URL" autocomplete="off" maxlength="120"><datalist id="multi-suggestions"></datalist><button type="submit">Add stream</button></form></div><div class="multi-footer"><div class="multi-save"><input id="multi-name" aria-label="Layout name" placeholder="Name this session" maxlength="48"><button id="multi-save">Save</button><select id="multi-sessions" aria-label="Saved multiview sessions"><option value="">Saved sessions…</option></select><button id="multi-delete" disabled>Delete saved</button></div><button id="multi-share">Copy link</button></div></div>
       <div id="multi-notice" class="multi-notice" role="status"></div><div class="multi-body"><div id="multi-grid" class="multi-grid"></div><aside class="multi-chat"><div class="multi-chat-mount"></div></aside></div>`;
     shadow.append(panel);
     const channelStyle=document.createElement('style');channelStyle.textContent=KickRefinedChannelPanel.styles;shadow.append(channelStyle);
@@ -56,5 +61,5 @@
     const $ = s => panel.querySelector(s);
     return {host,shadow,panel,directory,chatTabs,toolbarToggle,stage,gridElement,divider,sizing,$,decorate};
   }
-  globalThis.KickRefinedMultiView=Object.freeze({create});
+  globalThis.KickRefinedMultiView=Object.freeze({create,text,attr,css});
 })();

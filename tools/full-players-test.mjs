@@ -26,7 +26,7 @@ try{
   const url=new URL(route.request().url());
   if(url.pathname.startsWith('/__extension/'))return route.fulfill({path:path.join(root,'extension',url.pathname.split('/').pop())});
   if(url.searchParams.get('immersion-frame')==='full')return route.fulfill({contentType:'text/html',...(url.pathname==='/blocked'?{headers:{'content-security-policy':"frame-ancestors 'none'"},body:'<h1>Frame blocked</h1>'}:{body:fullFixture(url.pathname.slice(1))})});
-  if(url.pathname.startsWith('/api/v2/channels/')){const slug=url.pathname.split('/').pop();return route.fulfill({json:{slug,user:{username:slug,bio:'Channel'},livestream:{is_live:true,session_title:`${slug} live`,viewer_count:100,categories:[{name:'IRL'}]}}});}
+  if(url.pathname.startsWith('/api/v2/channels/')){const slug=url.pathname.split('/').pop();return route.fulfill({json:{slug,user:{username:slug,bio:'Channel'},livestream:{is_live:true,start_time:new Date(Date.now()-3*3600000).toISOString(),session_title:`${slug} live`,viewer_count:100,categories:[{name:'IRL'}]}}});}
   if(url.pathname.endsWith('/links'))return route.fulfill({json:[]});
   return route.fulfill({contentType:'text/html',body:fixture});
  });
@@ -39,11 +39,17 @@ try{
  const add=async slug=>{await workspace.getByRole('combobox',{name:'Add channel to multiview',exact:true}).fill(slug);await workspace.getByRole('button',{name:'Add stream',exact:true}).click();};
  await add('alpha');await add('beta');
  const frameFor=slug=>page.frames().find(frame=>frame.url().includes(`/${slug}?immersion-frame=full`));
+ await workspace.locator('.channel-title').filter({hasText:'beta live'}).waitFor();
+ await page.evaluate(()=>{const root=document.getElementById('kr-multi-root').shadowRoot;window.keptDirectoryCard=root.querySelector('.multi-channel-card[data-channel="beta"]').closest('.channel-panel');window.keptChatOption=root.querySelector('#multi-chat-channel option[value="beta"]');});
+ await workspace.getByRole('combobox',{name:'Multiview layout',exact:true}).selectOption('columns');
+ assert.equal(await page.evaluate(()=>{const root=document.getElementById('kr-multi-root').shadowRoot;return keptDirectoryCard===root.querySelector('.multi-channel-card[data-channel="beta"]').closest('.channel-panel')&&keptChatOption===root.querySelector('#multi-chat-channel option[value="beta"]');}),true,'unrelated layout updates preserve directory cards and chat options');
+ await workspace.getByRole('combobox',{name:'Multiview layout',exact:true}).selectOption('grid');
  await workspace.locator('.multi-player-loading:visible').waitFor({state:'detached'}).catch(()=>{});
  for(const slug of ['alpha','beta']){
   const frame=frameFor(slug);assert.ok(frame,`${slug} uses the full channel page`);
-  if(engine==='firefox'){await frame.waitForSelector('video',{state:'attached'});for(const file of ['full-player-frame.js','player-controls.js','player-frame.js'])await frame.addScriptTag({path:`extension/${file}`});}
+  if(engine==='firefox'){await frame.waitForSelector('video',{state:'attached'});for(const file of ['stream-clock.js','performance.js','full-player-frame.js','player-controls.js','player-frame.js'])await frame.addScriptTag({path:`extension/${file}`});}
   await frame.waitForSelector('[data-kr-full-player-root]');await frame.waitForFunction(()=>document.querySelector('video')?.readyState>=2);
+  await frame.waitForFunction(()=>document.querySelector('[data-kr-elapsed]')?.textContent?.startsWith('3:'));assert.match(await frame.locator('[data-kr-elapsed]').textContent(),/^3:\d{2}:\d{2}$/,'new players show total broadcast uptime');
   assert.equal(await frame.locator('#kr-root,#kr-multi-root').count(),0,'full frames do not recursively create Immersion workspaces');
   for(const selector of ['#page-nav','#page-sidebar','#channel-content','#channel-chatroom'])assert.equal(await frame.locator(selector).isVisible(),false,`${selector} is hidden in the player-only frame`);
   const geometry=await frame.locator('[data-kr-full-player-root]').evaluate(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};});
@@ -78,14 +84,17 @@ try{
  const compact=await supplemental.locator('[data-kr-action=play]').evaluate(button=>({height:button.getBoundingClientRect().height,gap:getComputedStyle(button.parentElement).gap}));assert.equal(compact.height,28);assert.ok(['5px','8px'].includes(compact.gap));
  await workspace.getByRole('button',{name:'Manage',exact:true}).click();await workspace.getByRole('button',{name:'Manage',exact:true}).click();
  await add('blocked');await workspace.getByRole('button',{name:'Use embed for blocked',exact:true}).click();await workspace.locator('.multi-tile[data-channel=blocked][data-player-mode=embed-fallback]').waitFor();await workspace.locator('.multi-tile[data-channel=blocked] iframe').contentFrame().locator('video').waitFor({state:'attached'});assert.ok(page.frames().some(frame=>frame.url().startsWith('https://player.kick.com/blocked')),'a blocked full page can fall back without relaxing framing protections');
- await workspace.getByRole('button',{name:'Switch alpha to standard embed',exact:true}).click();await workspace.locator('.multi-tile[data-channel=alpha][data-player-mode=embed-fallback]').waitFor();
+ await workspace.getByRole('button',{name:'Switch alpha to standard embed',exact:true}).click();await workspace.locator('.multi-tile[data-channel=alpha][data-player-mode=embed]').waitFor();
  await workspace.locator('.multi-tile[data-channel=alpha] iframe').contentFrame().locator('video').waitFor({state:'attached'});assert.ok(page.frames().some(frame=>frame.url().startsWith('https://player.kick.com/alpha')),'a loaded full player can also fall back');
  await workspace.getByRole('button',{name:'Use full player for alpha',exact:true}).click();
  await workspace.locator('iframe[name="kick-refined-full:alpha"]').contentFrame().locator('video').waitFor({state:'attached'});
- const retried=frameFor('alpha');if(engine==='firefox')for(const file of ['full-player-frame.js','player-controls.js','player-frame.js'])await retried.addScriptTag({path:`extension/${file}`});
+ const retried=frameFor('alpha');if(engine==='firefox')for(const file of ['stream-clock.js','performance.js','full-player-frame.js','player-controls.js','player-frame.js'])await retried.addScriptTag({path:`extension/${file}`});
  await retried.waitForSelector('[data-kr-full-player-root]');await workspace.getByRole('button',{name:'Switch alpha to standard embed',exact:true}).waitFor({state:'visible'});
  await mkdir('artifacts',{recursive:true});await workspace.screenshot({path:`artifacts/${engine}-full-players.png`});
  await workspace.getByRole('combobox',{name:'Player mode',exact:true}).selectOption('embed');assert.equal(page.frames().some(frame=>frame.url().includes('immersion-frame=full')),false,'switching modes disposes full player pages');
+ await workspace.getByRole('button',{name:'Use full player for beta',exact:true}).click();
+ await workspace.locator('iframe[name="kick-refined-full:beta"]').contentFrame().locator('video').waitFor({state:'attached'});
+ assert.ok(page.frames().some(frame=>frame.url().includes('/beta?immersion-frame=full')),'a pane can choose full mode while the workspace uses embeds');
  await workspace.getByRole('button',{name:'Close multiview',exact:true}).click();assert.equal(await page.locator('#kr-multi-root').count(),0);
  assert.deepEqual(errors,[]);console.log(`${engine}: full channel isolation, two concurrent players, native quality/timeline/dialogs, focus audio, carried volume, player replacement, embed fallback and teardown passed`);
 }catch(error){for(const page of context.pages())if(page.url().startsWith('https://kick.com/'))await page.screenshot({path:`artifacts/${engine}-full-players-failure.png`}).catch(()=>{});throw error;}finally{await context.close();await browser?.close();}

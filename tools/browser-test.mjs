@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const fixture = (await readFile(path.join(root, 'tests/fixture.html'), 'utf8')).replace('</body>', `<script>${await readFile(path.join(root, 'tests/design-fixture.js'), 'utf8')}</script></body>`);
+const fixture = (await readFile(path.join(root, 'tests/fixture.html'), 'utf8')).replace('<header>Stream chat</header>','<header style="position:relative"><span>Stream chat</span><button style="position:absolute;right:8px;top:5px;width:36px;height:36px;padding:0" aria-label="Show active chatters" onclick="window.mainChatterOpens=(window.mainChatterOpens||0)+1">People</button></header>').replace('</body>', `<script>${await readFile(path.join(root, 'tests/design-fixture.js'), 'utf8')}</script></body>`);
 await mkdir(path.join(root, 'artifacts'), { recursive: true });
 const report = [];
 const mediaFixture=`data:audio/wav;base64,${(await readFile(path.join(root,'tests/silence.wav'))).toString('base64')}`;
@@ -37,7 +37,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
   } else {
     browser = await playwright.firefox.launch({ executablePath: process.env.KR_FIREFOX || playwright.firefox.executablePath(), headless: true });
     context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
-    await context.addInitScript({path:path.join(root,'extension/scroll.js')});
+    await context.addInitScript({path:path.join(root,'extension/scroll.js')});await context.addInitScript({path:path.join(root,'extension/native-search-bridge.js')});
     // Firefox engine check. The API shim is explicit: this does not claim a signed add-on install test.
     await context.addInitScript(() => {
       const listeners = [];
@@ -67,7 +67,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
         if(slug==='third')return route.fulfill({status:403,body:'Unavailable'});
         return route.fulfill({json:{slug,user:{username:slug,bio:`**About ${slug}**\n\nLive sessions and new music.`,twitter:`${slug}_live`,instagram:'https://evil.test/untrusted'},livestream:{is_live:true,session_title:`${slug} live session`,viewer_count:1428,categories:[{name:slug==='aurora'?'Music':'Just Chatting'}]}}});
       }
-      if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body style="margin:0;background:#101014;color:#eee;font:13px system-ui"><div id="chatroom-messages">Native chat fixture <button id="frame-username">fixture-user</button></div><div id="user-identity" role="dialog" hidden style="position:fixed;top:40px;right:var(--chat-width,340px);width:356px;padding:16px;background:#24242c"><strong>fixture-user</strong><button id="frame-reply">Reply</button><button id="frame-close">Close user card</button></div><script>window.frameReplies=0;document.getElementById("frame-username").onclick=()=>document.getElementById("user-identity").hidden=false;document.getElementById("frame-reply").onclick=()=>window.frameReplies++;document.getElementById("frame-close").onclick=()=>document.getElementById("user-identity").hidden=true;</script></body></html>' });
+      if (new URL(route.request().url()).pathname.startsWith('/popout/')) return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><body style="margin:0;background:#101014;color:#eee;font:13px system-ui"><header style="height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px"><span>Chat</span><button aria-label="Show active chatters" onclick="document.getElementById('active-chatters').showModal()">People</button></header><dialog id="active-chatters" style="position:fixed;inset:10px;max-width:calc(100% - 20px);background:#24242c;color:white"><p>Secondary stream chatters</p><button onclick="this.closest('dialog').close()">Close chatters</button></dialog><div id="chatroom-messages">Native chat fixture <button id="frame-username">fixture-user</button></div><div id="user-identity" role="dialog" hidden style="position:fixed;top:40px;right:var(--chat-width,340px);width:356px;padding:16px;background:#24242c"><strong>fixture-user</strong><button id="frame-reply">Reply</button><button id="frame-close">Close user card</button></div><script>window.frameReplies=0;document.getElementById("frame-username").onclick=()=>document.getElementById("user-identity").hidden=false;document.getElementById("frame-reply").onclick=()=>window.frameReplies++;document.getElementById("frame-close").onclick=()=>document.getElementById("user-identity").hidden=true;</script></body></html>` });
       return route.fulfill({ contentType: 'text/html', body: fixture });
     });
     await context.route('https://player.kick.com/**', route => route.fulfill({ contentType: 'text/html', body: `<html><body style="margin:0;background:#0b0b0e;color:#858592;display:grid;place-items:center;font:12px system-ui"><div>Kick player fixture · silent local audio</div><video src="${mediaFixture}" loop autoplay muted playsinline style="width:1px;height:1px;position:absolute;opacity:0"></video><script>
@@ -183,7 +183,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await page.keyboard.press('Alt+k');
     const palette = page.locator('#kr-root #switch-dialog');
     await palette.waitFor({ state: 'visible' });
-    const search = palette.getByRole('combobox');
+    const search = palette.getByRole('combobox',{name:'Search Kick',exact:true});
     await page.evaluate(()=>{window.nativeHotkeys=[];});
     await search.pressSequentially('tmTM');
     assert.equal(await search.inputValue(),'tmTM');
@@ -201,16 +201,14 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] img').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
     assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"]').evaluate(el => getComputedStyle(el).boxShadow), 'none');
     await search.fill('night');
-    assert.equal(await palette.getByRole('option').count(), 1);
-    await palette.getByRole('button', { name: 'Pin selected' }).click();
-    await palette.getByRole('button', { name: 'Unpin selected' }).waitFor();
+    assert.equal(await palette.locator('#channel-results').getByRole('option').count(), 1);
     const navigationsBeforeSwitch=await page.evaluate(()=>window.nativeNavigations);
     await search.press('Enter');
     assert.equal(new URL(page.url()).pathname, '/nightshift');
     assert.equal(await page.evaluate(() => window.nativeNavigations), navigationsBeforeSwitch+1, 'uses native link handler');
     await page.keyboard.press('Alt+k');
     await palette.waitFor({ state: 'visible' });
-    assert.match(await palette.getByRole('option').first().textContent(), /nightshift/);
+    assert.equal(await palette.locator('#channel-results').getByRole('option').filter({hasText:'nightshift'}).count(),1);
     await page.screenshot({ path: path.join(root, `artifacts/${engine}-switcher.png`) });
     await search.press('Escape');
     await palette.waitFor({state:'hidden'});
@@ -464,7 +462,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await multi.locator('.multi-options').isVisible(),true,'expanded management controls are restored');
     assert.equal(await multi.locator('.multi-tile-identity span').first().isVisible(),false,'compact player labels show only name and photo');
     assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'hiding and showing settings retains the player');
-    await page.locator('#kr-multi-chat-picker').getByRole('combobox',{name:'Chat channel'}).selectOption('aurora');
+    await page.locator('#kr-multi-chat-picker').getByRole('button',{name:'Chat channel',exact:true}).click();await page.locator('#kr-multi-chat-picker').locator('[role=option][data-channel=aurora]').click();
     assert.match(await page.locator('#kr-multi-chat iframe').getAttribute('src'), /\/popout\/aurora\/chat$/);
     const switchedChat=page.frameLocator('#kr-multi-chat iframe');
     if(engine==='firefox'){
@@ -472,6 +470,8 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       for(const file of ['theme.css','polish.css'])await frame.addStyleTag({path:path.join(root,'extension',file)});
       for (const file of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await frame.addScriptTag({path:path.join(root,'extension',file)});
     }
+    assert.equal(await page.locator('#channel-chatroom > header > button[aria-label="Show active chatters"]').isVisible(),false,'main-stream controls are hidden behind secondary chat');
+    await switchedChat.getByRole('button',{name:'Show active chatters',exact:true}).click();await switchedChat.locator('#active-chatters').waitFor({state:'visible'});assert.equal(await page.evaluate(()=>window.mainChatterOpens||0),0,'secondary controls do not open main chat state');await switchedChat.getByRole('button',{name:'Close chatters',exact:true}).click();await switchedChat.locator('#active-chatters').waitFor({state:'hidden'});
     await switchedChat.getByRole('button',{name:'fixture-user',exact:true}).click();
     await switchedChat.locator('#user-identity').waitFor({state:'visible'});
     for(const width of [400,340,280]){
@@ -484,8 +484,9 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await switchedChat.getByRole('button',{name:'Reply',exact:true}).click();
     assert.equal(await switchedChat.locator('body').evaluate(()=>window.frameReplies),1,'username cards remain interactive in switched chat');
     await switchedChat.getByRole('button',{name:'Close user card',exact:true}).click();
-    await page.locator('#kr-multi-chat-picker').getByRole('combobox',{name:'Chat channel'}).selectOption('nightshift');
+    await page.locator('#kr-multi-chat-picker').getByRole('button',{name:'Chat channel',exact:true}).click();await page.locator('#kr-multi-chat-picker').locator('[role=option][data-channel=nightshift]').click();
     assert.equal(await page.locator('#kr-multi-chat iframe').count(),0);
+    await page.locator('#channel-chatroom > header > button[aria-label="Show active chatters"]').click();assert.equal(await page.evaluate(()=>window.mainChatterOpens),1,'main controls are restored after switching back');
     assert.equal(await page.evaluate(()=>document.getElementById('channel-chatroom')===window.originalChat),true,'switching back preserves the native chat connection');
     await multi.getByRole('combobox',{name:'Multiview layout'}).selectOption('grid');
     const edge=multi.getByRole('separator',{name:'Resize aurora',exact:true}),edgeRect=await edge.boundingBox();
@@ -592,7 +593,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await palette.isVisible(), false, 'does not hijack Ctrl+K while composing chat');
     await page.keyboard.press('Alt+k');
     await palette.waitFor({ state: 'visible' });
-    await palette.getByRole('combobox').press('Escape');
+    await palette.getByRole('combobox',{name:'Search Kick',exact:true}).press('Escape');
     // Burst of messages must not create an extension-owned duplicate message list.
     await page.evaluate(() => {
       const list = document.getElementById('chatroom-messages');
@@ -646,7 +647,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.waitFor({ state: 'visible' });
       assert.equal(await palette.evaluate(el => el.getBoundingClientRect().right <= innerWidth), true);
       if (width === 390) await page.screenshot({ path: path.join(root, `artifacts/${engine}-mobile.png`) });
-      await palette.getByRole('combobox').press('Escape');
+      await palette.getByRole('combobox',{name:'Search Kick',exact:true}).press('Escape');
     }
     assert.deepEqual(errors, []);
     report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','minimal drop cue without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','collapsible settings bar','native chat header dropdown','saved custom split','natural video height with three streams','direct close/fullscreen actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });

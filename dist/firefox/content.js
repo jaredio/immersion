@@ -10,7 +10,8 @@
   const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
   let refreshTimer, writeTimer, routeTimer, routeTimeout, previousFocus;
   let dockPosition = '';
-  let searchBackdrop=null;
+  let channelPage=null;
+  let searchWindow=null,nativeSearch=null,restoringSearchFocus=false;
   let currentPath = location.pathname;
   let disposed = false;
   let drag = null, dropTarget = null, lastDrop = null, dragChip = null, dragFrame = 0;
@@ -22,6 +23,7 @@
   });
 
   function apply() {
+    globalThis.KickRefinedPerf?.configure(settings.enabled&&settings.diagnostics);
     root.dataset.krEnabled = String(settings.enabled);
     root.dataset.krPerformance = String(settings.performance);
     root.dataset.krCompact = String(settings.compact);
@@ -41,10 +43,11 @@
     replyPreviews?.setEnabled(settings.enabled);
     notices?.setEnabled(settings.enabled);
     support?.setEnabled(settings.enabled);
-    channelPanel?.setEnabled(settings.enabled);
+    channelPage?.refresh(settings.enabled);channelPanel?.setEnabled(settings.enabled);
     checkouts?.setEnabled(settings.enabled);
     if(drag?.kind==='clip'&&(!settings.chatClips||settings.textOnly))endDrag();
-    if (!settings.enabled) { endDrag(); multi?.close(); }
+    nativeSearch?.refresh(settings.enabled);
+    if (!settings.enabled) { endDrag(); multi?.close();if(palette?.open)closeSearch(); }
   }
 
   function change(patch) {
@@ -83,11 +86,14 @@
         <div class="footer"><span>LOCAL SETTINGS · NO TELEMETRY<br>Alt+K to switch channels</span><button id="reset">Reset</button></div>
       </dialog>
       <dialog id="switch-dialog" class="palette search-palette" aria-label="Search Kick">
-        <div class="search"><input id="channel-search" type="search" placeholder="Search Kick · clips:channel · vods:channel" aria-label="Search Kick" role="combobox" aria-autocomplete="list" aria-controls="channel-results" aria-describedby="search-status" aria-expanded="true" autocomplete="off"><kbd>ESC</kbd><button class="close" aria-label="Close channel switcher">×</button></div>
-        <details class="search-guide"><summary title="Search filters" aria-label="Search filters">?</summary><div><p><code>clips:cobbruvs sort:views</code><br><code>vods:xqc "road trip"</code><br><code>clips:cobbruvs,xqc time:week views:&gt;100</code></p><p>Combine <code>channel:</code>, <code>category:"Just Chatting"</code>, <code>after:2026-10-01</code>, <code>before:</code>, <code>creator:</code>, <code>duration:&lt;60</code>, quoted phrases and <code>-words</code>. Channels support <code>live:true</code>. Sort by <code>recent</code> or <code>views</code>.</p></div></details>
+        <div class="search-window-bar" tabindex="0" aria-label="Move search window" title="Drag to move · Arrow keys move · Double-click to center"><span class="search-window-title">Search Kick</span><span class="window-grip" aria-hidden="true">⠿</span><button id="search-center" title="Center and reset size" aria-label="Reset search window">↺</button><button class="close" aria-label="Close channel switcher">×</button></div>
+        <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="channel-search" type="search" placeholder="Find a channel, clip or recording…" aria-label="Search Kick" role="combobox" aria-autocomplete="list" aria-controls="channel-results" aria-describedby="search-status" aria-expanded="true" autocomplete="off"><kbd>Alt K</kbd></div>
+        <div class="search-tools"><div class="search-types" role="group" aria-label="Search type"><button data-search-type="channels" aria-pressed="true">Channels</button><button data-search-type="clips" aria-pressed="false">Clips</button><button data-search-type="vods" aria-pressed="false">VODs</button></div></div>
+        <div class="search-media-filters" hidden><label>Channel<input id="search-scope" aria-label="Search channel" placeholder="Channel name" autocomplete="off" spellcheck="false"></label><label>Posted<select id="search-time" aria-label="Search time"><option value="all">Any time</option><option value="day">Today</option><option value="week">This week</option><option value="month">This month</option></select></label></div>
+        <div class="search-sort"><label>Sort<select id="search-sort" aria-label="Search sort"><option value="recent">Relevance</option><option value="views">Most viewed</option></select></label><details class="search-guide"><summary title="Search filters" aria-label="Search filters">?</summary><div><p><code>clips:cobbruvs sort:views</code><br><code>vods:xqc "road trip"</code><br><code>clips:cobbruvs,xqc time:week views:&gt;100</code></p><p>Combine <code>channel:</code>, <code>category:"Just Chatting"</code>, <code>after:2026-10-01</code>, <code>before:</code>, <code>creator:</code>, <code>duration:&lt;60</code>, quoted phrases and <code>-words</code>. Channels support <code>live:true</code>. Sort by <code>recent</code> or <code>views</code>.</p></div></details></div>
         <div id="search-status" class="search-status" role="status" aria-live="polite"></div>
         <div class="results" id="channel-results" role="listbox" aria-label="Search results"></div><button id="search-more" class="search-more" hidden>Load more clips</button>
-        <div class="footer"><span id="result-count"></span><span>↑↓ select · Enter open</span><button id="pin-channel">Pin selected</button></div>
+        <div class="footer"><span id="result-count"></span></div><div class="search-resize" tabindex="0" role="button" aria-label="Resize search window" title="Drag to resize · Arrow keys adjust"></div>
       </dialog>`;
     shadow.append(ui);
     const multiButton = document.createElement('button');
@@ -97,10 +103,10 @@
     multiButton.addEventListener('click', () => openMulti());
     const settingsMulti = document.createElement('button'); settingsMulti.textContent = 'Multiview'; settingsMulti.addEventListener('click', () => openMulti());
     shadow.querySelector('#settings-dialog .footer').append(settingsMulti);
-    const footer = shadow.querySelector('#switch-dialog .footer');
-    footer.innerHTML = '<span id="result-count"></span><span class="key-hint">↑↓ select · Enter open</span><div class="actions"><button id="pin-channel">Pin selected</button><button id="add-multi">Add to Multi</button></div>';
-    shadow.querySelector('#add-multi').addEventListener('click', () => openMulti(shown[selected]));
     support = KickRefinedSupport.create({enabled:settings.enabled});
+    channelPage=KickRefinedChannelPage.create({onChange:scheduleRefresh,onKeydown:handleShortcut,onWatch:row=>watchLibraryVideo(row),onDrag:(event,row)=>{
+      if(!settings.enabled||!settings.chatClips||settings.textOnly){event.preventDefault();return;}const item=KickRefinedClips.parseClip(row.href)||KickRefinedClips.parseVOD(row.href);if(!item){event.preventDefault();return;}event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('text/uri-list',item.href);startClipDrag(event,{...item,title:row.title,fromLibrary:true,commit:mode=>watchLibraryVideo(row,mode)});
+    }});
     channelPanel = KickRefinedChannelPanel.create({support,enabled:settings.enabled,onChange:scheduleRefresh});
     multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut, support, channelPanel });
     clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
@@ -111,8 +117,8 @@
     notices=KickRefinedNotices.create({enabled:settings.enabled});
     checkouts=KickRefinedCheckouts.create({enabled:settings.enabled});
     const localKeydown=event=>{
-      if(event.key==='Escape' && (palette?.open || settingsDialog?.open)) { event.preventDefault();palette?.open?palette.close():settingsDialog.close(); }
-      else if(event.key==='Tab'&&palette?.open){const controls=[...palette.querySelectorAll('input,button,summary,a[href]')].filter(node=>!node.disabled&&node.getClientRects().length);const active=shadow.activeElement;if(event.shiftKey&&active===controls[0]){event.preventDefault();controls.at(-1)?.focus();}else if(!event.shiftKey&&active===controls.at(-1)){event.preventDefault();controls[0]?.focus();}}
+      if(event.key==='Escape'&&drag){event.preventDefault();endDrag();}
+      else if(event.key==='Escape' && (palette?.open || settingsDialog?.open)) { event.preventDefault();palette?.open?closeSearch():settingsDialog.close(); }
       else handleShortcut(event);
       event.stopPropagation();
     };
@@ -120,26 +126,37 @@
     for(const type of ['keyup','keypress'])shadow.addEventListener(type,event=>event.stopPropagation());
     settingsDialog = shadow.querySelector('#settings-dialog');
     palette = shadow.querySelector('#switch-dialog');
+    searchWindow=KickRefinedSearchWindow.create({dialog:palette,handle:palette.querySelector('.search-window-bar'),resize:palette.querySelector('.search-resize'),reset:shadow.querySelector('#search-center')});
+    nativeSearch=KickRefinedNativeSearch.create({onOpen:input=>{if(!restoringSearchFocus)openNativeSearch(input);},onInput:input=>{openNativeSearch(input);},onKeydown:(event,input)=>{
+      if(event.isComposing)return;
+      if(event.key==='Escape'){if(palette.open){event.preventDefault();if(drag)endDrag();else closeSearch();}return;}
+      if(!palette.open&&['ArrowDown','ArrowUp'].includes(event.key))openNativeSearch(input);
+      if(palette.open)navigateSearch(event);handleShortcut(event);
+    },onDetach:()=>{if(palette.open&&searchWindow.mode==='docked')closeSearch();}});
+    document.addEventListener('pointerdown',event=>{if(!palette.open||searchWindow.mode!=='docked'||drag)return;const path=event.composedPath();if(!path.includes(palette)&&!path.includes(nativeSearch.input))closeSearch();},{capture:true,signal:abort.signal});
+
+    palette.addEventListener('dragover',event=>{if(!drag)return;event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='none';palette.dataset.cancelDrop='true';});
+    palette.addEventListener('dragleave',event=>{if(!palette.contains(event.relatedTarget))delete palette.dataset.cancelDrop;});
+    palette.addEventListener('drop',event=>{if(!drag)return;event.preventDefault();event.stopPropagation();endDrag();});
+    for(const button of palette.querySelectorAll('[data-search-type]'))button.addEventListener('click',()=>changeSearchFilters({type:button.dataset.searchType}));
+    shadow.querySelector('#search-sort').addEventListener('change',event=>changeSearchFilters({sort:event.target.value}));
+    shadow.querySelector('#search-time').addEventListener('change',event=>changeSearchFilters({time:event.target.value}));
+    shadow.querySelector('#search-scope').addEventListener('change',event=>changeSearchFilters({channels:event.target.value.split(',').map(name=>name.trim().replace(/^@/,''))}));
+    const scopeKeydown=event=>{if(event.key==='Enter'){event.preventDefault();changeSearchFilters({channels:event.target.value.split(',').map(name=>name.trim().replace(/^@/,''))});}};
+    for(const type of ['keydown','kick-refined-keydown'])shadow.querySelector('#search-scope').addEventListener(type,scopeKeydown);
+
     updateForm = KickRefinedUI.settingsForm(shadow.querySelector('.settings'), settings, change);
     shadow.querySelector('#kr-settings').addEventListener('click', openSettings);
     shadow.querySelector('#kr-switch').addEventListener('click', openPalette);
     shadow.querySelector('#reset').addEventListener('click', () => change(normalize()));
-    shadow.querySelector('#pin-channel').addEventListener('click', togglePin);
     shadow.querySelector('#channel-search').addEventListener('input', updateSearch);
     shadow.querySelector('#search-more').addEventListener('click',()=>loadSearch(searchRevision,true));
-    const searchKeydown=event=>{
-      if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
-        event.preventDefault();
-        selected = Math.max(0, Math.min(shown.length - 1, selected + (event.key === 'ArrowDown' ? 1 : -1)));
-        highlight();
-      } else if (event.key === 'Enter' && shown[selected]) { event.preventDefault(); go(shown[selected]); }
-    };
-    shadow.querySelector('#channel-search').addEventListener('keydown',searchKeydown);
-    shadow.querySelector('#channel-search').addEventListener('kick-refined-keydown',searchKeydown);
+    shadow.querySelector('#channel-search').addEventListener('keydown',navigateSearch);
+    shadow.querySelector('#channel-search').addEventListener('kick-refined-keydown',navigateSearch);
     for (const dialog of [settingsDialog, palette]) {
-      dialog.querySelector('.close').addEventListener('click', () => dialog.close());
-      dialog.addEventListener('click', event => { if (event.target === dialog && (event.clientX < dialog.getBoundingClientRect().left || event.clientX > dialog.getBoundingClientRect().right || event.clientY < dialog.getBoundingClientRect().top || event.clientY > dialog.getBoundingClientRect().bottom)) dialog.close(); });
-      dialog.addEventListener('close', () => { if(dialog===palette&&!palette.open){clearTimeout(searchTimer);searchService.cancel();searchBusy=false;searchRevision++;searchBackdrop?.remove();searchBackdrop=null;placeToolbar();}if (previousFocus?.isConnected) previousFocus.focus(); });
+      dialog.querySelector('.close').addEventListener('click', () => dialog===palette?closeSearch():dialog.close());
+      dialog.addEventListener('click', event => { if (event.target === dialog && (event.clientX < dialog.getBoundingClientRect().left || event.clientX > dialog.getBoundingClientRect().right || event.clientY < dialog.getBoundingClientRect().top || event.clientY > dialog.getBoundingClientRect().bottom)) (dialog===palette?closeSearch():dialog.close()); });
+      dialog.addEventListener('close', () => { if(dialog===palette&&!palette.open){clearTimeout(searchTimer);searchService.cancel();searchBusy=false;searchRevision++;nativeSearch.expanded(false);placeToolbar();}if (previousFocus?.isConnected){restoringSearchFocus=true;previousFocus.focus();}restoringSearchFocus=false; });
     }
     placeToolbar();
   }
@@ -161,7 +178,7 @@
   }
 
   function openSettings() {
-    if (palette.open) palette.close();
+    if (palette.open) closeSearch();
     previousFocus = shadow.activeElement || document.activeElement;
     const chat = !!document.getElementById('chatroom-messages');
     const side = !!document.getElementById('sidebar-wrapper');
@@ -169,14 +186,26 @@
     if (!settingsDialog.open) settingsDialog.showModal();
   }
 
+  function closeSearch(){if(!palette?.open)return;restoringSearchFocus=true;nativeSearch.expanded(false);palette.close();}
+  function navigateSearch(event){
+    if(event.isComposing)return;
+    if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();selected=Math.max(0,Math.min(shown.length-1,selected+(event.key==='ArrowDown'?1:-1)));highlight();}
+    else if(event.key==='Enter'){event.preventDefault();if(shown[selected]){if(event.shiftKey)void watchResult(shown[selected]);else go(shown[selected]);}}
+  }
   function openPalette() {
     if (settingsDialog.open) settingsDialog.close();
     previousFocus = shadow.activeElement || document.activeElement;
-    collectChannels(); selected = 0;
-    shadow.querySelector('#channel-search').value = '';
-    updateSearch();
-    if (!palette.open) {document.getElementById('kr-search-backdrop')?.remove();searchBackdrop=document.createElement('div');searchBackdrop.id='kr-search-backdrop';searchBackdrop.setAttribute('aria-hidden','true');searchBackdrop.style.cssText='position:fixed;inset:0;z-index:2147482999;background:#0008';searchBackdrop.addEventListener('click',()=>palette.close());document.body.append(searchBackdrop);palette.show();placeToolbar();}
-    shadow.querySelector('#channel-search').focus();
+    if(!palette.open){collectChannels();selected=0;shadow.querySelector('#channel-search').value='';updateSearch();palette.show();}
+    searchWindow.open();nativeSearch.expanded(false);placeToolbar();shadow.querySelector('#channel-search').focus();
+  }
+  function openNativeSearch(input){
+    if(disposed||!settings.enabled)return;
+    if(settingsDialog.open)settingsDialog.close();previousFocus=input;
+    const wasOpen=palette.open,field=shadow.querySelector('#channel-search'),changed=field.value!==input.value;field.value=input.value;
+    if(!palette.open){collectChannels();palette.show();}
+    searchWindow.dock(input);nativeSearch.expanded(true);placeToolbar();
+    if(document.activeElement!==input){restoringSearchFocus=true;input.focus({preventScroll:true});restoringSearchFocus=false;}
+    if(changed||!wasOpen||!searchRenderKey)updateSearch();else renderResults();
   }
 
   function collectChannels() {
@@ -188,7 +217,7 @@
       found.set(slug, { slug, ...details, link });
     }
     for (const slug of settings.pinned) {
-      if (!found.has(slug)) found.set(slug, { slug, title: slug, section: 'Saved · opens a full page', live: 'unknown', image: '', link: null });
+      if (!found.has(slug)) found.set(slug, { slug, title: slug, section: 'Pinned', live: 'unknown', image: '', link: null });
     }
     channels = [...found.values()].sort((a, b) => Number(settings.pinned.includes(b.slug)) - Number(settings.pinned.includes(a.slug)));
   }
@@ -204,27 +233,53 @@
     return { title: image?.alt || channelSlug(link.href, location.origin), image: image?.currentSrc || image?.src || '', live, section: following ? 'Following' : recommended ? 'Recommended' : 'Browse', category, viewers };
   }
   function openMulti(channel) {
-    if (palette.open) palette.close();
+    if (palette.open) closeSearch();
     if (settingsDialog.open) settingsDialog.close();
-    multi.open(channel ? [channel.slug] : [], channelSlug(location.pathname, location.origin));
+    multi.open(channel ? [channel.slug] : [], KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname, location.origin));
   }
 
+  async function watchLibraryVideo(row,mode='alongside'){
+    if(!settings.enabled||disposed)return false;
+    let item;try{item=clips.importItem({href:row.href,title:row.title,time:0,paused:false,volume:1});const added=await multi.addClip(item,mode);if(!added)item.release();return added;}catch{item?.release();return false;}
+  }
+  async function watchResult(row){
+    if(!row)return;if(row.type==='channel'){openMulti(row);return;}
+    let item;try{item=clips.importItem({href:row.href,title:row.title,time:0,paused:false,volume:1});if(await multi.addClip(item,'alongside'))closeSearch();else item.release();}catch{item?.release();const status=shadow.querySelector('#search-status');status.hidden=false;status.textContent='Could not add this video. Try again.';status.dataset.error='true';}
+  }
+
+  function changeSearchFilters(patch){
+    const q=searchQuery?{...searchQuery,channels:[...searchQuery.channels]}:KickRefinedSearch.parse('');
+    if(patch.type&&patch.type!==q.type){q.type=patch.type;q.creator='';if(q.type==='channels'){q.channels=[];q.after=q.before=null;q.duration=null;q.time='all';}else{q.live=null;}}
+    Object.assign(q,patch);shadow.querySelector('#channel-search').value=KickRefinedSearch.serialize(q);updateSearch();
+  }
+  function syncSearchFilters(){
+    if(!searchQuery)return;const q=searchQuery,media=q.type!=='channels';
+    for(const button of palette.querySelectorAll('[data-search-type]')){const value=String(button.dataset.searchType===q.type);if(button.getAttribute('aria-pressed')!==value)button.setAttribute('aria-pressed',value);}
+    const filters=palette.querySelector('.search-media-filters');if(filters.hidden!==!media)filters.hidden=!media;
+    // Native select popups preview choices before committing a change. Background
+    // renders must not reset that preview or rebuild the open popup's options.
+    for(const [id,value]of [['search-scope',q.channels.join(',')],['search-time',q.time],['search-sort',q.sort]]){const field=shadow.querySelector('#'+id);if(shadow.activeElement!==field&&field.value!==value)field.value=value;}
+    const option=shadow.querySelector('#search-sort option[value="recent"]'),label=media?'Newest':'Relevance';if(option.textContent!==label)option.textContent=label;
+  }
   function updateSearch(){
-    selected=0;searchRevision++;clearTimeout(searchTimer);searchService.cancel();searchRows=[];searchMore=false;searchLoaded=0;searchError=searchWarning='';
-    try{searchQuery=KickRefinedSearch.parse(shadow.querySelector('#channel-search').value);}catch(error){searchQuery=null;searchError=error.message;searchBusy=false;renderResults();return;}
-    searchBusy=searchQuery.type!=='channels'||!!searchQuery.terms.length||!!searchQuery.channels.length;renderResults();if(searchBusy){const revision=searchRevision;searchTimer=setTimeout(()=>loadSearch(revision),220);}
+    nativeSearch?.sync(shadow.querySelector('#channel-search').value);
+    shown=[];selected=0;searchRevision++;clearTimeout(searchTimer);searchService.cancel();searchRows=[];searchMore=false;searchLoaded=0;searchError=searchWarning='';
+    try{searchQuery=KickRefinedSearch.parse(shadow.querySelector('#channel-search').value,{allowUnscoped:true});}catch(error){searchQuery=null;searchError=error.message;searchBusy=false;renderResults();return;}
+    searchBusy=searchQuery.type==='channels'?!!searchQuery.terms.length||!!searchQuery.channels.length:!!searchQuery.channels.length;renderResults();if(searchBusy){const revision=searchRevision;searchTimer=setTimeout(()=>loadSearch(revision),220);}
   }
   async function loadSearch(revision,append=false){
-    if(!searchQuery||revision!==searchRevision||!palette.open)return;searchBusy=true;searchError='';renderResults();
+    if(!searchQuery||searchQuery.type!=='channels'&&!searchQuery.channels.length||revision!==searchRevision||!palette.open)return;searchBusy=true;searchError='';renderResults();
     try{const result=await searchService.search(searchQuery,{append});if(revision!==searchRevision||!palette.open)return;searchRows=result.rows;searchMore=result.more;searchLoaded=result.loaded;searchWarning=result.warning||'';}
     catch(error){if(revision!==searchRevision||error.name==='AbortError')return;searchError=error.message||'Kick search is unavailable. Try again.';}
     finally{if(revision===searchRevision&&palette.open){searchBusy=false;renderResults();}}
   }
   function renderResults() {
-    if(drag?.fromSearch)return;
+    if(disposed||drag?.fromSearch)return;
+    syncSearchFilters();
     const rows=new Map();if(searchQuery?.type==='channels')for(const channel of channels){const row={type:'channel',key:'channel:'+channel.slug,views:null,...channel};if(KickRefinedSearch.fits(row,searchQuery))rows.set(row.key,row);}
     for(const row of searchRows){const local=rows.get(row.key);rows.set(row.key,{...local,...row,link:local?.link||null,section:local?.section||row.section,image:row.image||local?.image||''});}
-    shown=[...rows.values()].slice(0,200);
+    const selectedKey=shown[selected]?.key;shown=(searchQuery?.type==='channels'?KickRefinedSearch.rank([...rows.values()],searchQuery,settings.pinned):[...rows.values()]).slice(0,200);
+    const retained=shown.findIndex(row=>row.key===selectedKey);if(retained>=0)selected=retained;
     selected = Math.max(0, Math.min(selected, shown.length - 1));
     const signature=JSON.stringify([shown.map(({link,...row})=>row),searchQuery,searchBusy,searchError,searchWarning,searchMore,searchLoaded,settings.pinned]);if(signature===searchRenderKey){highlight(false);return;}searchRenderKey=signature;
     const results = shadow.querySelector('#channel-results');
@@ -241,10 +296,11 @@
       } else avatar.textContent = channel.title.slice(0, 2);
       const info = document.createElement('div'); info.className = 'channel-info';
       const name = document.createElement('div'); name.className = 'channel-name'; name.textContent = channel.title;
-      const detail = document.createElement('div'); detail.className = 'channel-detail'; detail.textContent = (channel.type==='channel'?[channel.section,channel.category]:[channel.type==='clip'?'Clip':'VOD',channel.slug,channel.created?new Date(channel.created).toLocaleDateString():null,channel.duration?KickRefinedSearch.duration(channel.duration):null]).filter(Boolean).join(' · ');
-      info.append(name, detail); option.append(avatar, info);
+      const detail = document.createElement('div'); detail.className = 'channel-detail'; detail.textContent = (channel.type==='channel'?[channel.section,channel.category]:[channel.type==='clip'?'Clip':'VOD',channel.slug,channel.creator?`by ${channel.creator}`:null,channel.category,channel.created?new Date(channel.created).toLocaleDateString():null,channel.duration?KickRefinedSearch.duration(channel.duration):null]).filter(Boolean).join(' · ');
+      info.append(name);if(channel.type==='channel'&&channel.streamTitle){const title=document.createElement('div');title.className='result-stream-title';title.textContent=channel.streamTitle;info.append(title);}info.append(detail); option.append(avatar, info);
+      if(channel.type!=='channel'&&channel.duration){const clock=document.createElement('span');clock.className='result-duration';clock.textContent=KickRefinedSearch.duration(channel.duration);avatar.append(clock);}
       const status = document.createElement('span'); status.className = 'live-status'; status.dataset.live = channel.live;
-      status.textContent = channel.live === 'live' ? channel.viewers && channel.viewers !== 'LIVE' ? `Live · ${channel.viewers}` : 'Live' : channel.live === 'offline' ? 'Offline' : 'Unknown'; option.append(status);
+      status.textContent = channel.live === 'live' ? Number.isFinite(channel.views)?`Live · ${new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(channel.views)}`:channel.viewers && channel.viewers !== 'LIVE' ? `Live · ${channel.viewers}` : 'Live' : channel.live === 'offline' ? 'Offline' : 'Status unavailable'; option.append(status);
       if(channel.type!=='channel')status.textContent=channel.views===null?'':new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(channel.views)+' views';
       if (channel.type==='channel'&&settings.pinned.includes(channel.slug)) { const pin = document.createElement('span'); pin.className = 'pin'; pin.textContent = '★'; option.append(pin); }
       option.addEventListener('pointermove', () => { if (selected !== index) { selected = index; highlight(false); } });
@@ -255,11 +311,11 @@
     }
     if (!shown.length) {
       const empty = document.createElement('p'); empty.className = 'empty';
-      empty.textContent = searchBusy?'Searching…':searchError?'':searchQuery?.type==='channels'?'No matching channels.':`No matching ${searchQuery?.type||'results'} loaded.`;
+      empty.textContent = searchBusy?'Searching…':searchError?'':searchQuery?.type==='channels'?'No matching channels.':searchQuery&&!searchQuery.channels.length?`Choose a channel to browse ${searchQuery.type==='vods'?'VODs':'clips'}.`:`No matching ${searchQuery?.type||'results'} loaded.`;
       results.append(empty);
     }
     shadow.querySelector('#result-count').textContent = `${shown.length} ${searchQuery?.type==='vods'?(shown.length===1?'VOD':'VODs'):searchQuery?.type==='clips'?(shown.length===1?'clip':'clips'):(shown.length===1?'channel':'channels')}`;
-    const status=shadow.querySelector('#search-status');status.textContent=searchError||searchWarning||(searchBusy?'Searching Kick…':searchQuery?.type!=='channels'&&searchQuery?`${searchLoaded} loaded · Filters apply to loaded results${searchMore?' · Load more to continue':''}.`:'Search any channel · Drag a result to watch together');status.dataset.error=String(!!searchError);
+    const status=shadow.querySelector('#search-status');status.textContent=searchError||searchWarning||(searchBusy?'Searching Kick...':'');status.hidden=!status.textContent;status.dataset.error=String(!!searchError);
     if(searchError&&searchQuery){const retry=document.createElement('button');retry.type='button';retry.className='search-retry';retry.textContent='Retry';retry.addEventListener('click',()=>loadSearch(searchRevision));status.append(retry);}
     const more=shadow.querySelector('#search-more');more.hidden=!searchMore;more.disabled=searchBusy;
     highlight(false);
@@ -270,24 +326,13 @@
     const input = shadow.querySelector('#channel-search');
     if (shown[selected]) input.setAttribute('aria-activedescendant', `kr-option-${selected}`);
     else input.removeAttribute('aria-activedescendant');
-    const button = shadow.querySelector('#pin-channel');
-    button.disabled = shown[selected]?.type!=='channel';
-    shadow.querySelector('#add-multi').disabled = shown[selected]?.type!=='channel';
-    button.textContent = settings.pinned.includes(shown[selected]?.slug) ? 'Unpin selected' : 'Pin selected';
     if (scroll) shadow.querySelector(`#kr-option-${selected}`)?.scrollIntoView({ block: 'nearest' });
-  }
-
-  function togglePin() {
-    const channel = shown[selected];
-    if (!channel||channel.type!=='channel') return;
-    const pinned = settings.pinned.includes(channel.slug) ? settings.pinned.filter(s => s !== channel.slug) : [...settings.pinned, channel.slug];
-    change({ pinned });
   }
 
   function go(channel) {
     channel=shown.find(row=>row.key===channel.key)||channel;
     if(drag||lastDrop&&performance.now()-lastDrop.time<600&&lastDrop.slug===channel.slug)return;
-    palette.close();
+    closeSearch();
     multi.close();
     if (channel.link?.isConnected) channel.link.click();
     else location.assign(channel.href||`/${encodeURIComponent(channel.slug)}`);
@@ -336,12 +381,14 @@
     for(const [img,value]of saved.images)if(value===null)img.removeAttribute('draggable');else img.setAttribute('draggable',value);
     draggableRows.delete(row);
   }
-  function endDrag() {
+  function endDrag({committed=false}={}) {
     const searchDrag=drag?.fromSearch;
     if(drag?.row)delete drag.row.dataset.krDragging;
+    if(drag?.library){drag.library.style.position=drag.libraryStyle.position;drag.library.style.zIndex=drag.libraryStyle.zIndex;}
     drag?.resize?.disconnect();
     cancelAnimationFrame(dragFrame);dragFrame=0;delete root.dataset.krDragging;dragChip?.remove();dragChip=null;drag=null;dropTarget?.remove();dropTarget=null;
-    if(searchDrag&&palette){delete palette.dataset.dragging;palette.close();}
+    if(palette){delete palette.dataset.dragging;delete palette.dataset.cancelDrop;}
+    if(searchDrag&&palette){lastDrop={slug:shown[selected]?.slug,time:performance.now()};if(committed)closeSearch();else{searchRenderKey='';renderResults();}}
   }
   function drawDrag(){
     dragFrame=0;if(!drag||!dropTarget)return;
@@ -370,7 +417,7 @@
     if(!settings.enabled||!event.dataTransfer||!multi)return;const slug=meta.slug,main=multi.getDropMain();
     if(!slug || !main)return;
     endDrag();drag={slug,row,measure:true,fromSearch};row.dataset.krDragging='true';
-    if(fromSearch){setTimeout(()=>{if(drag?.row===row&&drag.fromSearch){palette.dataset.dragging='true';if(searchBackdrop)searchBackdrop.style.display='none';}},0);}
+    if(fromSearch){palette.dataset.dragging='true';}
     event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('application/x-kick-refined-channel',slug);
     const href=`https://kick.com/${slug}`;event.dataTransfer.setData('text/uri-list',href);event.dataTransfer.setData('text/plain',href);
     const preview=multi.dropPreview(slug);if(!preview){endDrag();return;}drag.main=main;drag.allowed=preview.allowed;drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
@@ -387,15 +434,16 @@
     dropTarget.addEventListener('dragover',e=>{if(drag){e.preventDefault();e.dataTransfer.dropEffect=drag.allowed?'copy':'none';}});
     dropTarget.addEventListener('drop',e=>{
       if(!drag)return;e.preventDefault();e.stopPropagation();const dropped=drag.slug,allowed=drag.allowed;
-      lastDrop={slug:dropped,time:performance.now()};endDrag();
-      if(allowed)multi.drop(dropped,channelSlug(location.pathname,location.origin));
+      lastDrop={slug:dropped,time:performance.now()};endDrag({committed:allowed});
+      if(allowed)multi.drop(dropped,KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname,location.origin));
     });
   }
   function startClipDrag(event,item){
     if(!settings.enabled||!settings.chatClips||settings.textOnly||!(KickRefinedClips.parseClip(item.href)||KickRefinedClips.parseVOD(item.href)))return;
     const main=multi.getDropMain();if(!main)return;
-    endDrag();drag={main,kind:'clip',fromSearch:!!item.fromSearch,item,allowed:multi.canAddClip(item.id),measure:true,x:event?.clientX??item.x??0,y:event?.clientY??item.y??0};
-    if(item.fromSearch)setTimeout(()=>{if(drag?.item===item){palette.dataset.dragging='true';if(searchBackdrop)searchBackdrop.style.display='none';}},0);
+    endDrag();drag={main,kind:'clip',fromSearch:!!item.fromSearch,fromLibrary:!!item.fromLibrary,item,allowed:multi.canAddClip(item.id),measure:true,x:event?.clientX??item.x??0,y:event?.clientY??item.y??0};
+    if(item.fromLibrary){const library=document.getElementById('kr-channel-library');if(library){drag.library=library;drag.libraryStyle={position:library.style.position,zIndex:library.style.zIndex};library.style.position='relative';library.style.zIndex='501';}}
+    if(item.fromSearch){palette.dataset.dragging='true';}
     drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
     dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label','Drop clip into workspace');dropTarget.style.cssText='position:fixed;z-index:500;overflow:hidden;background:transparent !important;';
     const preview=document.createElement('div');preview.className='stream-drop-zone clip-drop-targets';preview.dataset.allowed=String(drag.allowed);drag.preview=preview;
@@ -408,7 +456,7 @@
     const chipRoot=shadowRoot(dragChip),chip=document.createElement('div');chip.className='drag-channel-chip';const words=document.createElement('div'),name=document.createElement('strong');name.textContent=item.title||'Kick clip';words.append(name);chip.append(words);chipRoot.append(chip);
     const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;chipRoot.append(canvas);canvas.style.cssText='position:absolute;width:1px;height:1px;opacity:0';document.body.append(dragChip);event?.dataTransfer?.setDragImage(canvas,0,0);drawDrag();
     dropTarget.addEventListener('dragover',e=>{e.preventDefault();if(drag)e.dataTransfer.dropEffect=drag.allowed?'copy':'none';});
-    dropTarget.addEventListener('drop',e=>{if(!drag||drag.kind!=='clip')return;e.preventDefault();e.stopPropagation();const mode=e.composedPath().find(node=>node.dataset?.placement)?.dataset.placement||'alongside',allowed=drag.allowed;endDrag();if(allowed){if(item.commit)item.commit(mode);else void multi.addClip(item,mode);}});
+    dropTarget.addEventListener('drop',e=>{if(!drag||drag.kind!=='clip')return;e.preventDefault();e.stopPropagation();const mode=e.composedPath().find(node=>node.dataset?.placement)?.dataset.placement||'alongside',allowed=drag.allowed;endDrag({committed:allowed});if(allowed){if(item.commit)item.commit(mode);else void multi.addClip(item,mode);}});
   }
   function checkRoute() {
     if (currentPath === location.pathname) return;
@@ -433,17 +481,19 @@
 
   function refresh() {
     refreshTimer = null;
+    globalThis.KickRefinedPerf?.count('page.refreshes');
     if (disposed || !document.body) return;
     root = document.documentElement;
     // A late Next/React document hydration can remove extension-owned attributes.
     if (root.dataset.krEnabled !== String(settings.enabled)) apply();
-    checkRoute(); mount(); placeToolbar(); mountSidebar(); updateSidebarRows(); markSearchFields();
+    checkRoute(); mount(); placeToolbar(); mountSidebar(); updateSidebarRows(); markSearchFields();searchWindow.refresh();
     support.refresh();
-    channelPanel.refresh();
+    channelPage.refresh(settings.enabled);channelPanel.refresh();
     multi.refresh();
     if (palette.open) { collectChannels(); renderResults(); }
   }
   function markSearchFields() {
+    nativeSearch?.refresh(settings.enabled);
     for (const input of document.querySelectorAll('input[data-testid="search"],nav input[type="search"],nav input[aria-label*="Search"]')) {
       let field = input.parentElement;
       for (let depth = 0; field && depth < 3; depth++, field = field.parentElement) {
@@ -462,16 +512,16 @@
 
   function dispose() {
     clearTimeout(searchTimer);searchService.destroy();
-    searchBackdrop?.remove();searchBackdrop=null;
+    searchWindow?.destroy();nativeSearch?.destroy();
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; api.storage.onChanged.removeListener?.(onSettingsChanged); abort.abort(); unsubscribeDOM(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
-    clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
+    clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
   }
   function handleShortcut(e) {
     if(e.key==='Escape' && drag) { e.preventDefault();endDrag();return; }
     const editable=e.composedPath().some(el=>el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)));
     if((e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&e.code==='KeyK') || (!editable&&(e.ctrlKey||e.metaKey)&&e.code==='KeyK'&&!e.altKey&&!e.shiftKey)) {
-      e.preventDefault();palette.open?palette.close():openPalette();
+      e.preventDefault();palette.open&&searchWindow.mode==='floating'?closeSearch():openPalette();
     }
   }
 
@@ -481,17 +531,19 @@
     if(palette.open){collectChannels();renderResults();}
   }
   async function init() {
-    try { settings = normalize((await api.storage.local.get('settings')).settings); } catch { /* Extension defaults also work if storage is temporarily unavailable. */ }
+    try { settings = normalize((await (globalThis.KickRefinedThemeSettings||api.storage.local.get('settings'))).settings); } catch { /* Extension defaults also work if storage is temporarily unavailable. */ }
     apply(); refresh();
     const sharedMulti = new URL(location.href).searchParams.get('refined-multi');
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);
       const params = new URL(location.href).searchParams;
-      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
+      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerModes:(()=>{try{return JSON.parse(params.get('immersion-players')||'{}');}catch{return {};}})(),playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
     unsubscribeDOM=KickRefinedDOM.subscribePage(scheduleRefresh);
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragover', trackDrag, { capture:true, signal:abort.signal });
+    document.addEventListener('dragover',event=>{if(drag?.fromLibrary&&event.composedPath().some(node=>node.id==='kr-channel-library')){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='none';}},{capture:true,signal:abort.signal});
+    document.addEventListener('drop',event=>{if(drag?.fromLibrary&&event.composedPath().some(node=>node.id==='kr-channel-library')){event.preventDefault();event.stopPropagation();endDrag();}},{capture:true,signal:abort.signal});
     document.addEventListener('dragend', endDrag, { capture:true, signal:abort.signal });
     window.addEventListener('scroll',resizeDrag,{capture:true,passive:true,signal:abort.signal});
     window.addEventListener('resize',resizeDrag,{passive:true,signal:abort.signal});
@@ -511,7 +563,7 @@
   }
   function idleInit() {
     // Avoid modifying the server-rendered tree during Kick's initial hydration.
-    if ('requestIdleCallback' in window) requestIdleCallback(init, { timeout: 1800 });
+    if ('requestIdleCallback' in window) requestIdleCallback(init, { timeout: 250 });
     else setTimeout(init, 100);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', idleInit, { once: true });

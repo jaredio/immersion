@@ -1,7 +1,7 @@
 /* Channel support discovery and a provider-owned form, loaded only on click. */
 (() => {
   const {parse,extract}=KickRefinedSupportData;
-  const dollar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 6.5C17 4.6 14.8 4 12 4S7 5.3 7 7.5 9.2 11 12 12s5 2.3 5 4.5-2.2 3.5-5 3.5-5-.6-5-2.5"/></svg>';
+  const dollar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
   const glyph=path=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
   function create({enabled=true}={}){
     const {api,channelSlug,channelDetails}=KickRefined;
@@ -23,6 +23,7 @@
       const job=(async()=>{
         try{
           const path=kind==='channel'?`/api/v2/channels/${channel}`:`/api/v1/channels/${channel}/links`;
+          globalThis.KickRefinedPerf?.count('network.channelRequests');
           const response=await fetch(location.origin+path,{credentials:'omit',signal:controller.signal});
           if(!response.ok)throw Error('Channel unavailable');
           const text=await response.text();if(text.length>2097152)throw Error('Channel response too large');

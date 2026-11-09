@@ -24,6 +24,17 @@ Bring several streams into one page, arrange the layout, and save your setup for
 
 Search for channels, clips, and recordings, then drag them into your viewing space. Kick's native players, chat, and channel controls stay part of the experience.
 
+Alt+K opens a floating search window. Move it by its title bar, resize it from the
+bottom corner, or use arrow keys while either handle is focused. Position and size
+stay with the tab; the reset button centers the window. Channels, Clips and VODs
+have visible filters alongside the advanced query syntax. Drag a result into the
+workspace, drop it back onto search to cancel, or press Shift+Enter to watch together. Returning a drag keeps the query and results open.
+
+Kick's native search bar opens this same panel beneath the bar, with the same
+channel, clip and VOD filters and actions. Alt+K moves it into the
+floating window without losing the query or results. Escape or clicking outside
+closes the attached panel. Disabling Immersion restores native search handling.
+
 ## Get started
 
 <details>
@@ -73,10 +84,17 @@ Source lives in `extension/`. Browser builds and installable ZIPs are written to
 
 The [upgrade roadmap](docs/upgrade-roadmap.md) describes the module boundaries,
 completed performance work and prioritized next improvements. Shared DOM
-subscription checks run with `npm run test:dom`.
+subscription checks run with `npm run test:dom`. The [performance batch](docs/performance-batch.md) covers diagnostics, repeatable benchmarks, per-pane player modes and total broadcast uptime.
 
 </details>
 
 ---
 
 <p align="center"><sub>An independent project. Not affiliated with or endorsed by Kick.</sub></p>
+
+Lifecycle modules, chat picker fixes and soak checks: [lifecycle batch](docs/lifecycle-batch.md).
+
+Channel Home, Videos, Clips, Schedule and About views share the dark channel theme.
+Native card links and action handlers stay in place; offscreen library cards can skip
+rendering. Channel identities consolidate duplicate native headers, and portrait
+avatars stay inside their circular frame.

@@ -173,12 +173,13 @@ try{
  await workspace.getByRole('button',{name:'Manage',exact:true}).click();
  await workspace.getByRole('combobox',{name:'Add channel to multiview'}).fill('another');
  await workspace.getByRole('button',{name:'Add stream',exact:true}).click();
- await page.locator('#kr-multi-chat-picker').getByRole('combobox',{name:'Chat channel'}).selectOption('another');
+ await page.locator('#kr-multi-chat-picker').getByRole('button',{name:'Chat channel',exact:true}).click();await page.locator('#kr-multi-chat-picker').locator('[role=option][data-channel=another]').click();
  let selectedFrame;
  for(let attempt=0;attempt<30&&!selectedFrame;attempt++){selectedFrame=page.frames().find(frame=>frame.url().includes('/popout/another/chat'));if(!selectedFrame)await page.waitForTimeout(50);}
  assert.ok(selectedFrame);await selectedFrame.waitForSelector('#clip-message');
- if(engine!=='chromium')for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await selectedFrame.addScriptTag({path:path.join(root,'extension',name)});
+ if(engine!=='chromium'){await selectedFrame.addStyleTag({path:path.join(root,'extension/theme.css')});for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await selectedFrame.addScriptTag({path:path.join(root,'extension',name)});}
  const framedCard=selectedFrame.locator('.kr-chat-clip');await framedCard.waitFor();
+ await selectedFrame.waitForSelector('[data-kr-workspace-chat-header]',{state:'attached'});assert.equal(await selectedFrame.locator('[data-kr-workspace-chat-title]').isVisible(),false,'embedded secondary chat hides only its duplicate title');
  await framedCard.getByRole('button',{name:'Play sweatergxd clip',exact:true}).click();
  await selectedFrame.waitForFunction(()=>document.querySelector('.kr-chat-clip').shadowRoot.querySelector('video')?.readyState>=2);
  await framedCard.locator('video').evaluate(video=>{video.pause();video.currentTime=1.5;});
@@ -259,7 +260,7 @@ try{
  popPage.on('pageerror',error=>errors.push(error.message));
  await popPage.goto('https://kick.com/popout/sweatergxd/chat');
  if(engine!=='chromium')for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await popPage.addScriptTag({path:path.join(root,'extension',name)});
- const popCard=popPage.locator('.kr-chat-clip');await popCard.waitFor();
+ const popCard=popPage.locator('.kr-chat-clip');await popCard.waitFor();assert.equal(await popPage.locator('[data-kr-workspace-chat-header]').count(),0,'standalone popout chat keeps its heading');
  assert.equal(await popPage.locator('#kr-root').count(),0,'popout chat has clip cards without a second toolbar');
  await popCard.getByRole('button',{name:'Play sweatergxd clip',exact:true}).click();
  await popPage.waitForFunction(()=>document.querySelector('.kr-chat-clip').shadowRoot.querySelector('video')?.readyState>=2);

@@ -1,7 +1,7 @@
 /* Public Kick search with bounded requests, explicit query syntax and no API keys. */
 (() => {
   const slug=value=>typeof value==='string'&&/^[a-z0-9_]{1,40}$/i.test(value)?value.toLowerCase():'';
-  function parse(input=''){
+  function parse(input='',{allowUnscoped=false}={}){
     if(typeof input!=='string'||input.length>512)throw Error('Keep the query under 512 characters.');
     input=input.trim();if(/^https:\/\/(?:www\.)?kick\.com\/[\w]+\/?$/i.test(input))input=new URL(input).pathname.slice(1).replace(/\/$/,'');
     const tokens=[];let token='',quoted=false,escape=false,literal=false;
@@ -25,9 +25,23 @@
       else if(['views','duration'].includes(key)){const limit=/^(>=|<=|>|<|=)?(\d{1,10})$/.exec(value);if(!limit)throw Error(`Use ${key}:>100 or ${key}:<100.`);q[key]={op:limit[1]||'>=',value:Number(limit[2])};}
       else throw Error(`Unknown filter: ${key}:. Open ? for supported filters.`);
     }
-    if(q.type!=='channels'&&!q.channels.length)throw Error(`Choose a channel, for example ${q.type}:cobbruvs.`);
+    if(q.type!=='channels'&&!q.channels.length&&!allowUnscoped)throw Error(`Choose a channel, for example ${q.type}:cobbruvs.`);
     if(q.type==='channels'&&(q.creator||q.duration||q.after!==null||q.before!==null||q.time!=='all'))throw Error('Date, duration and creator filters need clips:channel or vods:channel.');
     if(q.type!=='channels'&&q.live!==null)throw Error('live: filters channel results.');if(q.type!=='clips'&&q.creator)throw Error('creator: filters clips.');if(q.after!==null&&q.before!==null&&q.after>q.before)throw Error('after: must come before before:.');return q;
+  }
+  function serialize(q){
+    const quote=value=>'"'+value.replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"';
+    const tokens=q.terms.map(quote).concat(q.exclude.map(value=>quote('-'+value)));
+    if(q.type!=='channels')tokens.unshift(q.channels.length?`${q.type}:${q.channels.join(',')}`:`type:${q.type}`);else if(q.channels.length)tokens.unshift(`channel:${q.channels.join(',')}`);
+    if(q.live!==null)tokens.push(`live:${q.live}`);if(q.sort==='views')tokens.push('sort:views');if(q.time!=='all')tokens.push(`time:${q.time}`);
+    for(const key of ['category','creator'])if(q[key])tokens.push(`${key}:${quote(q[key])}`);
+    for(const key of ['after','before'])if(q[key]!==null)tokens.push(`${key}:${new Date(q[key]).toISOString().slice(0,10)}`);
+    for(const key of ['views','duration'])if(q[key])tokens.push(`${key}:${q[key].op}${q[key].value}`);
+    return tokens.join(' ');
+  }
+  function rank(rows,q,pinned=[]){
+    const term=q.terms.join(' ').toLowerCase(),score=row=>(term&&row.slug===term?1000:term&&row.slug.startsWith(term)?500:0)+(pinned.includes(row.slug)?100:0)+(row.live==='live'?10:0);
+    return rows.map((row,index)=>({row,index})).sort((a,b)=>q.sort==='views'?(b.row.views??-1)-(a.row.views??-1)||a.index-b.index:score(b.row)-score(a.row)||a.index-b.index).map(item=>item.row);
   }
   const count=value=>{if(typeof value==='string'&&/^\d{1,15}$/.test(value))value=Number(value);return Number.isSafeInteger(value)&&value>=0?value:null;};
   const text=(value,max=500)=>typeof value==='string'?value.replace(/\s+/g,' ').trim().slice(0,max):'';
@@ -74,7 +88,7 @@
     const cache=new Map();let active=null,state=null,disposed=false;
     function cancel(){active?.abort();active=null;}
     async function read(path,signal,html=false){const hit=cache.get(path);if(hit?.until>Date.now())return hit.data;const controller=new AbortController(),stop=()=>controller.abort();signal.addEventListener('abort',stop,{once:true});if(signal.aborted)controller.abort();const timer=setTimeout(stop,8000);
-      try{const response=await fetch(location.origin+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw Error('Kick search is unavailable. Try again.');const body=await response.text();if(body.length>2097152)throw Error('Search response is too large.');let data;if(html)data=catalog(body,html);else try{data=JSON.parse(body);}catch{throw Error('Kick search is unavailable. Try again.');}cache.delete(path);cache.set(path,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);return data;}finally{clearTimeout(timer);signal.removeEventListener('abort',stop);}}
+      try{globalThis.KickRefinedPerf?.count('network.searchRequests');const response=await fetch(location.origin+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw Error('Kick search is unavailable. Try again.');const body=await response.text();if(body.length>2097152)throw Error('Search response is too large.');let data;if(html)data=catalog(body,html);else try{data=JSON.parse(body);}catch{throw Error('Kick search is unavailable. Try again.');}cache.delete(path);cache.set(path,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);return data;}finally{clearTimeout(timer);signal.removeEventListener('abort',stop);}}
     async function search(q,{append=false}={}){
       if(disposed)throw Error('Search closed.');cancel();const controller=new AbortController();active=controller;const key=JSON.stringify(q);
       if(!append||state?.key!==key)state={key,rows:new Map(),progress:q.channels.map(channel=>({channel,cursor:'',pages:0,loaded:0,done:false}))};const current=state;
@@ -96,5 +110,5 @@
     }
     return {search,cancel,destroy(){disposed=true;cancel();cache.clear();state=null;}};
   }
-  globalThis.KickRefinedSearch=Object.freeze({parse,normalize,fits,image,catalog,duration,create});
+  globalThis.KickRefinedSearch=Object.freeze({parse,serialize,rank,normalize,fits,image,catalog,duration,create});
 })();

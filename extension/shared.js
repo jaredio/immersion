@@ -4,6 +4,7 @@
     enabled: true,
     performance: true,
     blockTelemetry: true,
+    diagnostics: false,
     compact: false,
     hideRecommended: false,
     textOnly: false,
@@ -18,7 +19,7 @@
   function normalize(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const result = { ...defaults };
-    for (const key of ['enabled', 'performance', 'blockTelemetry', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds', 'mediaEmbeds']) {
+    for (const key of ['enabled', 'performance', 'blockTelemetry', 'diagnostics', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds', 'mediaEmbeds']) {
       if (typeof source[key] === 'boolean') result[key] = source[key];
     }
     for (const [key, min, max] of [['chatWidth', 280, 440], ['fontSize', 12, 18]]) {
@@ -58,7 +59,8 @@
     const source = input && typeof input === 'object' ? input : {};
     const channels = Array.isArray(source.channels) ? [...new Set(source.channels.filter(s => typeof s === 'string').map(s => channelSlug(`/${s}`)).filter(Boolean))].slice(0, 6) : [];
     const sizes={};for(const slug of channels)if(Number.isFinite(source.sizes?.[slug]))sizes[slug]=Math.max(2,Math.min(6,Math.round(source.sizes[slug])));
-    return { channels, sizes, playerMode:source.playerMode==='embed'?'embed':'full',mixAudio:source.mixAudio===true, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 74 };
+    const playerModes=Object.create(null);for(const slug of channels)if(['full','embed'].includes(source.playerModes?.[slug]))playerModes[slug]=source.playerModes[slug];
+    return { channels, sizes, playerModes, playerMode:source.playerMode==='embed'?'embed':'full',mixAudio:source.mixAudio===true, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 74 };
   }
   function multiURL(input) {
     const state = multiState(input), url = new URL('https://kick.com/');
@@ -66,6 +68,7 @@
     url.searchParams.set('refined-chat', state.chat); url.searchParams.set('refined-focus', state.focus);
     url.searchParams.set('immersion-size',state.focusSize);
     url.searchParams.set('immersion-player',state.playerMode);
+    if(Object.keys(state.playerModes).length)url.searchParams.set('immersion-players',JSON.stringify(state.playerModes));
     if(state.mixAudio)url.searchParams.set('immersion-mix','1');
     if(Object.keys(state.sizes).length)url.searchParams.set('immersion-tiles',JSON.stringify(state.sizes));
     if (!state.chatVisible) url.searchParams.set('refined-hide-chat', '1');
@@ -84,7 +87,8 @@
       }catch{}
     }
     let image='';try{const url=new URL(user.profile_pic);if(url.protocol==='https:'&&url.hostname.endsWith('.kick.com'))image=url.href;}catch{}
-    return {title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:typeof user.bio==='string'?user.bio.trim().slice(0,20000):'',category:text(category),language:text(stream?.language).slice(0,30),mature:stream?.is_mature===true,verified:data.verified===true||!!data.verified&&typeof data.verified==='object',live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',image,socials};
+    const clock=globalThis.KickRefinedStreamClock,startedAt=stream&&stream.is_live!==false?(clock?.parse(stream.start_time)??clock?.parse(stream.started_at)??clock?.parse(stream.created_at)??null):null;
+    return {startedAt,title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:typeof user.bio==='string'?user.bio.trim().slice(0,20000):'',category:text(category),language:text(stream?.language).slice(0,30),mature:stream?.is_mature===true,verified:data.verified===true||!!data.verified&&typeof data.verified==='object',live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',image,socials};
   }
   globalThis.KickRefined = Object.freeze({ defaults, normalize, channelSlug, api, chatEmbedCSS, chatEmbedMessage, multiState, multiURL, channelDetails });
 })();

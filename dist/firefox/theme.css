@@ -132,6 +132,7 @@ html[data-kr-enabled="true"] #sidebar-wrapper [data-kr-pinned="true"]::after {
 }
 html[data-kr-enabled="true"] [data-kr-filtered="true"],
 html[data-kr-enabled="true"][data-kr-hide-recommended="true"] [data-kr-section="recommended"] { display: none !important; }
+html[data-kr-workspace-chat="true"] [data-kr-workspace-chat-title] { visibility:hidden!important; }
 html[data-kr-enabled="true"] #channel-chatroom {
   background: var(--kr-panel) !important;
   border-left: 1px solid var(--kr-border);

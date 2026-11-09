@@ -2,7 +2,7 @@
 (() => {
   const {channelSlug}=KickRefined;
     function findContext() {
-      const slug=channelSlug(location.pathname,location.origin);
+      const slug=globalThis.KickRefinedChannelPage?.routeSlug()||channelSlug(location.pathname,location.origin);
       const anchor=slug && [...document.querySelectorAll('#video-player,#injected-channel-player')].find(el=>el.closest('main') && el.getBoundingClientRect().width>0);
       const main=anchor?.closest('main') || [...document.querySelectorAll('main')].find(el=>el.getBoundingClientRect().width>0);
       if(!main) return null;
@@ -14,7 +14,7 @@
         let common=main.parentElement; while(common && !common.contains(chat)) common=common.parentElement;
         if(common) while(branch.parentElement!==common) branch=branch.parentElement;
       }
-      return {slug,main,player,chat,branch};
+      return {slug,path:location.pathname,main,player,chat,branch};
     }
 
   function createStyles() {
@@ -47,7 +47,7 @@
     return {
       schedule(){
         if(disposed||!isActive()||frame)return;
-        frame=requestAnimationFrame(()=>{frame=0;if(!disposed&&isActive())run();});
+        frame=requestAnimationFrame(()=>{frame=0;if(!disposed&&isActive()){const start=globalThis.KickRefinedPerf?.enabled?performance.now():null;try{run();}finally{if(start!==null)globalThis.KickRefinedPerf.sample('layout.ms',performance.now()-start);}}});
       },
       cancel,
       destroy(){disposed=true;cancel();}

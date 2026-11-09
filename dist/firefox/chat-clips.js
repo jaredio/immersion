@@ -56,6 +56,7 @@
       .float .workspace-focus-surface{display:none}
       .info{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 10px}.info>.title{grid-column:1/-1}.words{min-width:0}.words .channel,.words .credit{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.actions{grid-column:2;grid-row:2;align-self:center;gap:2px}.actions button,.actions a{width:24px;height:24px;padding:4px;border-radius:6px}.actions svg{width:14px;height:14px}:host([data-workspace]) .card{width:100%}:host([data-workspace]) .info>.title{display:none}:host([data-workspace]) .info{grid-template-columns:1fr}:host([data-workspace]) .actions{grid-column:1;grid-row:auto;justify-self:end}
     `;
+    const byRow=new WeakMap();
     function shadow(host){const root=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css+KickRefined.chatEmbedCSS;root.append(style);return root;}
     function button(label,symbol,action){const el=document.createElement('button');el.type='button';el.title=label;el.setAttribute('aria-label',label);el.innerHTML=icon(symbol);el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();action(el);});return el;}
     function status(record,text=''){record.status.textContent=text;}
@@ -173,7 +174,7 @@
       for(const anchor of record.links)anchor.removeAttribute('data-kr-clip-link');
       record.native?.removeAttribute('data-kr-clip-native');record.placeholder?.remove();
       if(record.workspace)return;
-      records.delete(record);
+      records.delete(record);byRow.get(record.row)?.delete(record.clip.id);
       record.host.remove();
       if(floating?.record===record){floating.back.disabled=true;return;}
       reset(record);
@@ -202,7 +203,7 @@
       // Match X cards at the virtual row level, outside Kick's padded message body.
       row.append(host);
       record.releaseMessage=KickRefined.chatEmbedMessage(row);
-      records.add(record);
+      records.add(record);if(!byRow.has(record.row))byRow.set(record.row,new Map());byRow.get(record.row).set(record.clip.id,record);
       visibility?.observe(host);
       return record;
     }
@@ -234,7 +235,7 @@
           else {record.resume=record.resume||before;void play(record);}
         },
         setMuted(value){record.workspaceMuted=value;if(record.video&&record.video.muted!==value)record.video.muted=value;},
-        release(){if(floating?.record===record)closeFloating();record.workspace=null;record.suppressClick=0;reset(record);delete record.host.dataset.workspace;record.placeholder?.remove();if(record.row.isConnected&&record.row.contains(record.anchor)&&parseClip(record.anchor.href)?.id===record.clip.id){record.row.append(record.host);}else{record.releaseMessage?.();record.releaseMessage=null;record.host.remove();records.delete(record);}},
+        release(){if(floating?.record===record)closeFloating();record.workspace=null;record.suppressClick=0;reset(record);delete record.host.dataset.workspace;record.placeholder?.remove();if(record.row.isConnected&&record.row.contains(record.anchor)&&parseClip(record.anchor.href)?.id===record.clip.id){record.row.append(record.host);}else{record.releaseMessage?.();record.releaseMessage=null;record.host.remove();records.delete(record);byRow.get(record.row)?.delete(record.clip.id);}},
       };
     }
     function importItem(state){
@@ -247,26 +248,26 @@
       for(const record of records)if(!record.workspace&&!record.imported&&(!record.row.isConnected||!record.host.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))release(record);
       for(const record of records)if(record.workspace&&(!record.row.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))record.placeholder?.remove();
       for(const record of records)for(const anchor of record.links)if(!record.row.contains(anchor)||parseClip(anchor.href)?.id!==record.clip.id){anchor.removeAttribute('data-kr-clip-link');record.links.delete(anchor);}
-      for(const row of dirty){
+      for(const row of KickRefinedDOM.drainRows(dirty)){
         if(!row.isConnected||!list?.contains(row))continue;
         const seen=new Set();
-        for(const anchor of row.querySelectorAll('a[href]')){
+        for(const anchor of KickRefinedDOM.links(row)){
           const clip=parseClip(anchor.href);if(!clip)continue;
-          const existing=[...records].find(record=>record.row===row&&record.clip.id===clip.id);
+          const existing=byRow.get(row)?.get(clip.id);
           if(existing){hideLink(existing,anchor);seen.add(clip.id);if(!existing.native?.isConnected){const native=[...row.querySelectorAll('button')].find(el=>[...el.querySelectorAll('img')].some(img=>mediaURL(img.src,clip.id)));if(native){existing.native=native;if(!existing.credit.textContent)setCredit(existing,nativeCredit(native));}}existing.native?.setAttribute('data-kr-clip-native','');continue;}
           if(seen.has(clip.id)||seen.size>=2)continue;seen.add(clip.id);
           if(records.size<80)add(row,anchor,clip);
         }
       }
-      dirty.clear();
+      if(dirty.size)schedule(0);
     }
-    function schedule(){if(!timer&&!disposed&&enabled)timer=setTimeout(flush,50);}
+    function schedule(delay=50){if(!timer&&!disposed&&enabled)timer=setTimeout(flush,delay);}
     function queue(node,descendants=true){
       if(node.nodeType!==1)return;
       const row=node.closest('[data-index]');if(row)dirty.add(row);
       if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);
     }
-    const subscription=KickRefinedDOM.subscribeChat({onContainer:refresh,onMutations:changes=>{for(const change of changes){queue(change.target,false);for(const node of change.addedNodes)queue(node);}schedule();},attributes:['href','src','data-index']});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:refresh,onMutations:(changes,{rows})=>{for(const row of rows)dirty.add(row);schedule();},attributes:['href','src','data-index']});
     function refresh(){
       if(disposed)return;
       const next=enabled?KickRefinedDOM.chat:null;

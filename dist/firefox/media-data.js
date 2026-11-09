@@ -59,7 +59,7 @@
   }
   function player(item){
     if(item.kind!=='video')return '';
-    if(item.provider==='youtube'){const url=new URL(`https://www.youtube-nocookie.com/embed/${item.id}`);url.search='autoplay=1&playsinline=1&rel=0';if(item.start)url.searchParams.set('start',String(item.start));return url.href;}
+    if(item.provider==='youtube'){const url=new URL(`https://www.youtube-nocookie.com/embed/${item.id}`);url.search='autoplay=1&playsinline=1&rel=0&controls=1&fs=1';if(item.start)url.searchParams.set('start',String(item.start));return url.href;}
     if(item.provider==='tiktok')return `https://www.tiktok.com/player/v1/${item.id}?autoplay=1&controls=1&description=0&music_info=0`;
     return '';
   }

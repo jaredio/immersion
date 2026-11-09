@@ -24,7 +24,7 @@
       if (!pending) return writes;
       const next = pending;
       pending = null;
-      writes = writes.then(() => storage.set(next)).catch(onError);
+      writes = writes.then(() => {globalThis.KickRefinedPerf?.count('storage.writes');return storage.set(next);}).catch(onError);
       return writes;
     }
 
