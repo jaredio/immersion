@@ -108,7 +108,19 @@
       const rows=[...current.rows.values()].filter(row=>fits(row,q)).sort((a,b)=>q.sort==='views'?(b.views??-1)-(a.views??-1):b.created-a.created);
       return {rows,loaded:current.rows.size,more:current.progress.some(item=>!item.done&&item.pages<10&&item.loaded<200),warning:failures?'Some channels could not be loaded.':''};
     }
-    return {search,cancel,destroy(){disposed=true;cancel();cache.clear();state=null;}};
+    async function recordings(channel){
+      if(disposed||!slug(channel))throw Error('Recordings unavailable.');
+      cancel();const controller=new AbortController();active=controller;
+      const list=await read(`/api/v2/channels/${channel}/videos`,controller.signal);
+      if(!Array.isArray(list))throw Error('Recordings unavailable.');
+      return list.slice(0,300).flatMap(item=>{
+        const video=item?.video,id=video?.uuid;
+        if(!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id||'')||item.is_live||video.is_private||video.deleted_at||video.is_pruned||video.status&&video.status!=='public')return [];
+        const milliseconds=count(item.duration);
+        return [{type:'vod',href:`https://kick.com/${channel}/videos/${id}`,title:text(item.session_title)||'Untitled recording',image:image(item.thumbnail?.src),category:text(item.categories?.[0]?.name,100),views:count(item.views??video.views),duration:milliseconds===null?null:Math.floor(milliseconds/1000),created:Date.parse(video.created_at)||0}];
+      });
+    }
+    return {search,recordings,cancel,destroy(){disposed=true;cancel();cache.clear();state=null;}};
   }
   globalThis.KickRefinedSearch=Object.freeze({parse,serialize,rank,normalize,fits,image,catalog,duration,create});
 })();

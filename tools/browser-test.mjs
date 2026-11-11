@@ -198,7 +198,50 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     });
     assert.equal(searchGeometry.fits, true, 'Escape hint has its own space beside the focus highlight');
     assert.equal(searchGeometry.outline, 'none');
-    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] img').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+    const liveAvatar=page.locator('[data-testid="sidebar-following-channel-1"] img');
+    assert.equal(await liveAvatar.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+    assert.equal(await page.locator('[data-testid="sidebar-following-channel-2"] img').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+    await page.evaluate(()=>{
+      const sidebar=document.getElementById('sidebar-wrapper');
+      const row=sidebar.querySelector('[data-testid="sidebar-following-channel-1"]');
+      row.querySelector('.count').innerHTML='<span class="bg-brand-bg-default" style="display:inline-block;width:8px;height:8px"></span><span>2.4K</span>';
+      const dot=document.createElement('span');dot.className='fixture-extra-dot bg-brand-bg-default';dot.style.cssText='display:inline-block;width:6px;height:6px';row.prepend(dot);
+    });
+    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] .fixture-extra-dot').isVisible(),false);
+    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] .count .bg-brand-bg-default').isVisible(),true);
+    assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"] .count').isVisible(),true);
+    await page.evaluate(()=>{
+      const sidebar=document.getElementById('sidebar-wrapper');
+      sidebar.classList.add('w-(--sidebar-collapsed-width)');sidebar.style.width='68px';
+      for(const node of sidebar.querySelectorAll('.info,.count'))node.style.display='none';
+    });
+    const collapsedRow=page.locator('[data-testid="sidebar-following-channel-1"]');
+    await collapsedRow.hover();
+    assert.equal(await collapsedRow.evaluate(row=>{
+      const outer=row.getBoundingClientRect(),image=row.querySelector('img').getBoundingClientRect(),rail=row.closest('#sidebar-wrapper').getBoundingClientRect();
+      return Math.abs(outer.width-outer.height)<1&&Math.abs(outer.x+outer.width/2-image.x-image.width/2)<1&&Math.abs(outer.x+outer.width/2-rail.x-rail.width/2)<1;
+    }),true,'collapsed hover tile is square and centered on both the avatar and the rail');
+    await page.evaluate(()=>{
+      const sidebar=document.getElementById('sidebar-wrapper');
+      sidebar.classList.remove('w-(--sidebar-collapsed-width)');sidebar.style.removeProperty('width');
+      for(const node of sidebar.querySelectorAll('.info,.count'))node.style.removeProperty('display');
+    });
+    await page.evaluate(()=>{
+      const preview=document.createElement('div');preview.id='fixture-watch-preview';
+      preview.className='z-popover lg:w-[370px] lg:h-[264px]';
+      preview.style.cssText='position:absolute;z-index:10;display:flex;flex-direction:column;align-items:start;width:370px;height:264px;padding:20px';
+      preview.innerHTML='<div><span>LIVE</span></div><div style="display:flex"><span>Fixture stream preview</span><button aria-label="Mute">Audio</button></div><div>152 watching</div><button style="width:100%">Watch now</button>';
+      preview.addEventListener('click',event=>{preview.dataset.action=event.target.textContent;});
+      document.querySelector('main').append(preview);
+    });
+    const preview=page.locator('#fixture-watch-preview');
+    const previewBox=await preview.boundingBox();
+    assert.ok(previewBox.width<=276&&previewBox.height<190,'the Watch now overlay fits a compact player card');
+    await preview.getByRole('button',{name:'Mute',exact:true}).click();
+    assert.equal(await preview.getAttribute('data-action'),'Audio');
+    await preview.getByRole('button',{name:'Watch now',exact:true}).click();
+    assert.equal(await preview.getAttribute('data-action'),'Watch now');
+    await preview.evaluate(node=>node.remove());
     assert.equal(await page.locator('[data-testid="sidebar-following-channel-1"]').evaluate(el => getComputedStyle(el).boxShadow), 'none');
     await search.fill('night');
     assert.equal(await palette.locator('#channel-results').getByRole('option').count(), 1);
@@ -335,7 +378,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(page.frames().some(f=>f.url().startsWith('https://player.kick.com/nightshift')),false);
     await auroraPlayer.evaluate(() => { window.playerSentinel = 71; });
     await auroraPlayer.evaluate(()=>{const bar=document.createElement('div');bar.className='z-controls bottom-0';bar.innerHTML='<button aria-label="Quality" aria-haspopup="menu" aria-controls="test-frame-quality">Quality</button>';bar.querySelector('button').onclick=()=>{const menu=document.createElement('div');menu.setAttribute('data-radix-popper-content-wrapper','');menu.style.cssText='position:fixed;right:30px;top:100px;z-index:2147483647;background:#24242c;padding:12px';menu.innerHTML='<div role="menu" id="test-frame-quality"><button>720p</button></div>';menu.querySelector('button').onclick=()=>{window.frameQualitySelected=true;menu.remove();};document.body.append(menu);};document.body.append(bar);});
-    await auroraPlayer.locator('.z-controls').getByRole('button',{name:'Quality',exact:true}).click();
+    await auroraPlayer.locator('[data-kr-unified-row]').getByRole('button',{name:'Quality',exact:true}).click();
     await auroraPlayer.locator('#test-frame-quality').getByRole('button',{name:'720p',exact:true}).click();
     assert.equal(await auroraPlayer.evaluate(()=>window.frameQualitySelected),true,'embedded player settings stay native too');
     const frameOrder=await auroraPlayer.locator('[data-kr-unified-row]').evaluate(row=>[...row.querySelectorAll('button')].map(button=>button.dataset.krAction));

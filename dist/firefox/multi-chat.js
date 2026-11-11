@@ -5,7 +5,7 @@
     function chatMount() {
       const context=getContext();
       if(!context.chat) return $('.multi-chat-mount');
-      if(!chatOverlay){chatOverlay=document.createElement('div');chatOverlay.id='kr-multi-chat';chatOverlay.style.cssText='position:absolute;inset:0;z-index:5;background:#0e0e11';if(getComputedStyle(context.chat.parentElement).position==='static')style(context.chat.parentElement,'position','relative');context.chat.parentElement.append(chatOverlay);}
+      if(!chatOverlay){chatOverlay=document.createElement('div');chatOverlay.id='kr-multi-chat';chatOverlay.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;background:#0e0e11';if(getComputedStyle(context.chat.parentElement).position==='static')style(context.chat.parentElement,'position','relative');context.chat.parentElement.append(chatOverlay);}
       return chatOverlay;
     }
     function syncChatPicker(){
@@ -14,8 +14,8 @@
       if(!chatPicker?.isConnected){
         pickerScope?.dispose();pickerScope=scope.child();chatPicker?.remove();chatPicker=chatPickerRoot=chatHeader=null;
         const label=[...context.chat.querySelectorAll('h2,h3,span,div')].find(node=>!node.children.length&&/^(?:stream )?chat$/i.test(node.textContent.trim())&&!node.closest('button,#chatroom-messages'));
-        chatHeader=context.chat.querySelector('header')||(label?.parentElement===context.chat?label:label?.parentElement);
-        if(!chatHeader)return;
+        chatHeader=context.chat.querySelector('[data-testid="chatroom-header"],header')||(label?.parentElement===context.chat?label:label?.parentElement);
+        if(!chatHeader||chatHeader.contains(context.chat.querySelector('#chatroom-messages'))||chatHeader.querySelector('textarea,[contenteditable="true"]')){chatHeader=null;return;}
         if(label&&label!==chatHeader)style(label,'visibility','hidden');
         if(getComputedStyle(chatHeader).position==='static')style(chatHeader,'position','relative');
         style(chatHeader,'z-index','6');
@@ -48,9 +48,11 @@
         for(const slug of channels){let option=existing.get(slug);if(!option){option=document.createElement('button');option.type='button';option.className='option';option.setAttribute('role','option');option.tabIndex=-1;option.dataset.channel=slug;const image=document.createElement('img');image.className='avatar';image.alt='';const name=document.createElement('span');name.className='name';option.append(image,name);}updateIdentity(option,catalog.get(slug),slug);options.append(option);existing.delete(slug);}
         for(const option of existing.values())option.remove();
       }
-      for(const option of options.children)option.setAttribute('aria-selected',String(option.dataset.channel===selectedChat()));
+      for(const option of options.children){const selected=String(option.dataset.channel===selectedChat());if(option.getAttribute('aria-selected')!==selected)option.setAttribute('aria-selected',selected);}
       updateIdentity(trigger,catalog.get(selectedChat()),selectedChat());
-      panel.dataset.chatPicker='native';style(chatHeader,'visibility',getState().chatVisible&&selectedChat()===context.slug?'visible':'hidden');
+      panel.dataset.chatPicker='native';
+      chatPicker.style.visibility=getState().chatVisible?'visible':'hidden';
+      style(chatHeader,'visibility',getState().chatVisible&&selectedChat()===context.slug?'visible':'hidden');
     }
     function updateIdentity(node,meta,slug){const image=node.querySelector('img'),name=node.querySelector('.name');const title=meta?.title||slug;if(name.textContent!==title)name.textContent=title;image.hidden=!meta?.image;if(meta?.image&&image.getAttribute('src')!==meta.image)image.src=meta.image;}
     function render() {
@@ -67,7 +69,7 @@
         style(context.chat,'visibility',state.chatVisible&&original?'visible':'hidden');if(chatHeader)style(chatHeader,'visibility',state.chatVisible&&original?'visible':'hidden');
       }
       const needsFrame=state.chatVisible&&chat&&!(useNative&&original);
-      const url=chat?`https://kick.com/popout/${encodeURIComponent(chat)}/chat`:'https://kick.com';$('#multi-chat-external').href=url;
+      const url=chat?`${location.origin}/popout/${encodeURIComponent(chat)}/chat`:location.origin;$('#multi-chat-external').href=url;
       if(needsFrame){if(!chatFrame){chatFrame=document.createElement('iframe');chatFrame.name='kick-refined-chat';chatFrame.title='Selected stream chat';chatFrame.style.cssText='width:100%;height:100%;border:0;display:block';chatMount().append(chatFrame);}if(chatFrame.getAttribute('src')!==url)chatFrame.src=url;if(chatOverlay)chatOverlay.hidden=false;}
       else {chatFrame?.remove();chatFrame=null;if(chatOverlay)chatOverlay.hidden=true;}
       $('#multi-chat-toggle').setAttribute('aria-pressed',String(state.chatVisible));$('#multi-chat-toggle').setAttribute('aria-label',state.chatVisible?'Hide chat':'Show chat');decorate($('#multi-chat-toggle'),'chat',state.chatVisible?'Hide chat':'Show chat',true);
@@ -76,7 +78,7 @@
 
     function reset(){pickerScope?.dispose();pickerScope=null;chatPicker?.remove();chatFrame?.remove();chatOverlay?.remove();chatFrame=chatOverlay=chatPicker=chatPickerRoot=chatHeader=null;delete panel.dataset.chatPicker;}
     scope.defer(reset);
-    return {render,reset,syncPicker:syncChatPicker,get overlay(){return chatOverlay;},get header(){return chatHeader;},get pickerConnected(){return !!chatPicker?.isConnected;},isSource:source=>!!chatFrame&&chatFrame.contentWindow===source,frameRect:()=>chatFrame?.getBoundingClientRect()};
+    return {render,reset,syncPicker:syncChatPicker,get overlay(){return chatOverlay;},get pickerConnected(){return !!chatPicker?.isConnected;},isSource:source=>!!chatFrame&&chatFrame.contentWindow===source,frameRect:()=>chatFrame?.getBoundingClientRect()};
   }
   globalThis.KickRefinedMultiChat=Object.freeze({create});
 })();

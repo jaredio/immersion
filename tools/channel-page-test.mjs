@@ -13,6 +13,10 @@ try{
  await page.route('https://kick.com/**',route=>route.request().url().endsWith('/ui.css')?route.fulfill({path:'extension/ui.css'}):route.fulfill({contentType:'text/html',body:fixture}));
  await page.route('https://files.kick.com/**',route=>route.fulfill({contentType:'image/svg+xml',body:route.request().url().includes('tall')?'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="400"><rect width="20" height="400" fill="white"/></svg>':'<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#263a32"/><text x="40" y="140" fill="#b0ff8c" font-size="32">Stream recording</text></svg>'}));
  await page.goto('https://kick.com/nickwhite');
+ await page.evaluate(()=>{
+  const tabs=document.querySelector('.native-tabs'),sticky=document.createElement('div');
+  sticky.id='native-sticky-tabs';sticky.style.position='sticky';sticky.style.top='0';tabs.before(sticky);sticky.append(tabs);
+ });
  for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});
  await page.evaluate(()=>window.chrome={runtime:{getURL:file=>`https://kick.com/${file}`}});
  await page.addScriptTag({path:'extension/scroll.js'});
@@ -38,12 +42,28 @@ try{
  await page.setViewportSize({width:1360,height:1000});
 
  const library=page.locator('#kr-channel-library');await library.getByRole('heading',{name:'Library',exact:true}).waitFor();assert.equal(await library.locator('.card').count(),4,'overview shows one recording and three highlights');assert.equal(await page.locator('.native-tabs').isVisible(),false);assert.equal(await page.locator('main article').first().isVisible(),false);
+ assert.equal(await page.locator('#native-sticky-tabs #kr-channel-library').count(),0,'the library scrolls outside Kick’s sticky tab strip');
  await mkdir('artifacts',{recursive:true});await page.screenshot({path:`artifacts/channel-overview-${engine}.png`,fullPage:true});
  await library.getByRole('link',{name:'Videos',exact:true}).click();assert.equal(new URL(page.url()).pathname,'/nickwhite/videos');assert.equal(await library.locator('.items .card').count(),12);
  await page.evaluate(()=>{window.leakedLibraryKeys=0;window.addEventListener('keydown',()=>leakedLibraryKeys++,{capture:true});});await library.getByRole('searchbox',{name:'Find a video',exact:true}).pressSequentially('tmTM');assert.equal(await library.getByRole('searchbox',{name:'Find a video',exact:true}).inputValue(),'tmTM');assert.equal(await page.evaluate(()=>leakedLibraryKeys),0,'library typing does not trigger native player shortcuts');await library.getByRole('searchbox',{name:'Find a video',exact:true}).fill('');
  await library.getByRole('searchbox',{name:'Find a video',exact:true}).fill('Con! 11');assert.equal(await library.locator('.items .card').count(),1);await library.getByRole('searchbox',{name:'Find a video',exact:true}).fill('');
  await library.getByRole('combobox',{name:'Video length',exact:true}).selectOption('short');assert.equal(await library.getByText('No videos match these filters.',{exact:true}).count(),1);await library.getByRole('combobox',{name:'Video length',exact:true}).selectOption('all');
  await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('views');assert.match(await library.locator('.items .title').first().textContent(),/11$/);
+ await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('title');
+ assert.deepEqual(await library.locator('.items .title').allTextContents(),Array.from({length:12},(_,index)=>`Houston TX Collect A Con! ${index}`));
+ await page.evaluate(()=>{
+  const card=document.querySelectorAll('[data-testid="vods-card"]')[4];
+  card.querySelector('.native-info p').innerHTML='<span>13 hours ago</span>';
+  card.querySelector('.native-info p span').title=new Date(Date.now()-12.5*3600000).toLocaleString('en-US');
+  const filters=document.createElement('div');filters.id='native-filters';filters.innerHTML='<label>Search recordings<input type="search"></label><div><span>Sort by:</span><button role="combobox" aria-label="Sort by:">Newest</button></div><p>No videos match your search.</p>';
+  document.querySelector('.native-grid').before(filters);channelPage.refresh();
+ });
+ await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('recent');
+ assert.match(await library.locator('.items .title').first().textContent(),/4$/,'exact timestamps break ties between matching relative dates');
+ await library.getByRole('searchbox',{name:'Find a video',exact:true}).fill('unmatched recording');
+ assert.equal(await library.getByText('No videos match these filters.',{exact:true}).count(),1);
+ for(const node of await page.locator('#native-filters input,#native-filters button,#native-filters p,main article').all())assert.equal(await node.isVisible(),false);
+ await library.getByRole('searchbox',{name:'Find a video',exact:true}).fill('');
  await library.getByRole('button',{name:'List',exact:true}).click();assert.equal(await library.locator('.items').getAttribute('data-view'),'list');await library.getByRole('link',{name:'Clips',exact:true}).click();assert.equal(await library.locator('.items .card').count(),6);assert.equal(await library.locator('.items').getAttribute('data-view'),'list');await library.getByRole('button',{name:'Grid',exact:true}).click();
  await library.locator('.watch').first().click();assert.equal(await page.evaluate(()=>watched.length),1);await library.locator('.items .title').first().click();assert.ok((await page.evaluate(()=>navigationCalls)).some(path=>path.includes('/clips/')));await library.locator('.items .card').first().dispatchEvent('dragstart');assert.equal(await page.evaluate(()=>dragged.length),1);
  for(const width of [1360,760,390]){await page.setViewportSize({width,height:1000});assert.equal(await library.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true,'library fits each viewport');}
@@ -57,5 +77,64 @@ try{
  await page.evaluate(()=>{history.replaceState({},'','/nickwhite/videos');for(const card of document.querySelectorAll('[data-testid=vods-card],[data-testid=clips-card]'))card.remove();const unsupported=document.createElement('article');unsupported.dataset.testid='vods-card';unsupported.innerHTML='<img><a href="https://evil.test/video">Unsupported source</a>';document.querySelector('.native-grid').append(unsupported);channelPage.refresh();});assert.equal(await page.locator('#kr-channel-library').count(),0,'unsupported media markup falls back to the original page');assert.equal(await page.locator('.native-tabs').isVisible(),true);
  await page.evaluate(()=>{panel.setEnabled(false);channelPage.refresh(false);});assert.equal(await page.locator('#profile-header').isVisible(),true);assert.equal(await page.locator('#kr-channel-root').count(),0);assert.equal(await page.locator('[data-kr-library-source],[data-kr-library-shell],#kr-channel-library').count(),0,'disabling restores all native surfaces');
  await page.evaluate(()=>{channelPage.destroy();panel.destroy();});assert.deepEqual(errors,[]);
+ await page.route('https://kick.com/api/v2/channels/nickwhite/clips?**',route=>route.fulfill({json:{clips:[{id:`clip_${'1'.padStart(26,'0')}`,title:'Public highlight',duration:43,views:123}]}}));
+ await page.addScriptTag({path:'extension/search.js'});
+ await page.evaluate(()=>{
+  history.replaceState({},'','/nickwhite');
+  document.querySelector('.native-tabs [aria-current]').removeAttribute('aria-current');
+  for(const card of document.querySelectorAll('main article'))card.remove();
+  window.channelPage=KickRefinedChannelPage.create();channelPage.refresh();
+ });
+ await library.locator('.feature .title').getByText('Houston TX Collect A Con! 0',{exact:true}).waitFor();
+ await library.locator('.rail .title').getByText('Public highlight',{exact:true}).waitFor();
+ assert.equal(await page.evaluate(()=>document.querySelectorAll('main article').length),0,'Overview loads independently of native cards');
+ await page.evaluate(()=>channelPage.destroy());
+ const requests=[];
+ await page.route('https://kick.com/api/v2/channels/nickwhite/clips?**',route=>{
+  const params=new URL(route.request().url()).searchParams,sort=params.get('sort'),cursor=params.get('cursor');
+  requests.push(sort);
+  const clip=(id,title,duration,views)=>({id:`clip_${String(id).padStart(26,'0')}`,title,duration,views,created_at:'2026-11-10T18:00:00Z'});
+  return route.fulfill({json:sort==='view'?{clips:[clip(2,'Popular result',75,1000)]}:cursor?{clips:[clip(3,'Alphabetical result',15,5)]}:{clips:[clip(1,'Newest result',48,7)],nextCursor:'next'}});
+ });
+ await page.route('https://kick.com/api/v2/channels/nickwhite/videos',route=>route.fulfill({json:[{
+  session_title:'Public recording',duration:180000,views:16,video:{uuid:'00000000-0000-0000-0000-000000000001',created_at:'2026-11-10T18:00:00Z',status:'public'}
+ }]}));
+ await page.route('https://kick.com/nickwhite/schedule',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><nav>Kick navigation</nav><main><div data-testid="schedule-viewer-page"><button>Next week</button></div></main></body></html>'}));
+ await page.evaluate(()=>{
+  const support={channel:async()=>({title:'nickwhite',bio:'Unified channel bio'}),panels:async()=>[],makeButton:()=>document.createElement('button')};
+  const refresh=()=>{panel.refresh();channelPage.refresh();};
+  window.panel=KickRefinedChannelPanel.create({support,integratedProfile:true,onChange:refresh});
+  window.channelPage=KickRefinedChannelPage.create({getProfileMount:tab=>panel.getProfileMount(tab),onChange:refresh});
+  refresh();
+ });
+ assert.equal(await library.count(),0,'visiting a stream does not open or load its profile');
+ assert.deepEqual(requests,[]);
+ await header.locator('.channel-name-button').click();
+ await header.locator('#kr-channel-library .feature .title').waitFor();
+ await library.getByRole('link',{name:'Clips',exact:true}).click();
+ await library.getByRole('link',{name:'Newest result',exact:true}).waitFor();
+ await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('views');
+ await library.getByRole('link',{name:'Popular result',exact:true}).waitFor();
+ await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('title');
+ await library.getByRole('link',{name:'Alphabetical result',exact:true}).waitFor();
+ assert.deepEqual(await library.locator('.items .title').allTextContents(),['Alphabetical result','Newest result']);
+ await library.getByRole('combobox',{name:'Video length',exact:true}).selectOption('short');
+ assert.deepEqual(await library.locator('.items .title').allTextContents(),['Alphabetical result']);
+ await library.getByRole('link',{name:'Videos',exact:true}).click();
+ await library.getByRole('link',{name:'Public recording',exact:true}).waitFor();
+ await library.getByRole('link',{name:'About',exact:true}).click();
+ await header.getByText('Unified channel bio',{exact:true}).waitFor();
+ assert.equal(new URL(page.url()).pathname,'/nickwhite','inline tabs preserve the stream route');
+ await library.getByRole('link',{name:'Schedule',exact:true}).click();
+ const calendar=library.frameLocator('iframe[title="nickwhite schedule"]');
+ await calendar.getByRole('button',{name:'Next week'}).waitFor();
+ assert.equal(await calendar.locator('nav').isVisible(),false);
+ assert.equal(new URL(page.url()).pathname,'/nickwhite');
+ await library.getByRole('link',{name:'Overview',exact:true}).click();
+ assert.equal(await library.locator('iframe[title="nickwhite schedule"]').isVisible(),false);
+ await header.getByRole('button',{name:'Channel details for nickwhite',exact:true}).click();
+ assert.equal(await library.count(),0);
+ await page.evaluate(()=>{channelPage.destroy();panel.destroy();});
+ assert.deepEqual(errors,[]);
  console.log(`${engine}: owned overview/library, search/sort/length/grid/list, native routing/pagination, workspace actions, responsive layout and restoration passed`);
 }finally{await browser.close();}

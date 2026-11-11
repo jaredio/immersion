@@ -98,3 +98,8 @@ Channel Home, Videos, Clips, Schedule and About views share the dark channel the
 Native card links and action handlers stay in place; offscreen library cards can skip
 rendering. Channel identities consolidate duplicate native headers, and portrait
 avatars stay inside their circular frame.
+
+Home, Browse, Categories and category detail pages now share the profile theme,
+with a discovery navigation bar, a desktop featured-creator shelf, consistent
+stream cards and responsive category grids. Native player and filter controls
+stay in place. See [discovery design notes](docs/discovery-batch.md).

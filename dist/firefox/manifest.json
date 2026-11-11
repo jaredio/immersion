@@ -44,7 +44,8 @@
       ],
       "css": [
         "theme.css",
-        "polish.css"
+        "polish.css",
+        "discovery.css"
       ],
       "js": [
         "theme-start.js"
@@ -85,6 +86,7 @@
         "support.js",
         "channel-library.js",
         "channel-page.js",
+        "discovery.js",
         "channel-panel.js",
         "player-controls.js",
         "multi-layout.js",

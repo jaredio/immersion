@@ -41,7 +41,15 @@ await page.goto('https://kick.com/native');await page.addStyleTag({path:'extensi
 const baseline=await page.evaluate(()=>measure());
   const root=page.locator('#kr-multi-root');
   for(let cycle=0;cycle<cycles;cycle++){
+    if(cycle===0)await page.evaluate(()=>{
+      const main=document.querySelector('main'),spacer=document.createElement('div');
+      spacer.id='fixture-banner';spacer.style.cssText='height:1200px;flex:none';main.prepend(spacer);main.scrollTop=500;
+    });
     await page.evaluate(async()=>{history.replaceState({},'','/native');await workspace.open(['alpha','beta'],'native',{channels:['native','alpha','beta'],playerMode:'full'});});
+    if(cycle===0)assert.deepEqual(await page.evaluate(()=>{
+      const main=document.querySelector('main');
+      return {first:main.firstElementChild.id,scrollTop:main.scrollTop};
+    }),{first:'kr-multi-root',scrollTop:0},'opening secondary streams returns to the top of the workspace');
     await page.waitForFunction(()=>[...document.getElementById('kr-multi-root').shadowRoot.querySelectorAll('[data-channel].multi-tile:not([data-native-player])')].every(tile=>tile.dataset.playerState==='ready'));
 
     await root.getByRole('button',{name:'Manage',exact:true}).click();
@@ -60,6 +68,27 @@ const baseline=await page.evaluate(()=>measure());
     assert.ok(Math.abs(menu.width-menu.trigger)<1);assert.equal(menu.avatars,3);assert.ok(menu.rows.every(width=>Math.abs(width-(menu.inner-8))<1));
     await picker.locator('[role=option][data-channel=beta]').click();
     assert.equal(await page.locator('#kr-multi-chat iframe').getAttribute('name'),'kick-refined-chat');
+    if(cycle===0){
+      await page.waitForFunction(()=>{
+        const room=document.getElementById('channel-chatroom').getBoundingClientRect();
+        const frame=document.querySelector('#kr-multi-chat iframe').getBoundingClientRect();
+        return Math.abs(frame.top-room.top)<1&&Math.abs(frame.height-room.height)<1;
+      });
+      await page.addStyleTag({path:'extension/polish.css'});
+      await page.evaluate(()=>{
+        const profile=document.createElement('div');profile.id='test-profile';
+        profile.innerHTML='<nav><a href="/native/videos">Videos</a><a href="/native/clips">Clips</a></nav><article data-testid="clips-card"><a href="/native/clips/test"><img alt=""><h3>Profile clip</h3></a></article>';
+        document.querySelector('main').append(profile);
+        window.profile=KickRefinedChannelPage.create();
+        profile.querySelector('nav').addEventListener('click',event=>{event.preventDefault();history.pushState({},'',event.target.href);window.profile.refresh();workspace.refresh();});
+        window.profile.refresh();workspace.refresh();
+      });
+      const library=page.locator('#kr-channel-library');
+      await library.getByRole('link',{name:'Clips',exact:true}).click();
+      await library.getByRole('link',{name:'Profile clip',exact:true}).waitFor({state:'visible'});
+      assert.equal(await root.locator('.multi-tile').count(),3);
+      await page.evaluate(()=>{history.replaceState({},'','/native');window.profile.destroy();document.getElementById('test-profile').remove();document.getElementById('fixture-banner').remove();workspace.refresh();});
+    }
     await picker.getByRole('button',{name:'Chat channel',exact:true}).click();await page.keyboard.press('Escape');assert.equal(await picker.getByRole('listbox').isVisible(),false);
     await page.evaluate(async()=>{
       const callbacks=[];
