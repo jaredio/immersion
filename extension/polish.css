@@ -216,7 +216,7 @@ html[data-kr-enabled="true"] [data-kr-channel-about] :is(h2,h3) { color:#eeeef5;
 html[data-kr-enabled="true"] [data-kr-channel-about] img { max-width:100%;height:auto;object-fit:contain;border-radius:8px; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] img { outline:none !important;border:0 !important;box-shadow:none !important; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid*="-channel-"] [class*="ring-"]:has(img) { --tw-ring-shadow:0 0 #0000 !important;--tw-ring-offset-shadow:0 0 #0000 !important;box-shadow:none !important;border-color:transparent !important; }
-html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid^="sidebar-following-channel-"] :is(.bg-brand-bg-default,.bg-kick-voltGreen-150):empty:not(:is(.self-start,.count,[data-testid*="viewer-count"]) *),
+html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid^="sidebar-following-channel-"] :is(.bg-brand-bg-default,.bg-kick-voltGreen-150,.bg-surface-fg-brand):empty:not(:is(.self-start,.count,[data-testid*="viewer-count"]) *),
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid^="sidebar-following-channel-"][data-kr-live="live"] :is(.ring-surface-fg-brand,.ring-kick-voltGreen-150):empty { display:none!important; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid^="sidebar-following-channel-"][data-kr-live="live"] img { outline:2px solid var(--kr-accent)!important;outline-offset:1px; }
 html[data-kr-enabled="true"] #sidebar-wrapper a[data-testid^="sidebar-following-channel-"][data-kr-pinned="true"]::after { content:none; }
@@ -225,6 +225,14 @@ html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-wid
 html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid*="-channel-"] { display:flex!important;justify-content:center!important;gap:0!important;height:auto;aspect-ratio:1;padding:0!important;margin-inline:auto; }
 html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-kr-pinned="true"]::after { position:absolute;inset-inline-end:4px;inset-block-end:4px; }
 html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid*="-channel-"]:hover { background:#ffffff0b!important; }
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid^="sidebar-following-channel-"]:has(img) > :not(img,:has(img)) { display:none!important; }
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid^="sidebar-following-channel-"]::before,
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid^="sidebar-following-channel-"]::after,
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] :has(> a[data-testid^="sidebar-following-channel-"])::before,
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] :has(> a[data-testid^="sidebar-following-channel-"])::after,
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid^="sidebar-following-channel-"] > :has(img)::before,
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] a[data-testid^="sidebar-following-channel-"] > :has(img)::after { content:none!important; }
+html[data-kr-enabled="true"] #sidebar-wrapper[class~="w-(--sidebar-collapsed-width)"] li:has(> a[data-testid^="sidebar-following-channel-"]) { list-style:none!important; }
 
 /* The desktop player preview keeps Kick's native Watch now and audio actions. */
 html[data-kr-enabled="true"] main [class~="z-popover"][class~="lg:w-[370px]"][class~="lg:h-[264px]"] {

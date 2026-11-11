@@ -24,7 +24,13 @@ try{
   await library.getByRole('searchbox').fill('Recording 2');assert.equal(await library.locator('.card').count(),1);await library.getByRole('searchbox').fill('');await library.getByRole('button',{name:'List',exact:true}).click();assert.equal(await library.locator('.items').getAttribute('data-view'),'list');
   await header.getByRole('button',{name:'Channel details for nickwhite',exact:true}).click();await header.locator('[data-social-platform="X"]').waitFor();
   for(const name of ['Instagram','X','YouTube'])assert.equal(await header.locator(`[data-social-platform="${name}"] svg`).count(),1);
-  const instagram=header.locator('[data-social-platform="Instagram"]');assert.equal(await instagram.textContent(),'Instagram');await instagram.hover();await page.waitForFunction(()=>getComputedStyle(document.querySelector('#kr-channel-root').shadowRoot.querySelector('[data-social-platform=Instagram]')).color==='rgb(228, 64, 139)');assert.equal(await instagram.evaluate(node=>getComputedStyle(node).color),'rgb(228, 64, 139)');assert.equal(await header.getByRole('link',{name:'custom',exact:true}).getAttribute('href'),'https://example.com/');
+  const instagram=header.locator('[data-social-platform="Instagram"]');
+  assert.equal(await instagram.textContent(),'Instagram');
+  const initial=await instagram.evaluate(node=>({color:getComputedStyle(node).color,background:getComputedStyle(node).backgroundColor}));
+  assert.equal(initial.color,'rgb(228, 64, 139)');
+  await instagram.hover();
+  await page.waitForFunction(background=>getComputedStyle(document.querySelector('#kr-channel-root').shadowRoot.querySelector('[data-social-platform=Instagram]')).backgroundColor!==background,initial.background);
+  assert.equal(await header.getByRole('link',{name:'custom',exact:true}).getAttribute('href'),'https://example.com/');
   assert.equal(await page.evaluate(()=>originalPlayer===document.querySelector('video')),true,'native player identity is preserved');
   await mkdir('artifacts',{recursive:true});await page.screenshot({path:`artifacts/vod-page-${engine}.png`});
   await page.evaluate(()=>{adapter.refresh(false);panel.setEnabled(false);});assert.equal(await page.locator('#native-header').isVisible(),true);assert.equal(await page.locator('#recommendations h2').isVisible(),true);assert.equal(await library.count(),0);assert.deepEqual(errors,[]);

@@ -22,7 +22,7 @@
     function closeMenu(){if(host){host.removeAttribute('data-open');shadow.querySelector('.compact').setAttribute('aria-expanded','false');}}
     function place(){
       const nav=[...document.querySelectorAll('nav')].find(node=>!node.closest('main,aside')&&node.getBoundingClientRect().width>0&&node.getBoundingClientRect().height>0&&getComputedStyle(node).visibility!=='hidden');
-      if(!nav){host.hidden=true;return;}host.hidden=false;mark(nav,'data-kr-discovery-navbar');
+      if(!nav||globalThis.KickRefinedDOM?.isReady&&!KickRefinedDOM.isReady(nav)){host.hidden=true;return;}host.hidden=false;mark(nav,'data-kr-discovery-navbar');
       const last=[...nav.children].filter(node=>node!==host).at(-1),target=last?.tagName==='DIV'&&last.querySelector('button,[data-testid="login"],[data-testid="sign-up"]')&&!last.querySelector('input')?last:nav;
       if(target!==nav)mark(target,'data-kr-discovery-nav-actions');
       const input=nav.querySelector('input');if(input){let branch=input;while(branch.parentElement&&branch.parentElement!==nav)branch=branch.parentElement;if(branch!==target)mark(branch,'data-kr-discovery-nav-search');}

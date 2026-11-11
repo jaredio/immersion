@@ -50,7 +50,7 @@ test('player bus rejects spoofed, stale and detached messages while preserving t
   const window={addEventListener:(type,fn)=>listener=fn,removeEventListener:(type,fn)=>{assert.equal(fn,listener);listener=null;}};
   const context=await contextFor('multi-player-bus',{window,crypto:{randomUUID:()=> 'test-session'}});
   let active=true;
-  const bus=context.KickRefinedMultiPlayerBus.create({isActive:()=>active,onReady:()=>events.push('ready'),onStatus:()=>events.push('status'),onAudioIntent:()=>events.push('audio'),onFocus:()=>events.push('focus'),onHover:()=>events.push('hover')});
+  const bus=context.KickRefinedMultiPlayerBus.create({isActive:()=>active,onReady:()=>events.push('ready'),onStatus:()=>events.push('status'),onAudioIntent:()=>events.push('audio'),onFocus:()=>events.push('focus'),onHover:()=>events.push('hover'),onClip:()=>events.push('clip')});
   const source={postMessage:(data,origin)=>sent.push({data,origin})};
   const tile={frame:{contentWindow:source},frameOrigin:'https://kick.com',commandRevision:bus.nextRevision()};bus.attach(tile);
   const send=(data,overrides={})=>listener({source,origin:'https://kick.com',data:{session:'test-session',revision:tile.commandRevision,...data},...overrides});
@@ -61,7 +61,7 @@ test('player bus rejects spoofed, stale and detached messages while preserving t
   send({type:'kick-refined:audio-intent',muted:'false',volume:.5});send({type:'kick-refined:audio-intent',muted:false,volume:NaN});
   assert.equal(events.length,2);
   send({type:'kick-refined:audio-intent',muted:false,volume:.5});assert.equal(events.at(-1),'audio');
-  active=false;send({type:'kick-refined:focus'});active=true;bus.detach(tile);send({type:'kick-refined:ready'});assert.equal(events.length,3);
+  send({type:'kick-refined:clip'},{source:{}});send({type:'kick-refined:clip',session:'wrong'});assert.equal(events.length,3);send({type:'kick-refined:clip'});assert.equal(events.at(-1),'clip');active=false;send({type:'kick-refined:clip'});active=true;bus.detach(tile);send({type:'kick-refined:ready'});assert.equal(events.length,4);
   bus.destroy();assert.equal(listener,null);
 });
 

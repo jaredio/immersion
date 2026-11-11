@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const base = {
   manifest_version: 3,
   name: 'Immersion',
-  version: '0.10.0',
+  version: '0.11.4',
   description: 'A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.',
   permissions: ['storage', 'declarativeNetRequest'],
   declarative_net_request: { rule_resources: [{ id: 'kick-telemetry', enabled: true, path: 'telemetry-rules.json' }] },
@@ -15,11 +15,11 @@ const base = {
   action: { default_title: 'Immersion', default_popup: 'popup.html', default_icon: { 16: 'icons/16.png', 48: 'icons/48.png' } },
   content_scripts: [
     { matches: ['https://kick.com/*', 'https://www.kick.com/*'], css: ['theme.css','polish.css','discovery.css'], js: ['theme-start.js'], run_at: 'document_start', all_frames: true },
-    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], js: ['scroll.js','native-search-bridge.js'], run_at: 'document_start', world: 'MAIN', all_frames: true },
-    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], exclude_matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], js: ['stream-clock.js','performance.js','shared.js','dom.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js','channel-library.js','channel-page.js','discovery.js', 'channel-panel.js', 'player-controls.js', 'multi-layout.js','multi-view.js','multi-metadata.js','multi-session.js','multi-player-bus.js','multi-startup.js','lifetime.js','player-state.js','multi-chat.js','multi-stream-player.js','multi-stream-tile.js','multi-clip-tile.js','multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js','search-window.js','native-search.js', 'content.js'], run_at: 'document_idle' },
+    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], js: ['page-ready.js','clip-native-bridge.js','scroll.js','native-search-bridge.js'], run_at: 'document_start', world: 'MAIN', all_frames: true },
+    { matches: ['https://kick.com/*', 'https://www.kick.com/*'], exclude_matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], js: ['stream-clock.js','performance.js','shared.js','dom.js', 'clip-tools.js','clip-catalog.js','clip-history.js','clip-window.js','clip-workspace.js','clip-studio.js', 'ui.js', 'profile.js', 'support-data.js', 'support.js','channel-library.js','channel-page.js','discovery.js', 'channel-panel.js', 'player-controls.js', 'multi-layout.js','multi-view.js','multi-metadata.js','multi-session.js','multi-player-bus.js','multi-startup.js','lifetime.js','player-state.js','multi-chat.js','multi-stream-player.js','multi-stream-tile.js','multi-clip-tile.js','multiview.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'notices.js', 'checkouts.js', 'search.js','search-window.js','native-search.js', 'content.js'], run_at: 'document_idle' },
     { matches: ['https://powerchat.live/*', 'https://www.powerchat.live/*','https://kickbot.com/tips/*','https://www.kickbot.com/tips/*','https://streamelements.com/*/tip*','https://www.streamelements.com/*/tip*'], css:['support-form.css'], js: ['support-data.js', 'support-frame.js'], run_at: 'document_idle', all_frames: true },
     { matches: ['https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat'], js: ['stream-clock.js','performance.js','shared.js','dom.js', 'chat-clips.js', 'clip-bridge.js', 'x-post-data.js', 'x-posts.js', 'media-data.js', 'media-embeds.js', 'reply-preview.js', 'chat-frame.js'], run_at: 'document_idle', all_frames: true },
-    { matches: ['https://kick.com/*','https://www.kick.com/*'], js:['stream-clock.js','performance.js','full-player-frame.js','player-controls.js','player-frame.js'],run_at:'document_start',all_frames:true },
+    { matches: ['https://kick.com/*','https://www.kick.com/*'], js:['stream-clock.js','performance.js','clip-tools.js','clip-catalog.js','clip-history.js','clip-window.js','clip-workspace.js','clip-studio.js','clip-studio-frame.js','full-player-frame.js','player-controls.js','player-frame.js'],run_at:'document_start',all_frames:true },
     { matches: ['https://player.kick.com/*'], js: ['stream-clock.js','performance.js','player-controls.js','player-frame.js'], run_at: 'document_start', all_frames: true }
   ],
   web_accessible_resources: [{ resources: ['ui.css', 'vendor/hls.light.mjs'], matches: ['https://kick.com/*', 'https://www.kick.com/*'] }],

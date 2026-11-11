@@ -167,5 +167,8 @@
     };
   }
 
-  globalThis.KickRefinedDOM = Object.freeze({subscribePage, subscribeChat, links, drainRows, get chat() { return currentChat; }});
+  function isReady(node){
+    return !!node?.isConnected&&node.dispatchEvent(new Event('kick-refined:surface-ready',{bubbles:true,cancelable:true}));
+  }
+  globalThis.KickRefinedDOM = Object.freeze({subscribePage, subscribeChat, links, drainRows, isReady, get chat() { return currentChat; }});
 })();

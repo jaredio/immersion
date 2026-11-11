@@ -51,7 +51,10 @@ ignored artifacts files.
 
 Theme CSS and theme-start.js now run at document_start. Saved appearance settings
 apply independently of DOM enhancements, respecting enabled=false. Main UI startup
-keeps its hydration-safe idle scheduling with a 250ms deadline. The header only
+waits for React to own the native main and channel-title elements before scheduling
+DOM enhancements. A MAIN-world readiness bridge also protects header, library and
+player-control insertion during streamed hydration. test:hydration covers delayed
+readiness in Chromium and Firefox. The header only
 forwards recognized actions, excludes external social links and deduplicates action
 kinds during partial header hydration. test:theme-start verifies saved preferences
 while the native HTML parser is deliberately blocked, including disabled mode.

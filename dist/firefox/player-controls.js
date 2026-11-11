@@ -28,7 +28,7 @@
     [data-kr-volume]::-webkit-slider-thumb{appearance:none;width:10px;height:10px;border-radius:50%;background:#e6e6ef}
     [data-kr-volume]::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:#e6e6ef}
     [data-kr-unified-bar] [data-kr-unified-row] [data-kr-live]{width:auto!important;min-width:0!important;height:24px!important;min-height:24px!important;padding:3px 5px!important;gap:5px!important;font-size:11px!important;background:transparent!important;border-color:transparent!important;white-space:nowrap}
-    [data-kr-live]::before{content:'';width:5px;height:5px;flex:none;border-radius:50%;background:var(--kr-player-accent,var(--kr-accent,#b0ff8c))}
+    [data-kr-unified-row] [data-kr-live]::before{content:'';width:5px;height:5px;flex:none;border-radius:50%;background:var(--kr-player-accent,var(--kr-accent,#b0ff8c))}
     [data-kr-elapsed]{font-size:10px;white-space:nowrap;font-variant-numeric:tabular-nums;color:#b5b5c3}
     [data-kr-control-spacer]{flex:1!important;min-width:0!important}
     [data-kr-unified-row] button[hidden]{display:none!important}
@@ -53,7 +53,7 @@
   function sync(root,options){
     if(!root)return false;
     let owner=roots.get(root);
-    const bar=owner?.bar?.isConnected&&root.contains(owner.bar)?owner.bar:root.querySelector('.z-controls.bottom-0:has(button)');if(!bar)return false;
+    const bar=owner?.bar?.isConnected&&root.contains(owner.bar)?owner.bar:root.querySelector('.z-controls.bottom-0:has(button)');if(!bar||!bar.dispatchEvent(new Event('kick-refined:surface-ready',{bubbles:true,cancelable:true})))return false;
     if(!owner){
       owner={bar:null,dirty:true,frame:0,options,marked:new Set()};
       owner.observer=new MutationObserver(records=>{
@@ -87,6 +87,7 @@
       const live=button('live','Go live',()=>{const video=state.options.getVideo();if(video?.seekable.length)video.currentTime=video.seekable.end(video.seekable.length-1);});live.dataset.krLive='';live.textContent='LIVE';
       const spacer=document.createElement('span');spacer.dataset.krControlSpacer='';row.append(spacer);
       for(const key of ['clip','share','report','theatre','pip','fullscreen','settings'])button(key,{clip:'Clip',share:'Share',report:'Report',theatre:'Theatre mode',pip:'Picture in picture',fullscreen:'Fullscreen',settings:'Settings'}[key],()=>{
+        if(key==='clip'&&state.options.onClip){state.options.onClip();return;}
         const source=state.sources[key];if(source){source.click();if(key==='settings')requestAnimationFrame(()=>{const menu=document.getElementById(source.getAttribute('aria-controls'))||document.querySelector('[role="menu"][data-state="open"]');const portal=menu?.closest('[data-radix-popper-content-wrapper]');if(portal){const rect=bar.getBoundingClientRect();portal.style.setProperty('position','fixed','important');portal.style.setProperty('transform','none','important');portal.style.setProperty('left',`${Math.max(8,rect.right-portal.getBoundingClientRect().width)}px`,'important');portal.style.setProperty('top',`${Math.max(8,rect.top-portal.getBoundingClientRect().height)}px`,'important');}});}else if(key==='fullscreen')root.requestFullscreen?.().catch(()=>{});
       });
       const focus=button('focus','Focus stream',()=>state.options.onFocus());focus.dataset.krWorkspaceFocus='';

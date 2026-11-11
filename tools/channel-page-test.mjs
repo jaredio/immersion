@@ -41,7 +41,7 @@ try{
  }
  await page.setViewportSize({width:1360,height:1000});
 
- const library=page.locator('#kr-channel-library');await library.getByRole('heading',{name:'Library',exact:true}).waitFor();assert.equal(await library.locator('.card').count(),4,'overview shows one recording and three highlights');assert.equal(await page.locator('.native-tabs').isVisible(),false);assert.equal(await page.locator('main article').first().isVisible(),false);
+ const library=page.locator('#kr-channel-library');await library.locator('.overview').waitFor();assert.equal(await library.getByRole('heading',{name:/^(Library|Videos|Clips)$/}).count(),0);assert.equal(await library.getByText(/items loaded|\d+ loaded/).count(),0);assert.equal(await library.locator('.card').count(),4,'overview shows one recording and three highlights');assert.equal(await page.locator('.native-tabs').isVisible(),false);assert.equal(await page.locator('main article').first().isVisible(),false);
  assert.equal(await page.locator('#native-sticky-tabs #kr-channel-library').count(),0,'the library scrolls outside Kick’s sticky tab strip');
  await mkdir('artifacts',{recursive:true});await page.screenshot({path:`artifacts/channel-overview-${engine}.png`,fullPage:true});
  await library.getByRole('link',{name:'Videos',exact:true}).click();assert.equal(new URL(page.url()).pathname,'/nickwhite/videos');assert.equal(await library.locator('.items .card').count(),12);
@@ -101,7 +101,7 @@ try{
  }]}));
  await page.route('https://kick.com/nickwhite/schedule',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><nav>Kick navigation</nav><main><div data-testid="schedule-viewer-page"><button>Next week</button></div></main></body></html>'}));
  await page.evaluate(()=>{
-  const support={channel:async()=>({title:'nickwhite',bio:'Unified channel bio'}),panels:async()=>[],makeButton:()=>document.createElement('button')};
+  const support={channel:async()=>KickRefined.channelDetails({slug:'nickwhite',followers_count:'68800',user:{username:'nickwhite',bio:'Unified channel bio'}},'nickwhite'),panels:async()=>[],makeButton:()=>document.createElement('button')};
   const refresh=()=>{panel.refresh();channelPage.refresh();};
   window.panel=KickRefinedChannelPanel.create({support,integratedProfile:true,onChange:refresh});
   window.channelPage=KickRefinedChannelPage.create({getProfileMount:tab=>panel.getProfileMount(tab),onChange:refresh});
@@ -113,6 +113,8 @@ try{
  await header.locator('#kr-channel-library .feature .title').waitFor();
  await library.getByRole('link',{name:'Clips',exact:true}).click();
  await library.getByRole('link',{name:'Newest result',exact:true}).waitFor();
+ assert.equal(await library.getByRole('heading',{name:'Clips',exact:true}).count(),0);
+ assert.equal(await library.getByText(/of \d+ loaded/).count(),0);
  await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('views');
  await library.getByRole('link',{name:'Popular result',exact:true}).waitFor();
  await library.getByRole('combobox',{name:'Library sort',exact:true}).selectOption('title');
@@ -122,8 +124,14 @@ try{
  assert.deepEqual(await library.locator('.items .title').allTextContents(),['Alphabetical result']);
  await library.getByRole('link',{name:'Videos',exact:true}).click();
  await library.getByRole('link',{name:'Public recording',exact:true}).waitFor();
+ assert.equal(await library.getByRole('heading',{name:'Videos',exact:true}).count(),0);
+ assert.equal(await library.getByText(/of \d+ loaded/).count(),0);
  await library.getByRole('link',{name:'About',exact:true}).click();
  await header.getByText('Unified channel bio',{exact:true}).waitFor();
+ const followers=header.locator('.profile-followers');
+ assert.equal(await followers.textContent(),'68.8K Followers');
+ assert.equal(await followers.locator('svg[aria-hidden=true]').count(),1);
+ assert.deepEqual(await followers.locator('strong,span').evaluateAll(nodes=>nodes.map(node=>[getComputedStyle(node).fontSize,getComputedStyle(node).fontWeight])),[['13px','700'],['13px','700']]);
  assert.equal(new URL(page.url()).pathname,'/nickwhite','inline tabs preserve the stream route');
  await library.getByRole('link',{name:'Schedule',exact:true}).click();
  const calendar=library.frameLocator('iframe[title="nickwhite schedule"]');
@@ -134,6 +142,8 @@ try{
  assert.equal(await library.locator('iframe[title="nickwhite schedule"]').isVisible(),false);
  await header.getByRole('button',{name:'Channel details for nickwhite',exact:true}).click();
  assert.equal(await library.count(),0);
+ await page.evaluate(()=>{history.replaceState({},'','/nickwhite?tab=overview');panel.refresh();channelPage.refresh();});
+ await library.locator('.overview').waitFor();
  await page.evaluate(()=>{channelPage.destroy();panel.destroy();});
  assert.deepEqual(errors,[]);
  console.log(`${engine}: owned overview/library, search/sort/length/grid/list, native routing/pagination, workspace actions, responsive layout and restoration passed`);

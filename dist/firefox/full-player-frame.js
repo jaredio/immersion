@@ -19,10 +19,11 @@
   function scan(){
     timer=0;
     if(!document.documentElement)return;
+    const anchor=[...document.querySelectorAll('#injected-channel-player,#video-player,main video')].find(node=>node.closest('main')&&!node.closest('#clip-creator-dialog,[role="dialog"]'));
+    if(!anchor)return;
+    if(!anchor.dispatchEvent(new Event('kick-refined:surface-ready',{bubbles:true,cancelable:true}))){timer=setTimeout(scan,100);return;}
     if(!document.documentElement.hasAttribute('data-kr-full-player'))document.documentElement.setAttribute('data-kr-full-player','');
     if(!style.isConnected)(document.head||document.documentElement).append(style);
-    const anchor=[...document.querySelectorAll('#injected-channel-player,#video-player')].find(node=>node.closest('main'))||document.querySelector('main video');
-    if(!anchor)return;
     const main=anchor.closest('main');let root=anchor;
     while(root.parentElement&&root.parentElement!==main)root=root.parentElement;
     if(root===main||root===document.body)return;
@@ -35,7 +36,7 @@
         mark(sibling,'data-kr-full-hidden',nextHidden);
       }
     }
-    for(const video of root.querySelectorAll('video'))for(let node=video.parentElement;node&&node!==root;node=node.parentElement)mark(node,'data-kr-full-video-shell',nextVideoShells);
+    for(const video of root.querySelectorAll('video'))if(!video.closest('#clip-creator-dialog,[role="dialog"]'))for(let node=video.parentElement;node&&node!==root;node=node.parentElement)mark(node,'data-kr-full-video-shell',nextVideoShells);
     for(const [previous,next,key]of [[hidden,nextHidden,'data-kr-full-hidden'],[shells,nextShells,'data-kr-full-shell'],[videoShells,nextVideoShells,'data-kr-full-video-shell']]){
       for(const node of previous)if(!next.has(node))node.removeAttribute(key);
       previous.clear();for(const node of next)previous.add(node);

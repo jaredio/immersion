@@ -1,0 +1,138 @@
+import {chromium,firefox} from 'playwright';
+import assert from 'node:assert/strict';
+import {readFile,mkdir} from 'node:fs/promises';
+
+const engine=process.env.KR_ENGINE==='firefox'?firefox:chromium,browser=await engine.launch({headless:true});
+const fixture=await readFile('tests/clip-editor-fixture.html','utf8');
+const scripts=(await Promise.all(['clip-tools.js','clip-catalog.js','clip-history.js','clip-window.js','clip-workspace.js','clip-studio.js','clip-native-bridge.js','clip-studio-frame.js'].map(file=>readFile('extension/'+file,'utf8')))).join('\n');
+try{
+ const context=await browser.newContext({viewport:{width:1400,height:1000}});
+ let slowPlayer=false;
+ const recordingId='12345678-1234-1234-1234-123456789abc';
+ await context.route('https://stream.kick.com/**',route=>route.request().url().includes('/unavailable/')?route.fulfill({status:404,body:'No thumbnails available'}):route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="900" height="5050"><rect width="900" height="5050" fill="#34473c"/></svg>'}));
+ await context.route('https://files.kick.com/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#69856f"/></svg>'}));
+ await context.route('https://kick.com/**',route=>{
+  const url=new URL(route.request().url());
+  if(url.pathname.startsWith('/api/v2/channels/'))return route.fulfill({json:url.pathname.endsWith('/videos')?[{video:{uuid:recordingId,status:'public'},duration:10800000,session_title:'A three-hour broadcast'}]:{livestream:null}});
+  const fast=slowPlayer&&url.pathname==='/alpha'&&url.searchParams.get('immersion-frame')==='clip'?`<script type="application/json">${JSON.stringify({id:recordingId,channel:{slug:'alpha'},status:'public',is_live:true,duration:0,start_time:'2026-01-01T10:00:00Z'})}</script><script>document.querySelector('[data-native-clip]').remove();</script>`:'';
+  const playback=url.pathname.includes('/videos/')?`<script>setTimeout(()=>{const image=new Image();image.hidden=true;document.querySelector('main').append(image);image.src='https://stream.kick.com/current/media/thumbnails/thumbnail-sheet-0.webp';},100);</script>`:'';
+  return route.fulfill({contentType:'text/html',body:fixture.replace('</body>',`${fast}<script>${scripts}</script>${playback}</body>`)});
+ });
+ const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto('https://kick.com/alpha');
+ await page.evaluate(()=>{window.nativeEditor=KickRefinedClipStudio.createEditor();window.sourceNode=document.querySelector('#source-player');openNativeClip();});
+ const editor=page.locator('#clip-creator-dialog'),tools=editor.locator('[data-kr-clip-tools]');
+ await tools.getByRole('button',{name:'30s',exact:true}).waitFor();
+ await tools.getByRole('button',{name:'1m',exact:true}).click();
+ await page.waitForFunction(()=>Math.abs(rangeState.start-120)<.1&&Math.abs(rangeState.end-180)<.1);
+ await tools.getByRole('button',{name:'+1s',exact:true}).waitFor({state:'visible'});
+ await tools.getByRole('spinbutton',{name:'Clip start in seconds'}).fill('100');await tools.getByRole('spinbutton',{name:'Clip start in seconds'}).press('Tab');
+ await page.waitForFunction(()=>Math.abs(rangeState.start-100)<.2);
+ await tools.getByRole('spinbutton',{name:'Clip end in seconds'}).fill('140');await tools.getByRole('spinbutton',{name:'Clip end in seconds'}).press('Tab');
+ await page.waitForFunction(()=>Math.abs(rangeState.end-140)<.2);
+ await tools.getByRole('button',{name:'+1s',exact:true}).click();await page.waitForFunction(()=>Math.abs(rangeState.start-101)<.2&&Math.abs(rangeState.end-141)<.2);
+ await tools.getByRole('button',{name:'Reset trim',exact:true}).click();await page.waitForFunction(()=>Math.abs(rangeState.start-150)<.2&&Math.abs(rangeState.end-180)<.2);
+ assert.equal(await page.evaluate(()=>originalNativeForm===document.querySelector('#clip-creator-dialog form')),true,'editing retains the native form and handlers');
+ await tools.getByRole('button',{name:'15s',exact:true}).click();await page.waitForFunction(()=>Math.abs(rangeState.start-165)<.2);
+ await editor.locator('[data-testid="clip-creator-title"]').fill('A moment worth keeping');await page.waitForTimeout(500);
+ await editor.getByRole('button',{name:'Close clip editor',exact:true}).click();
+ await page.evaluate(()=>{rangeState={start:150,end:180,total:180};openNativeClip();});
+ await tools.getByRole('button',{name:'Restore draft',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('[data-testid="clip-creator-title"]').value==='A moment worth keeping'&&Math.abs(rangeState.start-165)<.2);
+ await tools.getByRole('button',{name:'Replay selection',exact:true}).click();
+ assert.ok(Math.abs(Number(await editor.getByRole('slider').getAttribute('aria-valuenow'))-165000)<100,'replay seeks to the trimmed start');
+ assert.equal(await page.evaluate(()=>clipCalls.publishes),0,'edits and drafts never publish automatically');
+ await editor.locator('[data-testid="clip-creator-publish"]').click();
+ await editor.locator('[data-testid="clip-share-url"]').waitFor();assert.equal(await tools.isVisible(),false,'editing controls disappear after success');
+ await editor.getByRole('button',{name:'Download',exact:true}).click();assert.equal(await page.evaluate(()=>clipCalls.downloads),1,'native download action remains connected');await page.getByRole('button',{name:'Close download',exact:true}).click();
+ await editor.getByRole('button',{name:'Close clip editor',exact:true}).click();await page.evaluate(()=>nativeEditor.destroy());
+
+ await page.evaluate(()=>{window.studio=KickRefinedClipStudio.create({getSources:()=>[{slug:'alpha',title:'Alpha',image:'https://files.kick.com/alpha.png',streamTitle:'Late-night highlights with the community'},{slug:'beta',title:'Beta'}],isWorkspace:()=>true});});
+ await page.getByRole('button',{name:'Clip',exact:true}).click();
+ const studio=page.locator('#kr-clip-studio-root');await studio.getByRole('dialog').waitFor();
+ const clipFrame=async()=>{for(let i=0;i<100;i++){const found=page.frames().find(frame=>frame.name().startsWith('kick-refined-clip:')&&frame.url().startsWith('https://kick.com/'));if(found)return found;await page.waitForTimeout(30);}throw Error('Clip frame did not load');};
+ await page.waitForFunction(()=>!!document.getElementById('kr-clip-studio-root')?.shadowRoot.querySelector('iframe'));
+ let frame=await clipFrame();await frame.locator('#clip-creator-dialog[data-kr-clip-studio]').waitFor();
+ const floatingState=await studio.getByRole('dialog').evaluate(node=>({modal:node.matches(':modal'),popover:node.matches(':popover-open'),aria:node.getAttribute('aria-modal'),backdrop:getComputedStyle(node,'::backdrop').backgroundColor}));
+ assert.deepEqual(floatingState,{modal:false,popover:true,aria:'false',backdrop:'rgba(0, 0, 0, 0)'},'the floating window has no modal backdrop or document inertness');
+ await page.evaluate(()=>{const button=document.createElement('button');button.id='background-action';button.textContent='Background action';button.style.cssText='position:fixed;left:4px;top:4px';button.onclick=()=>button.dataset.clicked='true';document.body.append(button);});
+ await page.locator('#background-action').click();assert.equal(await page.locator('#background-action').getAttribute('data-clicked'),'true','the page remains interactive while clipping');
+ assert.equal(await studio.getByRole('dialog').isVisible(),true,'clicking outside does not dismiss the editor');
+ const floatingMarker=await frame.evaluate(()=>window.floatingMarker=crypto.randomUUID()),originalBounds=await studio.getByRole('dialog').boundingBox();
+ const moveHandle=studio.getByRole('banner');await moveHandle.focus();await page.keyboard.press('Shift+ArrowRight');
+ const movedBounds=await studio.getByRole('dialog').boundingBox();assert.ok(movedBounds.x>=originalBounds.x+39,'the floating window moves independently of the page');
+ assert.equal(await frame.evaluate(()=>floatingMarker),floatingMarker,'moving preserves the clipping frame');
+ await studio.getByRole('button',{name:'Close clip studio',exact:true}).click();await page.evaluate(()=>studio.open('alpha'));frame=await clipFrame();await frame.locator('#clip-creator-dialog[data-kr-clip-studio]').waitFor();
+ assert.equal(Math.round((await studio.getByRole('dialog').boundingBox()).x),Math.round(movedBounds.x),'reopening retains the window position');
+ const filled=await frame.locator('#clip-creator-dialog').evaluate(node=>{const box=node.getBoundingClientRect();return Math.abs(box.width-innerWidth)<2&&Math.abs(box.height-innerHeight)<2;});assert.equal(filled,true,'Live moment fills the editor viewport');
+ for(const size of [{width:750,height:700},{width:560,height:540},{width:430,height:850}]){
+  await page.setViewportSize(size);await page.waitForTimeout(80);
+  const layout=await frame.locator('#clip-creator-dialog').evaluate(node=>{const box=selector=>node.querySelector(selector).getBoundingClientRect(),preview=box('[data-kr-clip-preview-outer]'),title=box('[data-testid=clip-creator-title]'),track=box('[data-kr-clip-track]'),tools=box('[data-kr-clip-tools]');return {previewHeight:preview.height,videoBeforeTitle:preview.bottom<=title.top+1,titleBeforeTrack:title.bottom<=track.top+1,trackBeforeTools:track.bottom<=tools.top+1};});
+  assert.ok(layout.previewHeight>=200,'Live moment retains a usable player at compact sizes');assert.equal(layout.videoBeforeTitle&&layout.titleBeforeTrack&&layout.trackBeforeTools,true,'resizing preserves the editor flow without overlapping video, title, timeline or tools');
+ }
+ await page.setViewportSize({width:1400,height:1000});await studio.getByRole('button',{name:'Resize clip studio',exact:true}).dblclick();
+ await mkdir('artifacts',{recursive:true});await page.screenshot({path:`artifacts/clip-studio-editing-${engine.name()}.png`});
+ assert.equal(await page.evaluate(()=>clipCalls.opens),2,'workspace clipping does not open an editor in the live player');
+ assert.equal(await page.evaluate(()=>sourceNode===document.querySelector('#source-player')),true);
+ for(let i=0;i<4;i++){
+  const slug=i%2?'alpha':'beta';await studio.getByRole('combobox',{name:'Stream to clip'}).selectOption(slug);
+  await page.waitForFunction(slug=>document.getElementById('kr-clip-studio-root').shadowRoot.querySelector('iframe')?.name==='kick-refined-clip:'+slug,slug);
+  frame=await clipFrame();await frame.locator('#clip-creator-dialog[data-kr-clip-studio]').waitFor();
+  assert.equal(page.frames().filter(frame=>frame.name().startsWith('kick-refined-clip:')).length,1,'only one clipping frame exists after switching');
+ }
+ await studio.getByRole('button',{name:'Close clip studio',exact:true}).click();assert.equal(page.frames().filter(frame=>frame.name().startsWith('kick-refined-clip:')).length,0);
+ await page.keyboard.press('c');frame=await clipFrame();await frame.locator('#clip-creator-dialog').waitFor();
+ await frame.getByRole('button',{name:'Cancel',exact:true}).click();await studio.getByRole('dialog').waitFor({state:'hidden'});
+ await page.evaluate(()=>studio.open('alpha'));frame=await clipFrame();await frame.locator('#clip-creator-dialog').waitFor();
+ await page.setViewportSize({width:430,height:850});await page.waitForTimeout(100);assert.ok((await frame.locator('[data-kr-clip-track]').boundingBox()).height>=40,'the mobile timeline cannot collapse under flex pressure');assert.equal(await frame.locator('[data-testid=clip-creator-publish]').evaluate(node=>node.getBoundingClientRect().bottom<=innerHeight+1),true,'Publish stays inside the mobile editor viewport');await page.screenshot({path:`artifacts/clip-studio-editing-narrow-${engine.name()}.png`});await page.setViewportSize({width:1400,height:1000});await studio.getByRole('button',{name:'Resize clip studio',exact:true}).dblclick();
+ await frame.locator('[data-testid="clip-creator-title"]').fill('Publish then download');await frame.locator('[data-testid="clip-creator-publish"]').click();
+ await frame.getByRole('button',{name:'Download',exact:true}).click();assert.equal(await frame.evaluate(()=>clipCalls.downloads),1);assert.equal(await frame.evaluate(()=>Number(getComputedStyle(document.getElementById('download-dialog')).zIndex)>Number(getComputedStyle(document.getElementById('clip-creator-dialog')).zIndex)),true,'the native download dialog appears above the editor');await frame.getByRole('button',{name:'Close download',exact:true}).click();
+ await studio.getByRole('button',{name:'Stream history',exact:true}).click();
+ frame=await clipFrame();await frame.waitForURL('**/videos/'+recordingId+'?immersion-frame=clip');
+ await studio.getByRole('button',{name:'Clip selection',exact:true}).waitFor();
+ await page.waitForFunction(()=>!document.getElementById('kr-clip-studio-root').shadowRoot.querySelector('[data-act=clip]').disabled);
+ await studio.getByRole('textbox',{name:'History in point',exact:true}).fill('2:00:00');await studio.getByRole('textbox',{name:'History in point',exact:true}).press('Tab');
+ await studio.getByRole('textbox',{name:'History out point',exact:true}).fill('2:01:00');await studio.getByRole('textbox',{name:'History out point',exact:true}).press('Tab');
+ assert.equal(await studio.getByRole('slider',{name:'Selection start on full stream',exact:true}).inputValue(),'7200');
+ assert.equal(await studio.getByRole('slider',{name:'Selection end on full stream',exact:true}).inputValue(),'7260');
+ await studio.getByRole('combobox',{name:'Timeline zoom',exact:true}).selectOption('120');
+ await studio.locator('.history-film img').first().waitFor();await page.waitForFunction(()=>document.getElementById('kr-clip-studio-root').shadowRoot.querySelector('.history-film img')?.src.includes('/current/'));
+ assert.equal(await studio.locator('.history-track').getAttribute('data-preview'),'ready','the native player thumbnail supplies real preview sheets');
+ const timeline=studio.locator('.history-track'),timelineBox=await timeline.boundingBox(),viewBefore=await studio.getByRole('slider',{name:'Selection start on full stream',exact:true}).evaluate(node=>({start:Number(node.min),size:Number(node.max)-Number(node.min)}));
+ await page.mouse.move(timelineBox.x+timelineBox.width*.75,timelineBox.y+timelineBox.height/2);await page.mouse.wheel(0,-160);await page.waitForTimeout(150);
+ const viewAfter=await studio.locator('input[aria-label="Selection start on full stream"]').evaluate(node=>({start:Number(node.min),size:Number(node.max)-Number(node.min)}));
+ assert.ok(viewAfter.size<viewBefore.size);assert.ok(Math.abs(viewBefore.start+.75*viewBefore.size-(viewAfter.start+.75*viewAfter.size))<.3,'wheel zoom anchors the timestamp under the cursor');
+ assert.equal(await studio.getByRole('textbox',{name:'History in point',exact:true}).inputValue(),'2:00:00','zooming does not change the selected clip');
+ await page.keyboard.down('Shift');await page.mouse.wheel(0,100);await page.keyboard.up('Shift');await page.waitForTimeout(100);
+ const panStart=Number(await studio.getByRole('slider',{name:'Timeline position',exact:true}).inputValue());assert.ok(panStart>viewAfter.start,'Shift + wheel pans the visible window');
+ await studio.getByRole('button',{name:'Fit selection',exact:true}).click();await timeline.hover();await studio.locator('.history-hover:not([hidden])').waitFor();assert.equal(await studio.locator('.history-hover img').evaluate(node=>node.complete&&node.naturalWidth>0),true,'hovering shows a loaded thumbnail at the pointer timestamp');
+ await frame.evaluate(()=>document.querySelector('main img[src*="thumbnail-sheet-"]').src='https://stream.kick.com/unavailable/media/thumbnails/thumbnail-sheet-0.webp');
+ await studio.getByText('Previews unavailable for this recording',{exact:true}).waitFor();assert.equal(await studio.getByRole('button',{name:'Clip selection',exact:true}).isEnabled(),true,'missing thumbnail sheets do not disable clipping');
+ await frame.evaluate(()=>document.querySelector('main img[src*="thumbnail-sheet-"]').src='https://stream.kick.com/current/media/thumbnails/thumbnail-sheet-0.webp');
+ await page.waitForFunction(()=>document.getElementById('kr-clip-studio-root').shadowRoot.querySelector('.history-track').dataset.preview==='ready');
+ await studio.getByRole('combobox',{name:'Timeline zoom',exact:true}).selectOption('120');
+ assert.equal(await frame.locator('[data-kr-clip-history-video]').evaluate(video=>{const box=video.getBoundingClientRect();return Math.abs(box.width-innerWidth)<2&&Math.abs(box.height-innerHeight)<2;}),true,'history video fills the viewport despite constrained native wrappers');
+ const endSlider=studio.getByRole('slider',{name:'Selection end on full stream',exact:true}),startSlider=studio.getByRole('slider',{name:'Selection start on full stream',exact:true});
+ async function dragThumb(slider,delta){const box=await slider.boundingBox(),data=await slider.evaluate(node=>({min:Number(node.min),max:Number(node.max),value:Number(node.value)}));const x=box.x+5+(box.width-10)*(data.value-data.min)/(data.max-data.min),y=box.y+box.height/2;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+delta,y,{steps:6});await page.mouse.up();}
+ await dragThumb(endSlider,-30);const trimmedEnd=Number(await endSlider.inputValue());assert.equal(await startSlider.inputValue(),'7200');assert.ok(trimmedEnd<7260&&trimmedEnd>7210,'the end handle shortens the clip instead of sliding it');
+ await dragThumb(startSlider,20);const trimmedStart=Number(await startSlider.inputValue());assert.ok(trimmedStart>7200);assert.equal(Number(await endSlider.inputValue()),trimmedEnd,'the start handle leaves the out point intact');
+ const selection=studio.locator('.history-selection'),selectionBox=await selection.boundingBox();await page.mouse.move(selectionBox.x+selectionBox.width/2,selectionBox.y+selectionBox.height/2);await page.mouse.down();await page.mouse.move(selectionBox.x+selectionBox.width/2+25,selectionBox.y+selectionBox.height/2,{steps:6});await page.mouse.up();assert.ok(Number(await startSlider.inputValue())>trimmedStart);assert.ok(Math.abs((Number(await endSlider.inputValue())-Number(await startSlider.inputValue()))-(trimmedEnd-trimmedStart))<=1,'dragging the selection body preserves its duration');
+ await studio.getByRole('textbox',{name:'History in point',exact:true}).fill('2:00:00');await studio.getByRole('textbox',{name:'History in point',exact:true}).press('Tab');await studio.getByRole('textbox',{name:'History out point',exact:true}).fill('2:01:00');await studio.getByRole('textbox',{name:'History out point',exact:true}).press('Tab');
+ const marker=await frame.evaluate(()=>window.keptPreviewMarker=crypto.randomUUID()),before=await studio.getByRole('dialog').boundingBox(),corner=studio.getByRole('button',{name:'Resize clip studio',exact:true}),cornerBox=await corner.boundingBox();
+ await page.mouse.move(cornerBox.x+9,cornerBox.y+9);await page.mouse.down();await page.mouse.move(cornerBox.x+129,cornerBox.y-111,{steps:10});await page.mouse.up();
+ const after=await studio.getByRole('dialog').boundingBox();assert.ok(after.width>before.width+80&&after.height<before.height-80,'the mouse resizes the clip window in both directions');assert.equal(await frame.evaluate(()=>keptPreviewMarker),marker,'window resizing does not reload the video');assert.equal(await endSlider.inputValue(),'7260');await corner.dblclick();
+ await page.screenshot({path:`artifacts/clip-studio-history-${engine.name()}.png`});
+ for(let i=0;i<3;i++){
+  await studio.getByRole('button',{name:'Clip selection',exact:true}).click();await frame.locator('#clip-creator-dialog').waitFor();
+  await frame.waitForFunction(()=>Math.abs(rangeState.start)<.2&&Math.abs(rangeState.end-60)<.2);
+  assert.deepEqual(await frame.evaluate(()=>receivedNativeClip),{mode:'vod',startTime:7350},'historical clipping targets the selected two-hour position through Kick’s native provider');
+  await studio.getByRole('button',{name:'Back to timeline',exact:true}).click();await frame.locator('#clip-creator-dialog').waitFor({state:'detached'});
+  assert.equal(await studio.getByRole('dialog').isVisible(),true,'returning from trim keeps the source timeline and workspace alive');
+ }
+ assert.equal(await page.evaluate(()=>sourceNode===document.querySelector('#source-player')),true,'historical clipping never replaces the workspace player');
+ await studio.getByRole('button',{name:'Close clip studio',exact:true}).click();slowPlayer=true;await page.evaluate(()=>studio.open('alpha'));frame=await clipFrame();await frame.locator('#clip-creator-dialog').waitFor();assert.equal(await frame.locator('[data-native-clip]').count(),0);assert.deepEqual(await frame.evaluate(()=>receivedNativeClip),{mode:'livestream',channelSlug:'alpha',webVideoId:recordingId},'Live moment requests footage without waiting for player controls');
+ await page.setViewportSize({width:430,height:850});await page.waitForTimeout(100);
+ const bounds=await studio.getByRole('dialog').boundingBox();assert.ok(bounds.width<=430&&bounds.x>=0);
+ await mkdir('artifacts',{recursive:true});await page.screenshot({path:`artifacts/clip-studio-${engine.name()}.png`});
+ await page.evaluate(()=>studio.destroy());assert.equal(await page.locator('#kr-clip-studio-root').count(),0);assert.deepEqual(errors,[]);
+ console.log(`${engine.name()}: native trimming, drafts, publish/download, isolated workspace, repeated switching, full replay navigation, zoom, two-hour clip targeting, repeated history/edit transitions and responsive layout passed`);
+}finally{await browser.close();}

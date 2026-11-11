@@ -3,7 +3,7 @@
   const {channelSlug}=KickRefined;
     function findContext() {
       const slug=globalThis.KickRefinedChannelPage?.routeSlug()||channelSlug(location.pathname,location.origin);
-      const anchor=slug && [...document.querySelectorAll('#video-player,#injected-channel-player')].find(el=>el.closest('main') && el.getBoundingClientRect().width>0);
+      const anchor=slug && [...document.querySelectorAll('#video-player,#injected-channel-player')].find(el=>el.closest('main') && !el.closest('#clip-creator-dialog,[role="dialog"]') && el.getBoundingClientRect().width>0);
       const main=anchor?.closest('main') || [...document.querySelectorAll('main')].find(el=>el.getBoundingClientRect().width>0);
       if(!main) return null;
       let player=anchor||null;

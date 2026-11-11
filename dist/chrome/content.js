@@ -1,11 +1,11 @@
 (() => {
-  if(window!==window.top&&/^kick-refined-full:[a-z0-9_]{1,40}$/.test(window.name))return;
+  if(window!==window.top&&/^kick-refined-(?:full|clip):[a-z0-9_]{1,40}$/.test(window.name))return;
   const { api, normalize, channelSlug } = KickRefined;
   if (/^\/popout\/[^/]+\/chat\/?$/.test(location.pathname)) return;
   if (!api?.storage || document.getElementById('kr-root')) return;
   let root = document.documentElement;
   let settings = normalize();
-  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, xPosts, mediaCards, replyPreviews, notices, support, channelPanel, checkouts;
+  let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, clipStudio, xPosts, mediaCards, replyPreviews, notices, support, channelPanel, checkouts;
   let channels = [], shown = [], selected = 0;
   const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
   let refreshTimer, writeTimer, routeTimer, routeTimeout, previousFocus;
@@ -47,7 +47,8 @@
     checkouts?.setEnabled(settings.enabled);
     if(drag?.kind==='clip'&&(!settings.chatClips||settings.textOnly))endDrag();
     nativeSearch?.refresh(settings.enabled);
-    if (!settings.enabled) { endDrag(); multi?.close();if(palette?.open)closeSearch(); }
+    clipStudio?.setEnabled(settings.enabled);
+    if (!settings.enabled) { endDrag(); clipStudio?.close(); multi?.close();if(palette?.open)closeSearch(); }
   }
 
   function change(patch) {
@@ -108,7 +109,8 @@
       if(!settings.enabled||!settings.chatClips||settings.textOnly){event.preventDefault();return;}const item=KickRefinedClips.parseClip(row.href)||KickRefinedClips.parseVOD(row.href);if(!item){event.preventDefault();return;}event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('text/uri-list',item.href);startClipDrag(event,{...item,title:row.title,fromLibrary:true,commit:mode=>watchLibraryVideo(row,mode)});
     }});
     channelPanel = KickRefinedChannelPanel.create({support,enabled:settings.enabled,onChange:scheduleRefresh,integratedProfile:true});
-    multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut, support, channelPanel });
+    multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut, support, channelPanel,onWatchProfileVideo:row=>watchLibraryVideo(row),onClip:slug=>clipStudio?.open(slug) });
+    clipStudio=globalThis.KickRefinedClipStudio?.create({getSources:()=>multi.isActive()?multi.clipSources():channelPanel.clipSource?[channelPanel.clipSource]:[],isWorkspace:()=>settings.enabled&&(multi.isActive()||!!channelPanel.clipSource&&!KickRefinedChannelPage.watchSlug()&&!KickRefinedChannelPage.clipSlug()),enabled:settings.enabled});
     clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
     clipBridge=KickRefinedClipBridge.create({getClips:()=>clips,multi,startDrag:startClipDrag,endDrag});
     xPosts=KickRefinedX.create({enabled:settings.enabled&&settings.xEmbeds&&!settings.textOnly});
@@ -520,7 +522,7 @@
 
   function dispose() {
     clearTimeout(searchTimer);searchService.destroy();
-    searchWindow?.destroy();nativeSearch?.destroy();
+    searchWindow?.destroy();nativeSearch?.destroy();clipStudio?.destroy();
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; api.storage.onChanged.removeListener?.(onSettingsChanged); abort.abort(); unsubscribeDOM(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
     clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();discovery?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
@@ -572,9 +574,13 @@
     api.storage.onChanged.addListener(onSettingsChanged);
   }
   function idleInit() {
-    // Avoid modifying the server-rendered tree during Kick's initial hydration.
-    if ('requestIdleCallback' in window) requestIdleCallback(init, { timeout: 250 });
-    else setTimeout(init, 100);
+    const main=document.querySelector('main')||document.body;
+    const title=document.querySelector('[data-testid="livestream-title"]');
+    if(!KickRefinedDOM.isReady(main)||title&&!KickRefinedDOM.isReady(title)){
+      setTimeout(idleInit,100);return;
+    }
+    if ('requestIdleCallback' in window) requestIdleCallback(init,{timeout:1000});
+    else setTimeout(init,0);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', idleInit, { once: true });
   else idleInit();

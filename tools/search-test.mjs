@@ -32,7 +32,7 @@ try{
  assert.equal(await page.locator('#kr-multi-root').count(),0,'returning a library drag cancels without opening a workspace');
  assert.equal(requests.filter(url=>url.includes(`/videos/${vod}`)).length,beforeLibraryDrag,'cancelled library drag loads no playback metadata');
  await browserLibrary.getByRole('link',{name:'Videos',exact:true}).click();
- await browserLibrary.getByRole('heading',{name:'Videos',exact:true}).waitFor();
+ await browserLibrary.getByRole('link',{name:'Videos',exact:true}).and(browserLibrary.locator('[aria-current=page]')).waitFor();
  assert.equal(new URL(page.url()).pathname,'/aurora','profile tabs leave the stream URL in place');
  await browserLibrary.getByRole('button',{name:'Watch together: Library recording',exact:true}).click();
  const libraryWorkspace=page.locator('#kr-multi-root');await libraryWorkspace.locator('[data-kind=vod] video').waitFor();
@@ -40,7 +40,7 @@ try{
  await libraryWorkspace.getByRole('button',{name:'Close multiview',exact:true}).click();
  assert.equal(await browserLibrary.isVisible(),true,'watch-together returns to the channel browser');
  await browserLibrary.getByRole('link',{name:'Overview',exact:true}).click();
- await browserLibrary.getByRole('heading',{name:'Library',exact:true}).waitFor();
+ await browserLibrary.locator('.overview').waitFor();
  await page.locator('main').evaluate(node=>node.scrollTop=0);
  const beforeOpeningSearch=requests.length;await page.keyboard.press('Alt+k');const palette=page.locator('#kr-root #switch-dialog'),input=palette.getByRole('combobox',{name:'Search Kick',exact:true});await input.waitFor();assert.equal(await palette.locator('.header').count(),0,'the intro header is removed');assert.equal(requests.length,beforeOpeningSearch,'opening only shows instant local results');
 

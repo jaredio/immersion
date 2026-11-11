@@ -14,7 +14,14 @@ const fullFixture=slug=>`<!doctype html><html><head><meta charset="utf-8"><style
 let browser,context;
 if(engine==='chromium'){
  context=await playwright.chromium.launchPersistentContext(path.join(root,`tmp/full-players-profile-${Date.now()}`),{executablePath:playwright.chromium.executablePath(),headless:true,viewport:{width:1600,height:1000},args:[`--disable-extensions-except=${path.join(root,'dist/chrome')}`,`--load-extension=${path.join(root,'dist/chrome')}`]});
- const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');await worker.evaluate(()=>chrome.storage.local.clear());
+ const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+ await worker.evaluate(async()=>{
+  for(let attempt=0;attempt<40;attempt++){
+   if(globalThis.chrome?.storage?.local){await chrome.storage.local.clear();return;}
+   await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  throw Error('Extension storage did not initialize');
+ });
 }else{
  browser=await playwright.firefox.launch({headless:true});context=await browser.newContext({viewport:{width:1600,height:1000}});
  await context.addInitScript(()=>{const values={};window.browser={runtime:{getURL:file=>`https://kick.com/__extension/${file}`},storage:{local:{get:async()=>values,set:async patch=>Object.assign(values,patch)},onChanged:{addListener(){}}}};});
@@ -25,23 +32,25 @@ try{
  await context.route('https://kick.com/**',route=>{
   const url=new URL(route.request().url());
   if(url.pathname.startsWith('/__extension/'))return route.fulfill({path:path.join(root,'extension',url.pathname.split('/').pop())});
-  if(url.searchParams.get('immersion-frame')==='full')return route.fulfill({contentType:'text/html',...(url.pathname==='/blocked'?{headers:{'content-security-policy':"frame-ancestors 'none'"},body:'<h1>Frame blocked</h1>'}:{body:fullFixture(url.pathname.slice(1))})});
+  if(['full','clip'].includes(url.searchParams.get('immersion-frame')))return route.fulfill({contentType:'text/html',...(url.pathname==='/blocked'?{headers:{'content-security-policy':"frame-ancestors 'none'"},body:'<h1>Frame blocked</h1>'}:{body:fullFixture(url.pathname.slice(1))})});
   if(url.pathname.startsWith('/api/v2/channels/')){const slug=url.pathname.split('/').pop();return route.fulfill({json:{slug,user:{username:slug,bio:'Channel'},livestream:{is_live:true,start_time:new Date(Date.now()-3*3600000).toISOString(),session_title:`${slug} live`,viewer_count:100,categories:[{name:'IRL'}]}}});}
   if(url.pathname.endsWith('/links'))return route.fulfill({json:[]});
   return route.fulfill({contentType:'text/html',body:fixture});
  });
  await context.route('https://player.kick.com/**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><video src="${media}" loop autoplay muted></video>`}));
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>{if(engine==='firefox'&&error.message==='RPMGetBoolPref is not defined'&&error.stack?.includes('chrome://global/content/aboutNetError.mjs'))return;errors.push(error.message);});await page.goto('https://kick.com/nightshift');
- if(engine==='firefox'){for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of manifest.content_scripts.find(script=>script.js?.includes('content.js')).js)await page.addScriptTag({path:`extension/${file}`});}
+ if(engine==='firefox'){for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of ['clip-tools.js','clip-catalog.js','clip-history.js','clip-window.js','clip-workspace.js','clip-studio.js',...manifest.content_scripts.find(script=>script.js?.includes('content.js')).js])await page.addScriptTag({path:`extension/${file}`});}
  await page.getByRole('button',{name:'Open multiview',exact:true}).click();const workspace=page.locator('#kr-multi-root');
  await workspace.getByRole('button',{name:'Manage',exact:true}).click();
  assert.equal(await workspace.getByRole('combobox',{name:'Player mode',exact:true}).inputValue(),'full','new multistreams default to Full Kick players');
  const add=async slug=>{await workspace.getByRole('combobox',{name:'Add channel to multiview',exact:true}).fill(slug);await workspace.getByRole('button',{name:'Add stream',exact:true}).click();};
  await add('alpha');await add('beta');
  const frameFor=slug=>page.frames().find(frame=>frame.url().includes(`/${slug}?immersion-frame=full`));
- await workspace.locator('.channel-title').filter({hasText:'beta live'}).waitFor();
+ await workspace.getByRole('group',{name:'Switch stream details'}).getByRole('button',{name:'beta',exact:true}).click();
+ await workspace.locator('.channel-pool-title').filter({hasText:'beta live'}).waitFor();
  await page.evaluate(()=>{const root=document.getElementById('kr-multi-root').shadowRoot;window.keptDirectoryCard=root.querySelector('.multi-channel-card[data-channel="beta"]').closest('.channel-panel');window.keptChatOption=root.querySelector('#multi-chat-channel option[value="beta"]');});
  await workspace.getByRole('combobox',{name:'Multiview layout',exact:true}).selectOption('columns');
+ assert.equal(await workspace.locator('[data-channel-pool] .channel-pool-avatar').count(),3,'Columns also shows the stream pool');
  assert.equal(await page.evaluate(()=>{const root=document.getElementById('kr-multi-root').shadowRoot;return keptDirectoryCard===root.querySelector('.multi-channel-card[data-channel="beta"]').closest('.channel-panel')&&keptChatOption===root.querySelector('#multi-chat-channel option[value="beta"]');}),true,'unrelated layout updates preserve directory cards and chat options');
  await workspace.getByRole('combobox',{name:'Multiview layout',exact:true}).selectOption('grid');
  await workspace.locator('.multi-player-loading:visible').waitFor({state:'detached'}).catch(()=>{});
@@ -55,7 +64,7 @@ try{
   const geometry=await frame.locator('[data-kr-full-player-root]').evaluate(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};});
   assert.ok(Math.abs(geometry.x)<1&&Math.abs(geometry.y)<1&&Math.abs(geometry.width-geometry.viewportWidth)<2&&Math.abs(geometry.height-geometry.viewportHeight)<2,'the full player fills its pane');
   await frame.getByRole('button',{name:'Quality',exact:true}).click();await frame.getByRole('button',{name:'1080p',exact:true}).click();assert.equal(await frame.evaluate(()=>qualitySelections),1,'native quality menu remains interactive');
-  await frame.getByRole('button',{name:'Clip',exact:true}).click();assert.equal(await frame.locator('#clip-dialog').isVisible(),true,'native dialog portals remain visible');await frame.locator('#clip-dialog').evaluate(node=>node.remove());
+  await frame.getByRole('button',{name:'Clip',exact:true}).click();const studio=page.locator('#kr-clip-studio-root');await studio.getByRole('dialog').waitFor();assert.equal(await studio.getByRole('combobox',{name:'Stream to clip'}).inputValue(),slug,'full-player clipping opens the selected stream in the isolated studio');assert.equal(await frame.locator('#clip-dialog').count(),0,'the live frame never mounts a competing clip preview');await studio.getByRole('button',{name:'Close clip studio',exact:true}).click();
   await frame.getByRole('slider',{name:'Playback timeline',exact:true}).fill('50');assert.ok(await frame.locator('video').evaluate(video=>video.currentTime>0),'native timeline keeps its seeking handler');
   if(slug==='beta'){
    await frame.evaluate(()=>{document.querySelector('[data-action=quality]').remove();const overlay=document.createElement('div');overlay.className='z-controls top-0';overlay.innerHTML='<button data-action="quality" aria-label="Quality" aria-haspopup="menu">Quality</button><button aria-label="Pause">Pause</button>';document.querySelector('#injected-channel-player').append(overlay);});
