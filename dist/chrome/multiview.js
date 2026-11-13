@@ -3,7 +3,7 @@
   const { channelSlug, multiState, multiURL } = KickRefined;
   const {text,attr,css}=KickRefinedMultiView;
   const pageChannel=()=>globalThis.KickRefinedChannelPage?.routeSlug()||channelSlug(location.pathname,location.origin);
-  function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo, onClip }) {
+  function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo }) {
     const {host,shadow,panel,directory,chatTabs,toolbarToggle,stage,gridElement,divider,sizing,$,decorate} =
       KickRefinedMultiView.create({onKeydown,onPosition:schedulePosition});
     let channelVersion=0,accentKey=null,accentValue='',appliedVisualKey='';
@@ -42,7 +42,6 @@
       onReady:tile=>command(tile,!audio.has(tile.slug),{force:true}),
       onAudioIntent:acceptAudioIntent,
       onFocus:tile=>focusStream(tile.slug),
-      onClip:tile=>onClip?.(tile.slug),
       onHover:(tile,hovered)=>{tile.card.dataset.hovered=String(hovered);},
       onStatus:receivePlayerStatus
     });
@@ -288,7 +287,7 @@
     }
     function syncNativeChrome(tile){
       const video=nativeVideo();tile.lifecycle.status({hasVideo:!!video,readyState:video?.readyState||0,playing:!!video&&!video.paused&&!video.ended},{live:catalog.get(tile.slug)?.live});attr(tile.card,'data-player-state',tile.lifecycle.phase);
-      const ready=globalThis.KickRefinedPlayerControls?.sync(context?.player,{getVideo:nativeVideo,getState:()=>({muted:!audio.has(tile.slug),volume:tile.volume,focused:state.layout==='focus'&&focusKey()===tile.slug,startedAt:catalog.get(tile.slug)?.startedAt}),onToggle:()=>{if(native)native.pausedByUs=false;command(tile,!audio.has(tile.slug),{action:nativeVideo()?.paused?'play':'pause'});syncNativeChrome(tile);},onVolume:(muted,volume)=>{acceptAudioIntent(tile,muted,volume);syncNativeChrome(tile);},onFocus:()=>focusStream(tile.slug),onClip:()=>onClip?.(tile.slug)});
+      const ready=globalThis.KickRefinedPlayerControls?.sync(context?.player,{getVideo:nativeVideo,getState:()=>({muted:!audio.has(tile.slug),volume:tile.volume,focused:state.layout==='focus'&&focusKey()===tile.slug,startedAt:catalog.get(tile.slug)?.startedAt}),onToggle:()=>{if(native)native.pausedByUs=false;command(tile,!audio.has(tile.slug),{action:nativeVideo()?.paused?'play':'pause'});syncNativeChrome(tile);},onVolume:(muted,volume)=>{acceptAudioIntent(tile,muted,volume);syncNativeChrome(tile);},onFocus:()=>focusStream(tile.slug)});
       if(ready)tile.card.dataset.nativeChrome='true';
     }
     function openNativeSettings(tile){
@@ -393,7 +392,6 @@
     function streamAction(action,tile){
       const slug=tile.slug;
       if(action==='profile')return selectDirectoryChannel(slug,'home');
-      if(action==='clip')return onClip?.(slug);
       if(action==='persist')return persist();
       if(action==='focus')return focusStream(slug);
       if(action==='listen')return selectAudio(slug);
@@ -577,7 +575,7 @@
       workspace.setAttribute('aria-label',duplicate?'Already in this workspace':full?'Workspace is full':'Add stream to workspace');
       return {element:workspace,allowed:!duplicate&&!full};
     }
-    return {clipSources:()=>[...new Set([context?.slug,...state.channels])].filter(slug=>slug&&state.channels.includes(slug)).map(slug=>({slug,title:catalog.get(slug)?.title||slug,image:catalog.get(slug)?.image||'',streamTitle:catalog.get(slug)?.streamTitle||''})),snapshot:()=>({active,streams:tiles.size,clips:clipTiles.size,startup:startup.snapshot(),transport:playerBus.snapshot()}),open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),addClip,canAddClip,isChatSource:chat.isSource,chatFrameRect:chat.frameRect,close,refresh,isActive:()=>active,getDropMain:()=>findContext()?.main,dropPreview,destroy:()=>{close({restorePlayback:false});destroyed=true;metadata.destroy();startup.destroy();playerBus.destroy();sessionStore.destroy();layoutScheduler.destroy();lifetime.dispose();}};
+    return {snapshot:()=>({active,streams:tiles.size,clips:clipTiles.size,startup:startup.snapshot(),transport:playerBus.snapshot()}),open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),addClip,canAddClip,isChatSource:chat.isSource,chatFrameRect:chat.frameRect,close,refresh,isActive:()=>active,getDropMain:()=>findContext()?.main,dropPreview,destroy:()=>{close({restorePlayback:false});destroyed=true;metadata.destroy();startup.destroy();playerBus.destroy();sessionStore.destroy();layoutScheduler.destroy();lifetime.dispose();}};
   }
   globalThis.KickRefinedMulti=Object.freeze({create});
 })();

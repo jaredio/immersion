@@ -1,6 +1,6 @@
 /* Frame transport. Validate source, origin, session and revision before dispatch. */
 (() => {
-  function create({isActive, onReady, onAudioIntent, onFocus, onHover, onStatus, onClip}) {
+  function create({isActive, onReady, onAudioIntent, onFocus, onHover, onStatus}) {
     const session = crypto.randomUUID();
     const sources = new Map();
     let revision = 0;
@@ -17,7 +17,6 @@
       if (data?.session !== session) return;
       if (data.type === 'kick-refined:hover') { onHover(tile, data.hovered === true); return; }
       if (data.type === 'kick-refined:focus') { onFocus(tile); return; }
-      if (data.type === 'kick-refined:clip') { onClip?.(tile); return; }
       if (data.revision !== tile.commandRevision) return;
       if (data.type === 'kick-refined:audio-intent') {
         if (typeof data.muted === 'boolean' && Number.isFinite(data.volume) && data.volume >= 0 && data.volume <= 1) onAudioIntent(tile, data.muted, data.volume);

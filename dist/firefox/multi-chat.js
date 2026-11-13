@@ -1,7 +1,13 @@
 /* Native chat stays in its React tree; owned overlays have one lifetime. */
 (() => {
   function create({scope,getContext,getState,getCatalog,selectedChat,chatChannels,style,originalStyle,panel,chatTabs,$,decorate}) {
-    let chatFrame=null,chatOverlay=null,chatPicker=null,chatPickerRoot=null,chatHeader=null,pickerScope=null;
+    let chatFrame=null,chatOverlay=null,chatPicker=null,chatPickerRoot=null,chatHeader=null,pickerScope=null,nativePanelOpen=false;
+    scope.listen(window,'message',event=>{
+      const data=event.data;
+      if(event.origin!==location.origin||event.source!==chatFrame?.contentWindow||data?.type!=='kick-refined:chat-panel'||data.channel!==selectedChat()||data.panel!=='chatters'||typeof data.open!=='boolean')return;
+      nativePanelOpen=data.open;if(chatPicker)chatPicker.hidden=nativePanelOpen;
+      if(nativePanelOpen&&chatPickerRoot){chatPickerRoot.querySelector('.options').hidden=true;chatPickerRoot.querySelector('.trigger').setAttribute('aria-expanded','false');}
+    });
     function chatMount() {
       const context=getContext();
       if(!context.chat) return $('.multi-chat-mount');
@@ -51,6 +57,7 @@
       for(const option of options.children){const selected=String(option.dataset.channel===selectedChat());if(option.getAttribute('aria-selected')!==selected)option.setAttribute('aria-selected',selected);}
       updateIdentity(trigger,catalog.get(selectedChat()),selectedChat());
       panel.dataset.chatPicker='native';
+      chatPicker.hidden=nativePanelOpen;
       chatPicker.style.visibility=getState().chatVisible?'visible':'hidden';
       style(chatHeader,'visibility',getState().chatVisible&&selectedChat()===context.slug?'visible':'hidden');
     }
@@ -70,13 +77,13 @@
       }
       const needsFrame=state.chatVisible&&chat&&!(useNative&&original);
       const url=chat?`${location.origin}/popout/${encodeURIComponent(chat)}/chat`:location.origin;$('#multi-chat-external').href=url;
-      if(needsFrame){if(!chatFrame){chatFrame=document.createElement('iframe');chatFrame.name='kick-refined-chat';chatFrame.title='Selected stream chat';chatFrame.style.cssText='width:100%;height:100%;border:0;display:block';chatMount().append(chatFrame);}if(chatFrame.getAttribute('src')!==url)chatFrame.src=url;if(chatOverlay)chatOverlay.hidden=false;}
-      else {chatFrame?.remove();chatFrame=null;if(chatOverlay)chatOverlay.hidden=true;}
+      if(needsFrame){if(!chatFrame){chatFrame=document.createElement('iframe');chatFrame.name='kick-refined-chat';chatFrame.title='Selected stream chat';chatFrame.style.cssText='width:100%;height:100%;border:0;display:block';chatMount().append(chatFrame);}if(chatFrame.getAttribute('src')!==url){nativePanelOpen=false;if(chatPicker)chatPicker.hidden=false;chatFrame.src=url;}if(chatOverlay)chatOverlay.hidden=false;}
+      else {chatFrame?.remove();chatFrame=null;nativePanelOpen=false;if(chatPicker)chatPicker.hidden=false;if(chatOverlay)chatOverlay.hidden=true;}
       $('#multi-chat-toggle').setAttribute('aria-pressed',String(state.chatVisible));$('#multi-chat-toggle').setAttribute('aria-label',state.chatVisible?'Hide chat':'Show chat');decorate($('#multi-chat-toggle'),'chat',state.chatVisible?'Hide chat':'Show chat',true);
       for(const button of chatTabs.children)button.setAttribute('aria-pressed',String(chat===button.dataset.channel));
     }
 
-    function reset(){pickerScope?.dispose();pickerScope=null;chatPicker?.remove();chatFrame?.remove();chatOverlay?.remove();chatFrame=chatOverlay=chatPicker=chatPickerRoot=chatHeader=null;delete panel.dataset.chatPicker;}
+    function reset(){nativePanelOpen=false;pickerScope?.dispose();pickerScope=null;chatPicker?.remove();chatFrame?.remove();chatOverlay?.remove();chatFrame=chatOverlay=chatPicker=chatPickerRoot=chatHeader=null;delete panel.dataset.chatPicker;}
     scope.defer(reset);
     return {render,reset,syncPicker:syncChatPicker,get overlay(){return chatOverlay;},get pickerConnected(){return !!chatPicker?.isConnected;},isSource:source=>!!chatFrame&&chatFrame.contentWindow===source,frameRect:()=>chatFrame?.getBoundingClientRect()};
   }

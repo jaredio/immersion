@@ -44,7 +44,7 @@
   }
   function syncPlaybackControls(){
     const root=document.querySelector('[data-kr-full-player-root]')||document;if(controlsRoot&&controlsRoot!==root)globalThis.KickRefinedPlayerControls?.clear(controlsRoot);controlsRoot=root;
-    return globalThis.KickRefinedPlayerControls?.sync(root,{getVideo:primary,getState:()=>({...desired,focused,startedAt}),onToggle:()=>execute(primary()?.paused?'play':'pause'),onVolume:(muted,volume)=>{desired={muted,volume};for(const video of videos())settings(video);send('kick-refined:audio-intent',desired);scheduleStatus();},onFocus:()=>send('kick-refined:focus'),onClip:()=>send('kick-refined:clip')});
+    return globalThis.KickRefinedPlayerControls?.sync(root,{getVideo:primary,getState:()=>({...desired,focused,startedAt}),onToggle:()=>execute(primary()?.paused?'play':'pause'),onVolume:(muted,volume)=>{desired={muted,volume};for(const video of videos())settings(video);send('kick-refined:audio-intent',desired);scheduleStatus();},onFocus:()=>send('kick-refined:focus')});
   }
   function syncChrome(){syncPlaybackControls();}
   window.addEventListener('resize',()=>{syncChrome();scheduleStatus();});

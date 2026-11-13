@@ -87,7 +87,6 @@
       const live=button('live','Go live',()=>{const video=state.options.getVideo();if(video?.seekable.length)video.currentTime=video.seekable.end(video.seekable.length-1);});live.dataset.krLive='';live.textContent='LIVE';
       const spacer=document.createElement('span');spacer.dataset.krControlSpacer='';row.append(spacer);
       for(const key of ['clip','share','report','theatre','pip','fullscreen','settings'])button(key,{clip:'Clip',share:'Share',report:'Report',theatre:'Theatre mode',pip:'Picture in picture',fullscreen:'Fullscreen',settings:'Settings'}[key],()=>{
-        if(key==='clip'&&state.options.onClip){state.options.onClip();return;}
         const source=state.sources[key];if(source){source.click();if(key==='settings')requestAnimationFrame(()=>{const menu=document.getElementById(source.getAttribute('aria-controls'))||document.querySelector('[role="menu"][data-state="open"]');const portal=menu?.closest('[data-radix-popper-content-wrapper]');if(portal){const rect=bar.getBoundingClientRect();portal.style.setProperty('position','fixed','important');portal.style.setProperty('transform','none','important');portal.style.setProperty('left',`${Math.max(8,rect.right-portal.getBoundingClientRect().width)}px`,'important');portal.style.setProperty('top',`${Math.max(8,rect.top-portal.getBoundingClientRect().height)}px`,'important');}});}else if(key==='fullscreen')root.requestFullscreen?.().catch(()=>{});
       });
       const focus=button('focus','Focus stream',()=>state.options.onFocus());focus.dataset.krWorkspaceFocus='';

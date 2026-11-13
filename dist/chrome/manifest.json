@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Immersion",
-  "version": "0.11.4",
+  "version": "0.12.2",
   "description": "A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.",
   "permissions": [
     "storage",
@@ -60,7 +60,6 @@
       ],
       "js": [
         "page-ready.js",
-        "clip-native-bridge.js",
         "scroll.js",
         "native-search-bridge.js"
       ],
@@ -82,12 +81,6 @@
         "performance.js",
         "shared.js",
         "dom.js",
-        "clip-tools.js",
-        "clip-catalog.js",
-        "clip-history.js",
-        "clip-window.js",
-        "clip-workspace.js",
-        "clip-studio.js",
         "ui.js",
         "profile.js",
         "support-data.js",
@@ -175,13 +168,6 @@
       "js": [
         "stream-clock.js",
         "performance.js",
-        "clip-tools.js",
-        "clip-catalog.js",
-        "clip-history.js",
-        "clip-window.js",
-        "clip-workspace.js",
-        "clip-studio.js",
-        "clip-studio-frame.js",
         "full-player-frame.js",
         "player-controls.js",
         "player-frame.js"

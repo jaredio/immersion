@@ -24,7 +24,7 @@
       tile.scope.listen(card,'pointerenter',()=>card.dataset.hovered='true');tile.scope.listen(card,'pointerleave',()=>card.dataset.hovered='false');tile.scope.listen(header,'dblclick',event=>{if(event.target.closest('a,button,input'))return;event.preventDefault();onAction('focus',tile);});
       const quick=document.createElement('div');quick.className='multi-quick-actions';header.append(quick);
       tile.audible=document.createElement('span');tile.audible.className='multi-audible';tile.audible.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg>';tile.audible.setAttribute('role','img');tile.audible.setAttribute('aria-label',`Audio enabled for ${slug}`);tile.audible.title='Audio enabled';tile.audible.hidden=true;quick.append(tile.audible);
-      const button=(label,text,action,target=controls)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;decorate(el,({'Listen to':'sound',Play:'play',Focus:'focus','Move left':'left','Move right':'right',Fullscreen:'fullscreen',Remove:'close','Player settings':'settings','Create clip':'clip','Switch player':'single'})[label],label,true);tile.scope.listen(el,'click',action);target.append(el);return el;};
+      const button=(label,text,action,target=controls)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;decorate(el,({'Listen to':'sound',Play:'play',Focus:'focus','Move left':'left','Move right':'right',Fullscreen:'fullscreen',Remove:'close','Player settings':'settings','Switch player':'single'})[label],label,true);tile.scope.listen(el,'click',action);target.append(el);return el;};
       tile.listen=button('Listen to','Listen',()=>onAction('listen',tile));
       const audioControl=document.createElement('div');audioControl.className='multi-audio-control';tile.audioControl=audioControl;tile.controls=controls;tile.scope.listen(controls,'pointerenter',()=>card.dataset.hovered='true');controls.append(audioControl);audioControl.append(tile.listen);
       const volume=document.createElement('label');volume.className='multi-volume';
@@ -34,7 +34,6 @@
       tile.scope.listen(tile.slider,'change',()=>onAction('persist',tile));
       tile.pause=button('Play','Play',()=>onAction('pause',tile));
       tile.settings=button('Player settings','settings',()=>onAction('settings',tile));
-      tile.clip=button('Create clip','clip',()=>onAction('clip',tile));
       tile.focus=button('Focus','focus',()=>onAction('focus',tile));
       tile.playerModeControl=button('Switch player','single',()=>onAction('mode',tile),quick);tile.playerModeControl.hidden=true;
       button('Fullscreen','fullscreen',()=>onAction('fullscreen',tile),quick);
