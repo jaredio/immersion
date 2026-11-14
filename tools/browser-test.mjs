@@ -29,7 +29,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
   const errors = [];
   const extension = path.join(root, 'dist/chrome');
   if (engine === 'chromium') {
-    context = await playwright.chromium.launchPersistentContext(path.join(root, 'tmp/test-profile'), {
+    context = await playwright.chromium.launchPersistentContext(path.join(root, `tmp/test-profile-${Date.now()}`), {
       executablePath: process.env.KR_CHROMIUM || playwright.chromium.executablePath(),
       headless: true, viewport: { width: 1600, height: 1000 },
       args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`]
@@ -393,7 +393,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multi.locator('.multi-player iframe').contentFrame().locator('video').waitFor({state:'attached'});
     for (const frame of page.frames().filter(f => f.url().startsWith('https://player.kick.com/'))) {
       await frame.waitForSelector('video', { state: 'attached' });
-      if (engine === 'firefox') for(const file of ['player-controls.js','player-frame.js']) await frame.addScriptTag({ path: path.join(root, 'extension',file) });
+      if (engine === 'firefox') for(const file of ['player-dom.js','player-controls.js','player-frame.js']) await frame.addScriptTag({ path: path.join(root, 'extension',file) });
     }
     const auroraPlayer = page.frames().find(f => f.url().startsWith('https://player.kick.com/aurora'));
     await page.evaluate(()=>{const bar=document.createElement('div');bar.className='z-controls bottom-0';bar.style.cssText='position:absolute;bottom:0;left:0;width:100%;height:40px';bar.innerHTML='<button aria-label="Quality" aria-haspopup="menu" aria-controls="test-native-quality">Quality</button>';bar.querySelector('button').onclick=()=>{const menu=document.createElement('div');menu.setAttribute('data-radix-popper-content-wrapper','');menu.style.cssText='position:fixed;right:30px;top:100px;z-index:2147483647;background:#24242c;padding:12px';menu.innerHTML='<div role="menu" id="test-native-quality"><button>1080p</button></div>';menu.querySelector('button').onclick=()=>{window.nativeQualitySelected=true;menu.remove();};document.body.append(menu);};document.querySelector('.stage').append(bar);});
@@ -465,7 +465,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await page.evaluate(()=>document.getElementById('video-player').muted),false,'focusing preserves other audio when mixing');
     await auroraPlayer.waitForFunction(()=>!document.querySelector('video').muted);
     await focusByTitle('aurora');
-    assert.equal(await multi.locator('.multi-tile[data-channel="aurora"] .multi-audible').isVisible(),false,'extra speaker indicator stays hidden');
+    assert.equal(await multi.locator('.multi-tile[data-channel="aurora"] .multi-audible').count(),0,'obsolete speaker indicator is not created');
     await multi.getByRole('button',{name:'Mute all',exact:true}).click();
     await auroraPlayer.waitForFunction(()=>document.querySelector('video').muted);
     await multi.getByRole('button',{name:'Mix audio',exact:true}).click();
@@ -578,6 +578,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     await multi.getByRole('combobox',{name:'Multiview layout'}).selectOption('focus');
     await multi.getByRole('textbox', { name: 'Layout name', exact: true }).fill('Evening duo');
     await multi.getByRole('button', { name: 'Save', exact: true }).click();
+    await multi.locator('#multi-notice').filter({hasText:'Saved “Evening duo”'}).waitFor();
     await addStream('pixelgarden');
     await page.waitForFunction(()=>document.title.includes('pixelgarden'));
     const geometry=await featured.evaluate(card=>{
@@ -640,7 +641,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       return grid.scrollLeft>50&&Math.abs(slot.left-player.left)<2&&getComputedStyle(window.originalPlayer).clipPath!=='none';
     });
     assert.equal(await auroraPlayer.evaluate(()=>window.playerSentinel),71,'horizontal scroll keeps the same players');
-    await multi.getByRole('combobox', { name: 'Saved multiview sessions' }).selectOption('0');
+    await multi.getByRole('combobox', { name: 'Saved multiview sessions' }).selectOption({label:'Evening duo'});
     await page.waitForFunction(()=>document.title.startsWith('Multistream:')&&!document.title.includes('pixelgarden'));
     assert.equal(await multi.locator('.multi-player iframe').count(), 1);
     assert.equal(await divider.getAttribute('aria-valuenow'),'72','session retains the custom split');

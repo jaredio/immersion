@@ -44,11 +44,18 @@
     if(current!==root){current?.removeAttribute('data-kr-full-player-root');current=root;}
     if(!root.hasAttribute('data-kr-full-player-root'))root.setAttribute('data-kr-full-player-root','');
   }
-  const observer=new MutationObserver(records=>{
-    if(!records.some(record=>{const target=record.target.nodeType===1?record.target:record.target.parentElement;return !target?.closest?.('#chatroom-messages,[data-kr-unified-row]')&&[...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1);}))return;
+  let unsubscribe=()=>{};
+  function changed(records){
+    if(!records.some(record=>{
+      const target=record.target.nodeType===1?record.target:record.target.parentElement;
+      const nodes=[...record.addedNodes,...record.removedNodes].filter(node=>node.nodeType===1);
+      if(current?.isConnected&&current.contains(target))return nodes.some(node=>node.matches('video')||node.querySelector('video'));
+      if(current?.isConnected&&target?.closest?.('[data-kr-full-hidden]'))return nodes.some(node=>node.matches(portal)||node.querySelector(portal));
+      return nodes.length>0;
+    }))return;
     if(!timer)timer=setTimeout(scan,40);
-  });
-  function init(){scan();observer.observe(document,{childList:true,subtree:true});}
+  }
+  function init(){scan();unsubscribe=KickRefinedPlayerDOM.subscribe(changed);}
   if(document.documentElement)init();else document.addEventListener('DOMContentLoaded',init,{once:true});
-  window.addEventListener('pagehide',event=>{if(!event.persisted){observer.disconnect();clearTimeout(timer);}});
+  window.addEventListener('pagehide',event=>{if(!event.persisted){unsubscribe();clearTimeout(timer);}});
 })();

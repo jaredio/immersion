@@ -121,7 +121,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .palette .footer .actions { display: flex; gap: 6px; margin-left: auto; }
 .toolbar .multi-button { padding: 6px; color: #92929e; }
 :host([data-compact="true"]) .multi-button, :host([data-placement="edge"]) .multi-button { display: none; }
-@media(max-width:440px) { .palette .footer .key-hint { display: none; } }
 .channel-name { font-weight: 600; font-size: 12px; }
 .channel-detail { font-size: 10px; color: #8e8e99; margin-top: 3px; }
 .pin { margin-left: auto; color: var(--accent); }
@@ -134,7 +133,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multiview { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-width: none; max-height: none; margin: auto; overflow: hidden; border-radius: 14px; }
 .multiview:fullscreen { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
 .multi-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #ffffff0b; flex-shrink: 0; }
-.multi-label { display: inline-block; color: var(--accent); font-size: 8px; letter-spacing: .13em; border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); padding: 3px 5px; border-radius: 4px; margin-left: 10px; vertical-align: middle; }
 .multi-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 16px; flex-shrink: 0; }
 .multi-tools form { display: flex; gap: 6px; flex: 1; min-width: 240px; }
 .multiview input { min-width: 0; background: #ffffff04; border: 1px solid #ffffff12; color: #e4e4ec; padding: 8px 10px; border-radius: 7px; }
@@ -161,9 +159,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-tile-controls button:last-child { margin-left: auto; }
 .multi-chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid #ffffff0d; border-radius: 10px; overflow: hidden; }
 .multi-chat[hidden] { display: none; }
-.multi-chat-header { display: flex; align-items: center; padding: 9px; gap: 9px; border-bottom: 1px solid #ffffff0b; font-size: 11px; color: #92929e; }
-.multi-chat-header select { flex: 1; min-width: 0; max-width: none; }
-.multi-chat-header a { color: #a1a1ad; text-decoration: none; }
 .multi-chat-mount { flex: 1; min-height: 0; }
 .multi-empty { grid-column: 1 / -1; display: grid; place-items: center; padding: 30px; color: #858592; font-size: 13px; text-align: center; }
 .multi-notice { font-size: 11px; color: var(--accent); padding: 0 18px 8px; }
@@ -204,7 +199,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-stage { position:relative;min-width:0;container-type:inline-size; }
 .multi-stage[data-resizing="true"] { cursor:col-resize;user-select:none; }
 .multi-stage[data-resizing="true"] iframe { pointer-events:none; }
-.multi-divider { position:absolute;left:var(--multi-featured,74%);top:0;bottom:0;width:10px;transform:translateX(-50%);cursor:col-resize;z-index:4;touch-action:none; }
+.multi-divider { position:absolute;left:var(--multi-featured,74%);top:0;height:var(--multi-focus-height,100%);width:10px;transform:translateX(-50%);cursor:col-resize;z-index:4;touch-action:none; }
 .multi-divider::after { content:'';position:absolute;left:3px;top:calc(50% - 22px);width:4px;height:44px;background:#454550;border-radius:4px;transition:background 120ms; }
 .multi-divider:is(:hover,:focus-visible)::after, .multi-stage[data-resizing="true"] .multi-divider::after { background:var(--accent); }
 .multi-divider:focus-visible { outline:1px solid var(--accent);outline-offset:-1px;border-radius:4px; }
@@ -268,7 +263,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multiview .multi-volume input { width:100%;min-width:24px;max-width:88px; }
 .multi-chat-bar #multi-chat-external { order:2;margin-left:auto; }
 .multi-chat-bar #multi-chat-toggle { order:3;margin-left:0; }
-@media(max-width:700px) { .multi-audio-source { flex-basis:100%;max-width:none; } }
 
 @container(max-width:260px) {
   .multi-volume output { display:none; }
@@ -280,12 +274,12 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 }
 @container(max-width:640px) {
   .multi-divider { display:none; }
-  .inline-multi .multi-grid[data-layout="focus"]:not([data-count="1"]) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .inline-multi .multi-grid[data-layout="focus"]:not([data-count="1"]) { grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:none!important; }
   .inline-multi .multi-grid[data-layout="focus"] .multi-tile { grid-column:auto !important;grid-row:auto !important; }
   .inline-multi .multi-grid[data-layout="focus"] .multi-tile[data-featured="true"] { grid-column:1 / -1 !important; }
 }
 @container(max-width:400px) {
-  .inline-multi .multi-grid[data-layout="focus"]:not([data-count="1"]) { grid-template-columns:minmax(0,1fr); }
+  .inline-multi .multi-grid[data-layout="focus"]:not([data-count="1"]) { grid-template-columns:minmax(0,1fr)!important; }
 }
 
 /* Direct player actions, optional mixing, and channel quick views. */
@@ -294,8 +288,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-quick-actions { display:flex;align-items:center;gap:3px;flex-shrink:0; }
 .inline-multi .multi-quick-actions button { padding:4px 6px;background:transparent;border-color:transparent;font-size:15px;line-height:1; }
 .multi-quick-actions button:hover { background:#ffffff0a; }
-.multi-audible { color:var(--accent);font-size:14px; }
-.multi-audible[hidden] { display:none; }
 .multi-tile { position:relative; }
 .inline-multi .multi-tile-controls { display:flex;flex-wrap:nowrap;gap:3px;padding-right:12px; }
 .inline-multi .multi-tile-controls > button { padding:4px 5px; }
@@ -323,7 +315,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
   .inline-multi .multi-grid[data-layout="grid"] { grid-template-columns:minmax(0,1fr); }
 }
 
-.multi-audible svg { display:block;width:15px;height:15px; }
 
 /* A quiet drop affordance keeps the actual stream visible during a drag. */
 .stream-drop-zone { position:absolute;inset:6px;pointer-events:none;border:1px solid #ffffff14;border-radius:12px;background:transparent;transition:border-color 140ms,background 140ms,box-shadow 140ms; }
@@ -399,8 +390,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .inline-multi .multi-tile-controls > button, .inline-multi .multi-quick-actions > button { display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:30px;height:30px;min-width:30px;padding:6px;border-radius:8px;color:#b1b1be;background:#ffffff03;border:1px solid #ffffff0a; }
 .inline-multi .multi-tile-controls > button:hover, .inline-multi .multi-quick-actions > button:hover { color:#f3f3f7;background:#ffffff0a;border-color:#ffffff20; }
 .inline-multi .multi-tile-controls > button[aria-pressed="true"] { color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,#121216);border-color:color-mix(in srgb,var(--accent) 20%,transparent); }
-.inline-multi .multi-tile-controls > .multi-order-control { margin-left:auto;background:transparent;border-color:transparent;color:#818190; }
-.inline-multi .multi-tile-controls > .multi-order-control + .multi-order-control { margin-left:0; }
 .inline-multi .multi-tile-controls > button:disabled { opacity:.25;cursor:default;background:transparent;border-color:transparent; }
 .multi-audio-control { --volume-color:#6f6f7e;display:flex;align-items:center;flex:1 1 180px;min-width:64px;max-width:200px;height:32px;padding:0 7px 0 1px;gap:2px;background:#ffffff03;border:1px solid #ffffff0d;border-radius:9px; }
 .multi-audio-control[data-active="true"] { --volume-color:var(--accent);border-color:color-mix(in srgb,var(--accent) 18%,transparent);background:color-mix(in srgb,var(--accent) 3%,#111115); }
@@ -487,7 +476,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .inline-multi .multi-tile[data-playing="true"]:not(:hover):not(:has(:focus-visible)):not([data-hovered="true"]) .multi-tile-controls{transform:translateY(4px)}
 .inline-multi .multi-tile[data-playing="true"]:not(:hover):not(:has(:focus-visible)):not([data-hovered="true"]) .multi-tile-controls{pointer-events:auto;transform:none}
 .inline-multi .multi-quick-actions>button{transition:opacity 160ms ease}
-.inline-multi .multi-audible{display:none!important}
 .inline-multi .multi-tile[data-native-chrome="true"] .multi-tile-controls{display:none!important}
 .inline-multi .multi-tile[data-native-chrome="true"] .multi-quick-actions button[aria-label^="Fullscreen"]{display:none}
 .inline-multi .multi-tile[data-native-player="true"]:not([data-native-chrome="true"]) .multi-tile-controls{position:relative;inset:auto;opacity:1;transform:none}
@@ -504,6 +492,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .inline-multi .multi-tile:is(:hover,:focus-within) .multi-tile-resize{opacity:.6}
 @media(hover:none){.inline-multi .multi-tile[data-playing="true"] .multi-tile-controls,.inline-multi .multi-tile[data-playing="true"] .multi-quick-actions>button{opacity:1!important;pointer-events:auto!important;transform:none!important}}
 @media(prefers-reduced-motion:reduce){.inline-multi .multi-tile-controls,.inline-multi .multi-quick-actions>button,.inline-multi .multi-tile-resize{transition:none!important}}
+@container(max-width:240px){
+  .inline-multi .multi-tile-controls{gap:3px;padding-inline:5px}
+  .inline-multi .multi-tile-controls>button{width:25px;min-width:25px;padding:4px}
+  .inline-multi .multi-audio-control{min-width:60px;padding-right:2px}
+}
+@container(max-width:180px){
+  .inline-multi .multi-tile-controls>button[aria-label^="Focus"],.inline-multi .multi-tile-controls>button[aria-label^="Return to grid"]{display:none}
+  .inline-multi .multi-audio-control{min-width:30px;flex:0 0 30px;padding:0}
+  .inline-multi .multi-audio-control .multi-volume{display:none}
+}
 .multi-player-options{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;color:#b5b5c3;font-size:12px}
 .multi-player-options span{font-size:11px;color:#9292a0}
 .multi-player-options select{background:#1a1a20;border:1px solid #ffffff14;border-radius:8px;color:#ededf3}

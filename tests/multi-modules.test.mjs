@@ -7,6 +7,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function contextFor(file,extra={}){
   const context=vm.createContext({URL,setTimeout,clearTimeout,...extra});
   vm.runInContext(await readFile('extension/shared.js','utf8'),context);
+  if(file==='multi-session')vm.runInContext(await readFile('extension/session-data.js','utf8'),context);
   vm.runInContext(await readFile(`extension/${file}.js`,'utf8'),context);
   return context;
 }
@@ -43,6 +44,32 @@ test('metadata requests deduplicate, recover independently and ignore late respo
   service.requestPanels('a');service.requestPanels('a');await tick();assert.equal(panelReads,1);assert.equal(panelChanges,1);
   service.requestChannel('late');await tick();service.destroy();release();await tick();
   assert.equal(service.channel('late'),undefined);assert.equal(channelChanges,2,'late completions do not render disposed workspaces');
+});
+
+test('metadata runs at most two reads, skips removed channels and abandons queued work on destroy',async()=>{
+  const context=await contextFor('multi-metadata');
+  const calls=[],releases=new Map(),wanted=new Set(['slow','fast','third','skip','last']);let changes=0;
+  const service=context.KickRefinedMultiMetadata.create({support:{channel:slug=>{calls.push(slug);return new Promise(resolve=>releases.set(slug,resolve));}},isWanted:slug=>wanted.has(slug),onChannel:()=>changes++});
+  for(const slug of wanted)service.requestChannel(slug);
+  service.requestChannel('fast');await tick();
+  assert.deepEqual(calls,['slow','fast'],'a slow request does not block a second channel, but the third waits');
+  wanted.delete('skip');releases.get('fast')({title:'fast'});await tick();
+  assert.deepEqual(calls,['slow','fast','third']);
+  releases.get('third')({title:'third'});await tick();
+  assert.deepEqual(calls,['slow','fast','third','last'],'removed queued channels never start');
+  wanted.add('queued');service.requestChannel('queued');service.destroy();
+  releases.get('slow')({});releases.get('last')({});await tick();
+  assert.equal(changes,2,'late results do not notify after teardown');
+  assert.equal(calls.includes('queued'),false,'destroyed queues do not start more work');
+});
+
+test('metadata failures retain last good data and become retryable after five seconds',async()=>{
+  let now=100000,fail=false,calls=0;const clock=class extends Date{static now(){return now;}};
+  const ctx=await contextFor('multi-metadata',{Date:clock});
+  const service=ctx.KickRefinedMultiMetadata.create({support:{channel:async()=>{calls++;if(fail)throw Error('temporary');return {title:'Good data'};}},isWanted:()=>true,onChannel(){}});
+  service.requestChannel('a');await tick();now+=60001;fail=true;service.requestChannel('a');await tick();
+  assert.equal(service.channel('a').title,'Good data');service.requestChannel('a');await tick();assert.equal(calls,2);
+  now+=5001;fail=false;service.requestChannel('a');await tick();assert.equal(calls,3);service.destroy();
 });
 
 test('player bus rejects spoofed, stale and detached messages while preserving the handshake',async()=>{

@@ -53,5 +53,24 @@
       destroy(){disposed=true;cancel();}
     };
   }
-  globalThis.KickRefinedMultiLayout=Object.freeze({findContext,createStyles,createScheduler});
+  function focusPlan({width,focusSize,gap,featured,rail}) {
+    const mainWidth=width*focusSize/100-gap/2,sideWidth=Math.round((width-mainWidth-gap)*1000)/1000;
+    const heightAt=(box,target)=>Math.ceil(box.height-box.playerHeight+(target-box.width+box.playerWidth)*box.playerHeight/box.playerWidth);
+    const mainHeight=heightAt(featured,mainWidth),heights=rail.map(box=>heightAt(box,sideWidth));
+    let count=0,used=0;
+    // Fill to the featured bottom before wrapping, allowing the last side pane
+    // to extend past it rather than leaving a nearly pane-sized empty slot.
+    while(count<heights.length&&(count===0||used+gap<mainHeight-.5)){
+      used+=(count?gap:0)+heights[count++];
+    }
+    const columns=Math.max(1,Math.min(4,Math.round(mainWidth/sideWidth)));
+    const rows=heights.slice(0,count);
+    rows[count-1]=Math.max(rows[count-1],mainHeight-rows.slice(0,-1).reduce((sum,height)=>sum+height+gap,0));
+    return {columns,mainHeight,templateColumns:`repeat(${columns},minmax(0,1fr)) ${sideWidth}px`,
+      templateRows:rows.map(height=>`${height}px`).join(' '),
+      featured:{column:`1 / span ${columns}`,row:`1 / span ${count}`},
+      rail:rail.map((_,index)=>index<count?{column:String(columns+1),row:String(index+1)}:
+        {column:String((index-count)%(columns+1)+1),row:String(count+1+Math.floor((index-count)/(columns+1)))})};
+  }
+  globalThis.KickRefinedMultiLayout=Object.freeze({findContext,createStyles,createScheduler,focusPlan});
 })();

@@ -1,5 +1,5 @@
 (() => {
-  if(window!==window.top&&/^kick-refined-(?:full|clip):[a-z0-9_]{1,40}$/.test(window.name))return;
+  if(window!==window.top&&/^kick-refined-full:[a-z0-9_]{1,40}$/.test(window.name))return;
   const { api, normalize, channelSlug } = KickRefined;
   if (/^\/popout\/[^/]+\/chat\/?$/.test(location.pathname)) return;
   if (!api?.storage || document.getElementById('kr-root')) return;
@@ -7,8 +7,8 @@
   let settings = normalize();
   let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, xPosts, mediaCards, replyPreviews, notices, support, channelPanel, checkouts;
   let channels = [], shown = [], selected = 0;
-  const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
-  let refreshTimer, writeTimer, routeTimer, routeTimeout, previousFocus;
+  const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchFailed=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
+  let refreshTimer, routeTimer, routeTimeout, previousFocus;
   let dockPosition = '';
   let channelPage=null;const discovery=globalThis.KickRefinedDiscovery?.create();
   let searchWindow=null,nativeSearch=null,restoringSearchFocus=false;
@@ -18,7 +18,7 @@
   const draggableRows = new Map();
   const abort = new AbortController();
   const sidebarObserver = new MutationObserver(() => scheduleRefresh());
-  const observedSidebar = new ResizeObserver(entries => {
+  const observedSidebar = new ResizeObserver(() => {
     if (host) placeToolbar();
   });
 
@@ -50,17 +50,8 @@
     if (!settings.enabled) { endDrag(); multi?.close();if(palette?.open)closeSearch(); }
   }
 
-  function change(patch) {
-    settings = normalize({ ...settings, ...patch });
-    apply();
-    if (palette?.open) renderResults();
-    clearTimeout(writeTimer);
-    writeTimer = setTimeout(() => {
-      api.storage.local.set({ settings }).catch(() => {
-        if (shadow) shadow.querySelector('#save-status').textContent = 'Could not save. Reload this tab after updating the extension.';
-      });
-    }, 100);
-  }
+  const settingsStore=KickRefinedSettings.create({onUpdate:value=>{settings=value;if(host){apply();if(palette?.open){collectChannels();renderResults();}}},onError:()=>{if(shadow)shadow.querySelector('#save-status').textContent='Could not save settings. Please try again.';},onSaved:()=>{if(shadow)shadow.querySelector('#save-status').textContent='';}});
+  function change(patch) { settingsStore.patch(patch); }
 
   function shadowRoot(element) {
     const result = element.attachShadow({ mode: 'open' });
@@ -263,14 +254,14 @@
   }
   function updateSearch(){
     nativeSearch?.sync(shadow.querySelector('#channel-search').value);
-    shown=[];selected=0;searchRevision++;clearTimeout(searchTimer);searchService.cancel();searchRows=[];searchMore=false;searchLoaded=0;searchError=searchWarning='';
+    shown=[];selected=0;searchRevision++;clearTimeout(searchTimer);searchService.cancel();searchRows=[];searchMore=false;searchLoaded=0;searchError=searchWarning='';searchFailed=false;
     try{searchQuery=KickRefinedSearch.parse(shadow.querySelector('#channel-search').value,{allowUnscoped:true});}catch(error){searchQuery=null;searchError=error.message;searchBusy=false;renderResults();return;}
     searchBusy=searchQuery.type==='channels'?!!searchQuery.terms.length||!!searchQuery.channels.length:!!searchQuery.channels.length;renderResults();if(searchBusy){const revision=searchRevision;searchTimer=setTimeout(()=>loadSearch(revision),220);}
   }
-  async function loadSearch(revision,append=false){
+  async function loadSearch(revision,append=false,retryFailed=false){
     if(!searchQuery||searchQuery.type!=='channels'&&!searchQuery.channels.length||revision!==searchRevision||!palette.open)return;searchBusy=true;searchError='';renderResults();
-    try{const result=await searchService.search(searchQuery,{append});if(revision!==searchRevision||!palette.open)return;searchRows=result.rows;searchMore=result.more;searchLoaded=result.loaded;searchWarning=result.warning||'';}
-    catch(error){if(revision!==searchRevision||error.name==='AbortError')return;searchError=error.message||'Kick search is unavailable. Try again.';}
+    try{const result=await searchService.search(searchQuery,{append,retryFailed});if(revision!==searchRevision||!palette.open)return;searchRows=result.rows;searchMore=result.more;searchLoaded=result.loaded;searchWarning=result.warning||'';searchFailed=!!result.failedChannels?.length;}
+    catch(error){if(revision!==searchRevision||error.name==='AbortError')return;searchError=error.message||'Kick search is unavailable. Try again.';searchFailed=true;}
     finally{if(revision===searchRevision&&palette.open){searchBusy=false;renderResults();}}
   }
   function renderResults() {
@@ -281,7 +272,7 @@
     const selectedKey=shown[selected]?.key;shown=(searchQuery?.type==='channels'?KickRefinedSearch.rank([...rows.values()],searchQuery,settings.pinned):[...rows.values()]).slice(0,200);
     const retained=shown.findIndex(row=>row.key===selectedKey);if(retained>=0)selected=retained;
     selected = Math.max(0, Math.min(selected, shown.length - 1));
-    const signature=JSON.stringify([shown.map(({link,...row})=>row),searchQuery,searchBusy,searchError,searchWarning,searchMore,searchLoaded,settings.pinned]);if(signature===searchRenderKey){highlight(false);return;}searchRenderKey=signature;
+    const signature=JSON.stringify([shown.map(({link,...row})=>row),searchQuery,searchBusy,searchError,searchWarning,searchMore,searchFailed,searchLoaded,settings.pinned]);if(signature===searchRenderKey){highlight(false);return;}searchRenderKey=signature;
     const results = shadow.querySelector('#channel-results');
     results.replaceChildren();
     for (const [index, channel] of shown.entries()) {
@@ -316,7 +307,7 @@
     }
     shadow.querySelector('#result-count').textContent = `${shown.length} ${searchQuery?.type==='vods'?(shown.length===1?'VOD':'VODs'):searchQuery?.type==='clips'?(shown.length===1?'clip':'clips'):(shown.length===1?'channel':'channels')}`;
     const status=shadow.querySelector('#search-status');status.textContent=searchError||searchWarning||(searchBusy?'Searching Kick...':'');status.hidden=!status.textContent;status.dataset.error=String(!!searchError);
-    if(searchError&&searchQuery){const retry=document.createElement('button');retry.type='button';retry.className='search-retry';retry.textContent='Retry';retry.addEventListener('click',()=>loadSearch(searchRevision));status.append(retry);}
+    if((searchError||searchFailed)&&searchQuery){const retry=document.createElement('button');retry.type='button';retry.className='search-retry';retry.textContent='Retry';retry.disabled=searchBusy;retry.addEventListener('click',()=>loadSearch(searchRevision,false,true));status.append(retry);}
     const more=shadow.querySelector('#search-more');more.hidden=!searchMore;more.disabled=searchBusy;
     highlight(false);
   }
@@ -523,7 +514,7 @@
     searchWindow?.destroy();nativeSearch?.destroy();
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; api.storage.onChanged.removeListener?.(onSettingsChanged); abort.abort(); unsubscribeDOM(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
-    clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();discovery?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); clearTimeout(writeTimer); stopTransition();
+    clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();discovery?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); settingsStore.destroy(); stopTransition();
   }
   function handleShortcut(e) {
     if(e.key==='Escape' && drag) { e.preventDefault();endDrag();return; }
@@ -535,12 +526,11 @@
 
   function onSettingsChanged(changes,area){
     if(disposed||area!=='local'||!changes.settings)return;
-    settings=normalize(changes.settings.newValue);apply();
-    if(palette.open){collectChannels();renderResults();}
+    settingsStore.accept(changes.settings.newValue);
   }
   async function init() {
     try { settings = normalize((await (globalThis.KickRefinedThemeSettings||api.storage.local.get('settings'))).settings); } catch { /* Extension defaults also work if storage is temporarily unavailable. */ }
-    apply(); refresh();
+    settingsStore.accept(settings);apply(); refresh();
     const sharedMulti = new URL(location.href).searchParams.get('refined-multi');
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);

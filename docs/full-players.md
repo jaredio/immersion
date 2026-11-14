@@ -12,7 +12,9 @@ Choose **Manage** > **Player mode** to switch to **Standard embeds**. Full pages
 resources, including the channel application's background work. The selected mode
 is saved with the workspace and included in shared workspace links.
 
-If a page cannot load, use **Use standard embed** in that pane. The pane's header
+Full pages start two at a time. While a pane is waiting for a startup slot, its
+**Use standard embed** button switches immediately without waiting for other
+pages to finish. The same button is available if a page cannot load. The pane's header
 also offers a switch back to an embed after loading, or a retry of the full player.
 Switching the workspace mode reloads added players. Kick's framing protections
 are respected; this mode does not modify response headers.
@@ -20,6 +22,8 @@ are respected; this mode does not modify response headers.
 ## Verification
 
 - `npm run test:full-players`: Chromium extension integration with local fixtures.
+- `npm run test:queued-player`: immediate queued fallback, cancellation, retained
+  frames and keyboard focus; also supports `KR_ENGINE=firefox`.
 - PowerShell: `$env:KR_ENGINE='firefox'; npm run test:full-players`: Firefox engine
   integration with the same content scripts injected by the test harness.
 - `npm run test:full-players:live`: optional anonymous test against two real Kick

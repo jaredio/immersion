@@ -78,13 +78,14 @@
     }
     function renderSchedule(){
       const visible=context.tab==='schedule'&&context.inlineSchedule;
+      if(!visible&&schedule){schedule.remove();schedule=null;}
       if(visible&&!schedule){
         schedule=document.createElement('div');schedule.className='schedule';
         const frame=document.createElement('iframe');frame.title=`${context.slug} schedule`;frame.hidden=true;
         const link=document.createElement('a');link.href=`/${context.slug}/schedule`;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Open schedule on Kick ↗';
         const status=document.createElement('p');status.className='status';status.setAttribute('role','status');status.textContent='Loading schedule…';
         frame.addEventListener('load',()=>{
-          if(destroyed)return;
+          if(destroyed||!schedule?.contains(frame)||context.slug!==frame.dataset.channel)return;
           const doc=frame.contentDocument;
           if(!doc?.head||!doc.querySelector('[data-testid="schedule-viewer-page"]')){status.textContent='Could not load the inline schedule.';return;}
           const css=doc.createElement('style');
@@ -96,7 +97,7 @@
           `;
           doc.head.append(css);frame.hidden=false;status.hidden=true;
         });
-        frame.src=link.href;schedule.append(status,frame,link);$('.content').after(schedule);
+        frame.dataset.channel=context.slug;frame.src=link.href;schedule.append(status,frame,link);$('.content').after(schedule);
       }
       if(schedule)setHidden(schedule,!visible);
     }
@@ -133,12 +134,12 @@
       if(target.dataset.view){view=target.dataset.view;render();return;}if(target.matches('.more')){context.more?.();return;}
       const row=rows.get(target.dataset.key||target.closest('[data-key]')?.dataset.key);if(!row)return;
       if(target.dataset.action==='open')open(row,event);
-      if(target.dataset.action==='watch'){event.preventDefault();target.disabled=true;try{const result=await onWatch?.(row);if(result===false)throw Error();}catch{if(!destroyed){$('.notice').hidden=false;setText($('.notice'),'Could not add this video to the workspace.');}}finally{if(!destroyed)target.disabled=false;}}
+      if(target.dataset.action==='watch'){event.preventDefault();target.disabled=true;try{const result=await onWatch?.(row);if(result===false)throw Error();if(!destroyed)$('.notice').hidden=true;}catch{if(!destroyed){$('.notice').hidden=false;setText($('.notice'),'Could not add this video to the workspace.');}}finally{if(!destroyed)target.disabled=false;}}
     });
     ui.addEventListener('dragstart',event=>{const row=rows.get(event.target.closest('[data-key]')?.dataset.key);if(row&&onDrag){lastDrag=performance.now();onDrag(event,row);}});ui.addEventListener('dragend',()=>lastDrag=performance.now());
     for(const type of ['keydown','kick-refined-keydown','keyup','keypress'])shadow.addEventListener(type,event=>{if(type==='keydown'||type==='kick-refined-keydown')onKeydown?.(event);event.stopPropagation();});
     return {host,update(next,items){
-      if(destroyed)return;if(context?.slug!==next.slug){sort='recent';$('[aria-label="Library sort"]').value=sort;nodes.clear();}if(context?.slug!==next.slug||context?.tab!==next.tab){query='';length='all';$('.find input').value='';$('[aria-label="Video length"]').value='all';}context=next;
+      if(destroyed)return;if(context?.slug!==next.slug){schedule?.remove();schedule=null;sort='recent';$('[aria-label="Library sort"]').value=sort;nodes.clear();}if(context?.slug!==next.slug||context?.tab!==next.tab){query='';length='all';$('.find input').value='';$('[aria-label="Video length"]').value='all';}context=next;
       rows=new Map(items.map(row=>[row.key,row]));for(const key of nodes.keys())if(!rows.has(key))nodes.delete(key);
       signature=JSON.stringify(items.map(({source,...row})=>row));const nav=JSON.stringify([next.slug,next.tab,next.integrated]);if(nav!==navKey){navKey=nav;$('.nav').replaceChildren(...[['home','Overview'],['videos','Videos'],['clips','Clips'],['about','About'],['schedule','Schedule']].map(([tab,label])=>{const link=document.createElement('a');link.href=`/${next.slug}${tab==='home'?(next.integrated?'?tab=overview':''):'/'+tab}`;link.dataset.tab=tab;link.textContent=label;if(tab==='about')link.className='secondary';if(tab===next.tab)link.setAttribute('aria-current','page');return link;}));}
       render();

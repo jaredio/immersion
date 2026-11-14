@@ -64,7 +64,7 @@
     }
     const observer=new MutationObserver(changes=>{
       if(!current)return;
-      if(!current.row.isConnected||!current.row.contains(current.trigger)||!authorFrom(current.trigger)){clear();return;}
+      if(!current.row.isConnected||!current.row.contains(current.trigger)||current.index!==current.row.getAttribute('data-index')||!authorFrom(current.trigger)){clear();return;}
       if(changes.some(change=>current.trigger.contains(change.target)))clear();
     });
     function enter(event){
@@ -75,7 +75,12 @@
       if(!trigger||!authorFrom(trigger)){if(current)closeSoon();return;}
       stopClose();if(current?.trigger===trigger)return;
       clear();current={trigger,row:trigger.closest('[data-index]'),list:trigger.closest('#chatroom-messages')};
-      observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
+      current.index=current.row.getAttribute('data-index');
+      observer.observe(trigger,{subtree:true,childList:true,characterData:true});
+      observer.observe(current.row,{childList:true,attributes:true,attributeFilter:['data-index']});
+      // Direct-child observation along the ancestor path catches detachment
+      // without subscribing to every message's text and subtree mutations.
+      for(let node=current.row.parentNode;node;node=node.parentNode)observer.observe(node,{childList:true});
       if(event.type==='focusin')show();else openTimer=setTimeout(show,100);
     }
     function leave(event){const next=event.relatedTarget instanceof Node?event.relatedTarget:null;if(current&&!current.trigger.contains(next)&&!host?.contains(next))closeSoon();}

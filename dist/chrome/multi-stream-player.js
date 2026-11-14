@@ -20,6 +20,13 @@
       drop(tile);tile.frameMode=mode;tile.card.dataset.playerMode=tile.embedFallback?'embed-fallback':mode;
       const scope=tile.mountScope=tile.scope.child(),token=tile.lifecycle.begin(mode,{queued:mode==='full',retrying});
       scope.defer(()=>{startup.cancel(tile.startJob);tile.startJob=null;bus.detach(tile);tile.frame?.remove();tile.loading?.remove();tile.frame=null;tile.loading=tile.retry=tile.loadMessage=null;tile.frameOrigin='';});
+      const loading=document.createElement('div');loading.className='multi-player-loading';loading.hidden=mode!=='full';
+      const message=document.createElement('p');message.setAttribute('role','status');message.textContent='Waiting for a full-player startup slot...';
+      const fallback=document.createElement('button');fallback.type='button';fallback.textContent='Use standard embed';fallback.setAttribute('aria-label',`Use embed for ${slug}`);
+      const retry=document.createElement('button');retry.type='button';retry.textContent='Retry full player';retry.setAttribute('aria-label',`Retry full player for ${slug}`);retry.hidden=true;
+      const remount=embed=>{const active=tile.card.getRootNode().activeElement,focused=active===fallback||active===retry;tile.pendingAction=tile.pendingAction||(tile.playing||!tile.everLoaded?'play':'pause');tile.embedFallback=embed;drop(tile);mount(tile,{retrying:!embed});onRemount(tile);if(focused)tile.card.querySelector('.multi-tile-header a')?.focus({preventScroll:true});};
+      scope.listen(fallback,'click',()=>remount(true));scope.listen(retry,'click',()=>remount(false));
+      loading.append(message,fallback,retry);Object.assign(tile,{loading,loadMessage:message,retry});tile.player.replaceChildren(loading);
       const start=scope.guard(()=>{
         if(!isCurrent(tile))return;
         tile.lifecycle.start(token);publish(tile);
@@ -30,17 +37,10 @@
         scope.listen(frame,'pointerenter',()=>tile.card.dataset.hovered='true');
         scope.listen(frame,'load',()=>{if(isCurrent(tile)&&tile.frame===frame)command(tile,isMuted(slug),{force:true});});
         scope.listen(frame,'error',()=>failed(tile,'Kick could not load this player.',token));
-        const loading=document.createElement('div');loading.className='multi-player-loading';loading.hidden=mode!=='full';
-        const message=document.createElement('p');message.setAttribute('role','status');message.textContent='Loading full Kick player...';
-        const fallback=document.createElement('button');fallback.type='button';fallback.textContent='Use standard embed';fallback.setAttribute('aria-label',`Use embed for ${slug}`);
-        const retry=document.createElement('button');retry.type='button';retry.textContent='Retry full player';retry.setAttribute('aria-label',`Retry full player for ${slug}`);retry.hidden=true;
-        const remount=embed=>{tile.pendingAction=tile.playing||!tile.everLoaded?'play':'pause';tile.embedFallback=embed;drop(tile);mount(tile,{retrying:!embed});onRemount(tile);};
-        scope.listen(fallback,'click',()=>remount(true));scope.listen(retry,'click',()=>remount(false));
-        loading.append(message,fallback,retry);Object.assign(tile,{loading,loadMessage:message,retry,frame});tile.player.replaceChildren(frame,loading);bus.attach(tile);
+        message.textContent='Loading full Kick player...';tile.frame=frame;tile.player.replaceChildren(frame,loading);bus.attach(tile);
         if(mode==='full'&&!tile.pendingAction)tile.pendingAction=tile.playing||!tile.everLoaded?'play':'pause';
       });
       if(mode==='full'){
-        const waiting=document.createElement('div');waiting.className='multi-player-loading';waiting.textContent='Waiting to start full Kick player…';tile.player.replaceChildren(waiting);scope.defer(()=>waiting.remove());
         tile.startJob=startup.enqueue({priority:priority(slug),start,onTimeout:scope.guard(job=>{if(tile.startJob===job){tile.startJob=null;failed(tile,'The full player is taking longer than expected. You can retry or use an embed.',token);}})});
       }else start();
       publish(tile);

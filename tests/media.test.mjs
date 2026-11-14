@@ -33,7 +33,7 @@ test('metadata worker resolves short links, deduplicates and restricts senders',
  let listener,requests=0;const options=[];
  const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async(url,opts)=>{
   requests++;options.push(opts);const response=new Response(html(ttItem));Object.defineProperty(response,'url',{value:tt});return response;
- }});vm.runInContext(source,worker);vm.runInContext(workerSource,worker);
+ }});vm.runInContext(source,worker);vm.runInContext(await readFile('extension/shared.js','utf8'),worker);vm.runInContext(await readFile('extension/preview-queue.js','utf8'),worker);vm.runInContext(workerSource,worker);
  const sender={id:'extension',tab:{id:1},url:'https://kick.com/channel'},message={type:'immersion:media-preview',href:'https://vt.tiktok.com/ZSg44YD1X/'};
  const ask=()=>new Promise(resolve=>assert.equal(listener(message,sender,resolve),true));const values=await Promise.all([ask(),ask()]);assert.equal(requests,1);assert.ok(values.every(value=>value.ok));assert.equal(values[0].item.id,ttItem.id);assert.equal(options[0].credentials,'omit');
  let hit;listener(message,sender,value=>hit=value);assert.equal(hit.ok,true);assert.equal(requests,1);

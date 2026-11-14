@@ -61,6 +61,8 @@ Requires Firefox 142 or newer. This development install lasts until Firefox rest
 
 You'll find **Immersion** at the bottom of Kick's sidebar. Make it yours from there. To apply an update, reload the extension and refresh Kick.
 
+See the [0.13.0 release notes](docs/releases/0.13.0.md) for changes, validation and rollback details.
+
 ## Made to be yours
 
 Your preferences and saved viewing sessions stay in your browser. Immersion has no analytics or custom backend.
@@ -80,7 +82,7 @@ npm run build
 npm test
 ```
 
-Source lives in `extension/`. Browser builds and installable ZIPs are written to `dist/`. Additional browser checks are listed in [`package.json`](package.json).
+Source lives in `extension/`. Browser builds and installable ZIPs are written to `dist/`. See [maintenance and release checks](docs/maintenance.md) for the current behavior, supported validation commands and measurement limits. Additional browser checks are listed in [`package.json`](package.json).
 
 The [upgrade roadmap](docs/upgrade-roadmap.md) describes the module boundaries,
 completed performance work and prioritized next improvements. Shared DOM

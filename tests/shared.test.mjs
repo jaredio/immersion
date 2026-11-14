@@ -52,7 +52,7 @@ test('both packages contain only scoped permissions and local assets', async () 
     assert.deepEqual(manifest.permissions, browser==='firefox'?['storage','declarativeNetRequest','webRequest','webRequestBlocking',...metadataHosts,'https://kick.com/*','https://www.kick.com/*','https://clips.kick.com/*','https://stream.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*']:[ 'storage','declarativeNetRequest']);
     assert.ok(!manifest.externally_connectable);
     assert.deepEqual(manifest.host_permissions,browser==='firefox'?undefined:metadataHosts);
-    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['privacy-background.js','x-post-data.js','x-background.js','media-data.js','media-background.js','support-data.js','support-background.js'],persistent:false}:{service_worker:'background.js'});
+    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['shared.js','settings-store.js','settings-background.js','session-data.js','session-background.js','privacy-background.js','preview-queue.js','x-post-data.js','x-background.js','media-data.js','media-background.js','support-data.js','support-background.js'],persistent:false}:{service_worker:'background.js'});
     for (const script of manifest.content_scripts) {
       for (const match of script.matches) assert.ok(['https://kick.com/*', 'https://www.kick.com/*', 'https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat', 'https://player.kick.com/*','https://powerchat.live/*','https://www.powerchat.live/*','https://kickbot.com/tips/*','https://www.kickbot.com/tips/*','https://streamelements.com/*/tip*','https://www.streamelements.com/*/tip*'].includes(match), match);
       if(script.matches.some(match=>match.includes('powerchat.live')||match.includes('kickbot.com')))assert.deepEqual(script.js,['support-data.js','support-frame.js'],'provider pages only receive the gated form stylesheet bridge');
@@ -90,7 +90,7 @@ test('Immersion layout preferences migrate safely and share only bounded sizes',
 });
 
 test('player audio bridge rejects unrelated frames and untrusted commands', async () => {
-  const source = await readFile(new URL('../extension/player-frame.js', import.meta.url), 'utf8');
+  const source = (await readFile('extension/player-dom.js','utf8')) + '\n' + await readFile(new URL('../extension/player-frame.js', import.meta.url), 'utf8');
   const sent=[],listeners = {}, parent = { postMessage(data) {sent.push(data);} }, video = { closest:()=>null,muted:true,volume:1,paused:true,addEventListener(){} };
   const document = { documentElement: {append(){}}, createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll: () => [video] };
   const window = { name: 'kick-refined:xqc', parent, top: {}, addEventListener: (name, cb) => { listeners[name] = cb; } };
@@ -138,7 +138,7 @@ test('tile widths and audio mixing migrate safely into saved and shared layouts'
 });
 
 test('a delayed player obeys the latest pause and avoids repeated media setters', async () => {
-  const source=await readFile(new URL('../extension/player-frame.js',import.meta.url),'utf8');
+  const source=(await readFile('extension/player-dom.js','utf8'))+'\n'+await readFile(new URL('../extension/player-frame.js',import.meta.url),'utf8');
   let present=false,observer,muted=true,volume=1,mutations=0,plays=0,pauses=0;
   const timers=[],listeners={},parent={postMessage(){}};
   const video={closest:()=>null,paused:false,addEventListener(){},play(){plays++;},pause(){pauses++;this.paused=true;},

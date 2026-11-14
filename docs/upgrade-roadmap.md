@@ -48,6 +48,8 @@ measurement limits and the total-stream-time fix.
 | 11 | Prioritized, cancelable two-player startup queue |
 | 12 | Saved/shared per-pane full/embed choices |
 
+Current cleanup and verification commands: [maintenance](maintenance.md).
+
 ## P2 — reliability and code quality
 
 | # | Upgrade | Reason and acceptance evidence |
@@ -55,16 +57,16 @@ measurement limits and the total-stream-time fix.
 | 13 | Delivered: extract remaining controller responsibilities | Move chat mounting/picker behavior, stream-tile lifecycle, and clip placement into modules with small callback interfaces. Keep one orchestration owner for active workspace state and audio focus. |
 | 14 | Delivered: explicit player phases and playback | Encode queued/loading/retrying/ready/blocked/offline/failed/disposed phases separately from playback. Reject replaced generations and exercise repeated mode changes and disposal. |
 | 15 | Delivered: structured lifetime scopes | Give each workspace/pane a disposal scope owning event listeners, observers, timers, animation frames and pending jobs. Teardown should be idempotent and leave no retained frame references. |
-| 16 | Request priorities and cancellation | Add a small bounded metadata queue with selected/visible channels first. Use generation tokens or consumer-aware cancellation so closing a pane does not abort a request another feature needs. |
-| 17 | Shared bounded response reader | Support/search currently check text size after buffering. Use one streaming byte-limited reader with timeout, content-type validation and consistent errors. Keep HTML catalog and JSON limits explicit. |
-| 18 | Atomic settings/session mutations across tabs | Per-tab write queues do not prevent two tabs replacing each other's snapshots. Serialize patches through a background owner or use explicit revision/conflict handling. Test two tabs saving distinct sessions concurrently. |
+| 16 | Partly delivered: bounded metadata reads | Two channel reads run concurrently; removed queued channels and late responses are suppressed. Selected-channel priority and shared-consumer cancellation remain proposals. |
+| 17 | Delivered: shared bounded response reader | `shared.js` streams channel/search responses with a 2 MiB byte limit and cancellation. HTML catalog parsing and JSON parsing remain explicit at callers. |
+| 18 | Delivered: cross-tab settings/session mutations | Named sessions use one background writer, stable IDs and synchronized menus. Settings use serialized field-level patches shared by popup and tabs. Concurrent edits to the same preference and the last-used workspace snapshot intentionally retain last-writer behavior. |
 | 19 | Versioned stored schemas | Add explicit storage migrations and a bounded recovery path for corrupted settings/sessions. Preserve existing extension ID and user preferences. |
 | 20 | Clear message/data contracts | Add JSDoc types and runtime guards at network/frame/storage boundaries. Consider type-checking JavaScript before considering a language migration. Reject invalid status payloads without corrupting state. |
 | 21 | Formatting and static checks | Format source consistently, introduce a scoped linter, and enforce unused-variable checks. Make formatting a separate reviewable change; retain browser-tested selectors and behavior. |
 | 22 | Finish consolidating test configuration | General workspace/clip injection lists now use the manifest. Keep isolated-feature dependencies explicit and centralize the remaining repeated browser setup, fixture routing and result reporting. |
 | 23 | Selector compatibility adapter | Centralize Kick DOM selectors and fallbacks by feature. Detect unsupported markup and retain native behavior instead of hiding content that could not be replaced. |
 | 24 | Installed-browser regression matrix | Retain fast shim fixtures, but add actual installed Chrome/Firefox checks for settings, chat replacement, full/embed fallback and checkout. Separate offline, network-denied and unsupported-codec outcomes from code failures. |
-| 25 | Lifecycle and soak tests | Run repeated open/close/navigation/mode-switch cycles. Measure retained iframe/video/observer counts and heap trends; test cached back/forward navigation and extension reload. |
+| 25 | Delivered: lifecycle and soak tests | Repeated open/close/navigation/mode-switch cycles assert owned resource and observer baselines. Whole-browser heap trends and installed-browser reload coverage remain separate work. |
 | 26 | Reproducible release checks | Validate manifest references, local-only runtime code, minimal permissions and packaged file lists. Exclude browser caches, diagnostics and secrets; verify installable ZIPs before release. |
 
 ## P3 — privacy, resilience and product improvements
@@ -87,9 +89,9 @@ measurement limits and the total-stream-time fix.
 ## Order of work
 
 The performance foundation in items 1-12 is delivered. Use diagnostics and
-repeatable samples to identify the next bottleneck. The next architecture batch
-is remaining chat/tile ownership (13), explicit lifecycle states (14), and unified
-resource disposal (15), followed by request/storage robustness. Preserve one
+repeatable samples to identify the next bottleneck. Chat/tile ownership (13), explicit lifecycle states (14), and unified
+resource disposal (15) are delivered. The next robustness work is cross-tab
+storage coordination and explicit schema migrations. Preserve one
 owner for each resource and avoid refactoring purely to reduce line counts.
 
 No blanket tracker-domain blocking, automatic decoder/quality changes, framework

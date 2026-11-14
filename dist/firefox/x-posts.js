@@ -12,14 +12,14 @@
   const duration=seconds=>Number.isFinite(seconds)&&seconds>0?`${Math.floor(seconds/60)}:${String(Math.floor(seconds)%60).padStart(2,'0')}`:'';
   globalThis.KickRefinedEmbedUI=Object.freeze({css:cardCSS,svg,playSVG,duration});
   function create({enabled=true}={}){
-    let list,timer,disposed=false;
+    let list,timer,disposed=false,prune=false;
     const records=new Set(),dirty=new Set(),api=KickRefined.api;
     const nativeStyle=document.createElement('style');nativeStyle.textContent='[data-kr-x-link]{display:none!important}';document.head.append(nativeStyle);
     const byHost=new WeakMap();
     const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting)load(record);else stopVideo(record);}}}, {rootMargin:'80px'});
     const byRow=new WeakMap();
     function stopVideo(record){const active=record.activeVideo;if(!active)return;record.activeVideo=null;if(active.video){active.video.pause();active.video.removeAttribute('src');active.video.load();}active.frame.remove();active.slot.replaceChildren(active.preview);}
-    function release(record){stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);byRow.get(record.row)?.delete(record.post.id);clearTimeout(record.feedback);}
+    function release(record){if(record.requestId){try{Promise.resolve(api.runtime.sendMessage({type:'immersion:preview-cancel',requestId:record.requestId})).catch(()=>{});}catch{}record.requestId=null;}stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);byRow.get(record.row)?.delete(record.post.id);clearTimeout(record.feedback);}
     function hideLinks(record){for(const link of record.links)link.setAttribute('data-kr-x-link','');}
     function button(label,kind,click){const el=document.createElement('button');el.type='button';el.title=label;el.setAttribute('aria-label',label);el.innerHTML=svg(kind);el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();click(el);});return el;}
     function render(record,post){
@@ -66,18 +66,20 @@
       const actions=document.createElement('div');actions.className='actions';actions.append(button('Copy post link','copy',async el=>{try{await navigator.clipboard.writeText(post.href);el.title='Copied';}catch{el.title='Could not copy';}clearTimeout(record.feedback);record.feedback=setTimeout(()=>{el.title='Copy post link';},1500);}));
       const open=document.createElement('a');open.className='open';open.href=post.href;open.target='_blank';open.rel='noopener noreferrer';open.title='Open post on X';open.setAttribute('aria-label',open.title);open.innerHTML=svg('open');actions.append(open);footer.append(actions);card.append(body,footer);hideLinks(record);
     }
-    async function load(record){
+    async function load(record,retry=false){
       if(record.loading||record.loaded||!enabled||disposed)return;
       record.loading=true;
+      const requestId=record.requestId=crypto.randomUUID(),restoreFocus=!!record.card.getRootNode().activeElement?.closest('.retry');
+      record.card.setAttribute('aria-busy','true');const retryButton=record.card.querySelector('.retry');if(retryButton){retryButton.disabled=true;retryButton.textContent='Loading...';}
       try{
-        const result=await api.runtime.sendMessage({type:'immersion:x-post',href:record.post.href});
+        const result=await api.runtime.sendMessage({type:'immersion:x-post',href:record.post.href,retry,requestId});
         if(!records.has(record)||!enabled||disposed)return;
         if(!result?.ok)throw Error('Unavailable');
-        record.loaded=true;render(record,result.post);byHost.set(record.host,record);visibility.observe(record.host);
+        record.loaded=true;render(record,result.post);byHost.set(record.host,record);visibility.observe(record.host);if(restoreFocus)record.card.querySelector('a')?.focus();
       }catch{
         if(!records.has(record)||!enabled||disposed)return;
-        visibility.unobserve(record.host);byHost.delete(record.host);record.card.replaceChildren();const fallback=document.createElement('div');fallback.className='loading';fallback.textContent='X preview unavailable';const retry=document.createElement('button');retry.className='retry';retry.textContent='Retry';retry.addEventListener('click',()=>load(record));fallback.append(retry);record.card.append(fallback);
-      }finally{record.loading=false;}
+        visibility.unobserve(record.host);byHost.delete(record.host);record.card.replaceChildren();const fallback=document.createElement('div');fallback.className='loading';fallback.textContent='X preview unavailable';const retry=document.createElement('button');retry.className='retry';retry.textContent='Retry';retry.addEventListener('click',()=>load(record,true));fallback.append(retry);record.card.append(fallback);if(restoreFocus)retry.focus();
+      }finally{record.loading=false;if(record.requestId===requestId)record.requestId=null;record.card.setAttribute('aria-busy','false');}
     }
     function add(row,anchor,post){
       const host=document.createElement('div');host.className='kr-x-post';const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=cardCSS+KickRefined.chatEmbedCSS;const card=document.createElement('div');card.className='card';const loading=document.createElement('div');loading.className='loading';loading.textContent='Loading X post…';card.append(loading);shadow.append(style,card);
@@ -85,19 +87,21 @@
     }
     function flush(){
       timer=0;if(!enabled||disposed)return;
-      for(const record of [...records]){
+      const candidates=prune?[...records]:[...dirty].flatMap(row=>[...(byRow.get(row)?.values()||[])]);prune=false;
+      for(const record of candidates){
+        globalThis.KickRefinedPerf?.count('chat.xRecordsChecked');
         for(const link of record.links)if(!record.row.contains(link)||parse(link.href)?.id!==record.post.id){link.removeAttribute('data-kr-x-link');record.links.delete(link);}
         if(!list?.contains(record.row)||!record.row.contains(record.host)||!record.links.size)release(record);
       }
       for(const row of KickRefinedDOM.drainRows(dirty)){
-        if(!list?.contains(row))continue;const seen=new Set();
+        if(!list?.contains(row))continue;const seen=new Set(byRow.get(row)?.keys());
         for(const anchor of KickRefinedDOM.links(row)){const post=parse(anchor.href);if(!post)continue;const existing=byRow.get(row)?.get(post.id);if(existing){existing.links.add(anchor);if(existing.loaded)hideLinks(existing);continue;}if(seen.size>=2||records.size>=80)continue;seen.add(post.id);add(row,anchor,post);}
       }
       if(dirty.size)schedule(0);
     }
     function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const row of node.querySelectorAll('[data-index]'))dirty.add(row);}
     function schedule(delay=60){if(!timer&&enabled&&!disposed)timer=setTimeout(flush,delay);}
-    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{for(const row of rows)dirty.add(row);schedule();}});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();}});
     function refresh(){const next=enabled?KickRefinedDOM.chat:null;if(next===list)return;for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(enabled);refresh();
     return {setEnabled(value){if(enabled===value)return;enabled=value;clearTimeout(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};

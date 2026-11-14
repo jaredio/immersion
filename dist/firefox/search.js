@@ -88,25 +88,30 @@
     const cache=new Map();let active=null,state=null,disposed=false;
     function cancel(){active?.abort();active=null;}
     async function read(path,signal,html=false){const hit=cache.get(path);if(hit?.until>Date.now())return hit.data;const controller=new AbortController(),stop=()=>controller.abort();signal.addEventListener('abort',stop,{once:true});if(signal.aborted)controller.abort();const timer=setTimeout(stop,8000);
-      try{globalThis.KickRefinedPerf?.count('network.searchRequests');const response=await fetch(location.origin+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw Error('Kick search is unavailable. Try again.');const body=await response.text();if(body.length>2097152)throw Error('Search response is too large.');let data;if(html)data=catalog(body,html);else try{data=JSON.parse(body);}catch{throw Error('Kick search is unavailable. Try again.');}cache.delete(path);cache.set(path,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);return data;}finally{clearTimeout(timer);signal.removeEventListener('abort',stop);}}
-    async function search(q,{append=false}={}){
+      try{globalThis.KickRefinedPerf?.count('network.searchRequests');const response=await fetch(location.origin+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw Error('Kick search is unavailable. Try again.');const body=await KickRefined.readText(response,{signal:controller.signal});let data;if(html)data=catalog(body,html);else try{data=JSON.parse(body);}catch{throw Error('Kick search is unavailable. Try again.');}cache.delete(path);cache.set(path,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);return data;}finally{clearTimeout(timer);signal.removeEventListener('abort',stop);}}
+    async function search(q,{append=false,retryFailed=false}={}){
       if(disposed)throw Error('Search closed.');cancel();const controller=new AbortController();active=controller;const key=JSON.stringify(q);
-      if(!append||state?.key!==key)state={key,rows:new Map(),progress:q.channels.map(channel=>({channel,cursor:'',pages:0,loaded:0,done:false}))};const current=state;
+      if((!append&&!retryFailed)||state?.key!==key)state={key,rows:new Map(),progress:q.channels.map(channel=>({channel,cursor:'',pages:0,loaded:0,done:false}))};const current=state;
       if(q.type==='channels'){
         if(!q.channels.length&&!q.terms.length)return {rows:[],loaded:0,more:false};
-        const paths=q.channels.length?q.channels.map(channel=>`/api/v2/channels/${channel}`):['/api/search?'+new URLSearchParams({searched_word:q.terms.join(' ')})];
-        const results=[];let next=0;await Promise.all([0,1].map(async()=>{while(next<paths.length){const index=next++;results[index]=await read(paths[index],controller.signal);}}));if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');const rows=results.flatMap(raw=>normalize(raw,'channels')).filter(row=>fits(row,q));return {rows,loaded:rows.length,more:false};
+        if(!q.channels.length){const raw=await read('/api/search?'+new URLSearchParams({searched_word:q.terms.join(' ')}),controller.signal);if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');const rows=normalize(raw,'channels').filter(row=>fits(row,q));return {rows,loaded:rows.length,more:false,failedChannels:[]};}
+        const tasks=current.progress.filter(item=>retryFailed?item.failed:!item.done);let index=0;
+        await Promise.all([0,1].map(async()=>{while(index<tasks.length){const item=tasks[index++];try{const raw=await read(`/api/v2/channels/${item.channel}`,controller.signal);if(controller.signal.aborted)return;for(const row of normalize(raw,'channels'))current.rows.set('channel:'+row.slug,row);item.failed=false;item.done=true;}catch{if(controller.signal.aborted)return;item.failed=true;}}}));
+        if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
+        const rows=[...current.rows.values()].filter(row=>fits(row,q)),failedChannels=current.progress.filter(item=>item.failed).map(item=>item.channel);
+        if(failedChannels.length===current.progress.length&&!current.rows.size)throw Error('Kick search is unavailable. Try again.');
+        return {rows,loaded:current.rows.size,more:false,failedChannels,warning:failedChannels.length?'Some channels could not be loaded.':''};
       }
-      const tasks=current.progress.filter(item=>!item.done&&item.pages<10&&item.loaded<200);let index=0,failures=0;
+      const tasks=current.progress.filter(item=>(retryFailed?item.failed:!item.done&&!item.failed)&&item.pages<10&&item.loaded<200);let index=0,failures=0;
       await Promise.all([0,1].map(async()=>{while(index<tasks.length){const item=tasks[index++];try{
         const params=new URLSearchParams({sort:q.sort==='views'?'view':'date',time:q.time});if(item.cursor)params.set('cursor',item.cursor);
         const path=q.type==='clips'?`/api/v2/channels/${item.channel}/clips?${params}`:`/${item.channel}/videos`,raw=await read(path,controller.signal,q.type==='vods'?item.channel:false);if(controller.signal.aborted)return;
-        const rows=q.type==='vods'?raw:normalize(raw,q.type,item.channel);for(const row of rows)current.rows.set(row.key,row);item.loaded+=rows.length;item.pages++;
+        const rows=q.type==='vods'?raw:normalize(raw,q.type,item.channel);for(const row of rows)current.rows.set(row.key,row);item.loaded+=rows.length;item.pages++;item.failed=false;
         const next=typeof raw.nextCursor==='string'&&raw.nextCursor.length<=2048?raw.nextCursor:'';item.done=q.type!=='clips'||!next||next===item.cursor;item.cursor=next;
-      }catch(error){if(controller.signal.aborted)return;failures++;item.done=true;}}}));
-      if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');if(failures===tasks.length&&tasks.length)throw Error('Kick search is unavailable. Try again.');
+      }catch{if(controller.signal.aborted)return;failures++;item.failed=true;}}}));
+      if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');if(failures===tasks.length&&tasks.length&&!current.rows.size)throw Error('Kick search is unavailable. Try again.');
       const rows=[...current.rows.values()].filter(row=>fits(row,q)).sort((a,b)=>q.sort==='views'?(b.views??-1)-(a.views??-1):b.created-a.created);
-      return {rows,loaded:current.rows.size,more:current.progress.some(item=>!item.done&&item.pages<10&&item.loaded<200),warning:failures?'Some channels could not be loaded.':''};
+      return {rows,loaded:current.rows.size,more:current.progress.some(item=>!item.done&&!item.failed&&item.pages<10&&item.loaded<200),failedChannels:current.progress.filter(item=>item.failed).map(item=>item.channel),warning:current.progress.some(item=>item.failed)?'Some channels could not be loaded.':''};
     }
     async function recordings(channel){
       if(disposed||!slug(channel))throw Error('Recordings unavailable.');

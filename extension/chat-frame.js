@@ -6,7 +6,7 @@
   // Only our embedded chat has a channel picker supplied by the parent.
   const workspaceChat=window!==window.top&&(window.frameElement?.getAttribute('name')||window.name)==='kick-refined-chat';
   let reportedPanel=null;
-  function reportPanel(root,enabled){
+  function reportPanel(enabled){
     if(!workspaceChat)return;
     const search=document.querySelector('input[aria-label="Search active chatters"]'),open=!!enabled&&!!search&&search.getBoundingClientRect().width>0;
     if(open===reportedPanel)return;reportedPanel=open;
@@ -17,7 +17,7 @@
   function syncHeader(){
     if(!workspaceChat)return;
     const enabled=current?.enabled===true;
-    const chatRoot=document.getElementById('channel-chatroom')||document.getElementById('chatroom');reportPanel(chatRoot,enabled);
+    reportPanel(enabled);
     document.documentElement.dataset.krWorkspaceChat=String(enabled);
     if(!enabled){for(const header of markedHeaders)header.removeAttribute('data-kr-workspace-chat-header');markedHeaders.clear();for(const title of markedTitles)title.removeAttribute('data-kr-workspace-chat-title');markedTitles.clear();return;}
     for(const header of [...markedHeaders])if(!header.isConnected){header.removeAttribute('data-kr-workspace-chat-header');markedHeaders.delete(header);}

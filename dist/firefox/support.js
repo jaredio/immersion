@@ -26,7 +26,7 @@
           globalThis.KickRefinedPerf?.count('network.channelRequests');
           const response=await fetch(location.origin+path,{credentials:'omit',signal:controller.signal});
           if(!response.ok)throw Error('Channel unavailable');
-          const text=await response.text();if(text.length>2097152)throw Error('Channel response too large');
+          const text=await KickRefined.readText(response,{signal:controller.signal});
           const raw=JSON.parse(text);
           const data=kind==='channel'?channelDetails(raw,channel):Array.isArray(raw)?raw.slice(0,30).filter(item=>item&&typeof item==='object').map(item=>({title:typeof item.title==='string'?item.title.slice(0,300):'',description:typeof item.description==='string'?item.description.slice(0,20000):'',image:KickRefinedProfile.url(item.image?.url),href:KickRefinedProfile.url(item.link)})):[];
           const links=kind==='channel'?extract(data.bio,'Channel bio'):data.flatMap(panel=>extract(`${panel.href}\n${panel.description}`,'Channel panel'));

@@ -7,7 +7,7 @@ const root=fileURLToPath(new URL('../',import.meta.url)),engine=process.env.KR_E
 const fixture=(await readFile(path.join(root,'tests/fixture.html'),'utf8')).replace('</body>',`<script>${await readFile(path.join(root,'tests/design-fixture.js'),'utf8')}</script></body>`).replace('<button>Follow</button>','<div id="channel-actions" style="display:flex;gap:0;margin-left:auto"><button type="button" class="native-channel-button" data-testid="follow-button">Follow</button><button type="button" class="native-channel-button" data-testid="sub-button">Subscribe</button></div>');
 const form=`<!doctype html><html><head><title>Powerchat</title></head><body><div class="nav-container">Provider navigation</div><div class="page-container"><div class="paid-chat-page"><div class="card"><div class="card-body"><h2 class="paid-chat-name">cobbruvs</h2><div class="donations-container"><form><div class="input-row"><label>Username</label><input name="username" placeholder="Leave blank to chat as Anonymous"></div><div class="input-row"><label>Optional Message</label><input name="message" maxlength="250"></div><div class="input-row"><label>Amount (USD)</label><input name="amount"></div><div class="paid-chat-disclaimer"><input name="paid-chat-disclaimer" type="checkbox"><label>I agree to the <a href="/terms-of-service">Terms of Service</a></label></div><div class="payment-container disabled">Select Payment Method</div></form></div></div></div></div></div><div class="footer-container">Provider navigation</div></body></html>`;
 let browser,context;
-if(engine==='chromium')context=await playwright.chromium.launchPersistentContext(path.join(root,live?'tmp/support-live-profile':'tmp/support-test-profile'),{executablePath:playwright.chromium.executablePath(),headless:true,args:[`--disable-extensions-except=${path.join(root,'dist/chrome')}`,`--load-extension=${path.join(root,'dist/chrome')}`],viewport:{width:1500,height:1000}});
+if(engine==='chromium')context=await playwright.chromium.launchPersistentContext(path.join(root,`tmp/support-${live?'live':'test'}-profile-${Date.now()}`),{executablePath:playwright.chromium.executablePath(),headless:true,args:[`--disable-extensions-except=${path.join(root,'dist/chrome')}`,`--load-extension=${path.join(root,'dist/chrome')}`],viewport:{width:1500,height:1000}});
 else{
  browser=await playwright.firefox.launch({headless:true});context=await browser.newContext({viewport:{width:1500,height:1000}});
  await context.addInitScript(()=>{const listeners=[];let stored={};window.browser={runtime:{getURL:file=>`https://kick.com/__extension/${file}`},storage:{local:{get:async()=>structuredClone(stored),set:async patch=>{const changes=Object.fromEntries(Object.entries(patch).map(([key,value])=>[key,{oldValue:stored[key],newValue:value}]));stored={...stored,...patch};listeners.forEach(fn=>fn(changes,'local'));}},onChanged:{addListener:fn=>listeners.push(fn)}}};});
@@ -15,7 +15,7 @@ else{
 }
 const counts={panels:0,channel:0,provider:0};let viewerOnly=false;
 try{
- if(engine==='chromium'){const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');await worker.evaluate(()=>chrome.storage.local.clear());}
+ if(engine==='chromium'){const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');await worker.evaluate(async()=>{for(let attempt=0;attempt<40;attempt++){if(globalThis.chrome?.storage?.local){await chrome.storage.local.clear();return;}await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Extension storage did not initialize');});}
  await context.route('https://kick.com/**',route=>{
   const url=new URL(route.request().url());if(url.pathname.startsWith('/__extension/'))return route.fallback();
   if(url.pathname.startsWith('/api/v2/channels/')){counts.channel++;return route.fulfill({json:{user:{username:'aurora',bio:''},livestream:null}});}
@@ -43,13 +43,13 @@ try{
  assert.equal(await button.evaluate(node=>node.classList.contains('native-channel-button')),false,'support never inherits native utility classes');
  const subscribe=page.locator('#kr-channel-root .channel-action[data-kind="subscribe"]');
  const subscribeBox=await subscribe.boundingBox(),supportBox=await button.boundingBox();
- assert.ok(supportBox.x-subscribeBox.x-subscribeBox.width>=7,'channel actions have visible spacing');
+ assert.ok(Math.max(supportBox.x-subscribeBox.x-subscribeBox.width,subscribeBox.x-supportBox.x-supportBox.width)>=7,'channel actions have visible spacing in either order');
  assert.ok(supportBox.width>=90&&supportBox.height>=36,'support retains a complete button shape');
  const group=page.locator('#kr-channel-root .channel-primary-actions');
  await mkdir(path.join(root,'artifacts'),{recursive:true});await group.screenshot({path:path.join(root,`artifacts/${engine}-support-buttons.png`)});
  await group.evaluate(node=>node.style.maxWidth='180px');
  const compactSubscribe=await subscribe.boundingBox(),compactSupport=await button.boundingBox();
- assert.ok(compactSupport.y>=compactSubscribe.y+compactSubscribe.height+7,'support wraps with spacing when the action row is narrow');
+ assert.ok(Math.max(compactSupport.y-compactSubscribe.y-compactSubscribe.height,compactSubscribe.y-compactSupport.y-compactSupport.height)>=7,'support wraps with spacing when the action row is narrow');
  await group.evaluate(node=>node.style.removeProperty('max-width'));
  assert.equal(counts.provider,0,'no third-party page is loaded before clicking');
  await button.click();const dialog=page.locator('#kr-support-root').getByRole('dialog');

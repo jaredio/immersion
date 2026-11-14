@@ -39,7 +39,7 @@
   let hlsModule;
   function create({enabled=true,onWorkspace=null,onWorkspaceDrag=null}={}) {
     const {api}=KickRefined;
-    let list=null,timer=0,active=null,floating=null,disposed=false,visibility=null;
+    let list=null,timer=0,active=null,floating=null,disposed=false,visibility=null,prune=false;
     const records=new Set(),dirty=new Set(),cache=new Map(),feedbackTimers=new Set();
     const paths={workspace:'M3 4h18v16H3zM15 4v16M18 8v8m-3-4h6',play:'m8 5 11 7-11 7z',copy:'M9 9h12v12H9zM15 9V3H3v12h6',check:'m5 12 4 4L19 6',pop:'M8 3h13v13H8zM3 8v13h13v-5M8 7h13',external:'M14 3h7v7m0-7L10 14M10 3H3v18h18v-7',full:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',close:'m6 6 12 12M18 6 6 18',dock:'M3 4h18v16H3zM7 15h10v5H7z'};
     const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]}"/></svg>`;
@@ -245,12 +245,17 @@
     }
     function flush(){
       timer=0;if(disposed||!enabled)return;
-      for(const record of records)if(!record.workspace&&!record.imported&&(!record.row.isConnected||!record.host.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))release(record);
-      for(const record of records)if(record.workspace&&(!record.row.isConnected||!record.row.contains(record.anchor)||parseClip(record.anchor.href)?.id!==record.clip.id))record.placeholder?.remove();
-      for(const record of records)for(const anchor of record.links)if(!record.row.contains(anchor)||parseClip(anchor.href)?.id!==record.clip.id){anchor.removeAttribute('data-kr-clip-link');record.links.delete(anchor);}
+      const candidates=prune?[...records]:[...dirty].flatMap(row=>[...(byRow.get(row)?.values()||[])]);prune=false;
+      for(const record of candidates){
+        globalThis.KickRefinedPerf?.count('chat.clipRecordsChecked');
+        const sourceValid=record.row.isConnected&&record.row.contains(record.anchor)&&parseClip(record.anchor.href)?.id===record.clip.id;
+        if(!record.workspace&&!record.imported&&(!sourceValid||!record.host.isConnected)){release(record);continue;}
+        if(record.workspace&&!sourceValid)record.placeholder?.remove();
+        for(const anchor of record.links)if(!record.row.contains(anchor)||parseClip(anchor.href)?.id!==record.clip.id){anchor.removeAttribute('data-kr-clip-link');record.links.delete(anchor);}
+      }
       for(const row of KickRefinedDOM.drainRows(dirty)){
         if(!row.isConnected||!list?.contains(row))continue;
-        const seen=new Set();
+        const seen=new Set(byRow.get(row)?.keys());
         for(const anchor of KickRefinedDOM.links(row)){
           const clip=parseClip(anchor.href);if(!clip)continue;
           const existing=byRow.get(row)?.get(clip.id);
@@ -267,7 +272,7 @@
       const row=node.closest('[data-index]');if(row)dirty.add(row);
       if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);
     }
-    const subscription=KickRefinedDOM.subscribeChat({onContainer:refresh,onMutations:(changes,{rows})=>{for(const row of rows)dirty.add(row);schedule();},attributes:['href','src','data-index']});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:refresh,onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();},attributes:['href','src','data-index']});
     function refresh(){
       if(disposed)return;
       const next=enabled?KickRefinedDOM.chat:null;

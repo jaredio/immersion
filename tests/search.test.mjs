@@ -1,8 +1,33 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFile} from 'node:fs/promises';
 const source=await readFile(new URL('../extension/search.js',import.meta.url),'utf8');
-function setup(extra={}){const context=vm.createContext({URL,URLSearchParams,AbortController,DOMException,setTimeout,clearTimeout,location:{origin:'https://kick.com'},...extra});vm.runInContext(source,context);return context.KickRefinedSearch;}
+const shared=await readFile(new URL('../extension/shared.js',import.meta.url),'utf8');
+function setup(extra={}){const context=vm.createContext({URL,URLSearchParams,AbortController,DOMException,TextDecoder,setTimeout,clearTimeout,location:{origin:'https://kick.com'},...extra});vm.runInContext(shared,context);vm.runInContext(source,context);return context.KickRefinedSearch;}
 const api=setup(),id='clip_01M5VG3B8WEFY068DP0GCHKSGW';
 const clip={id,title:'Road trip moment',duration:30,views:1200,created_at:'2026-10-20T10:00:00Z',privacy:'public',channel:{slug:'cobbruvs'},creator:{slug:'clipper'},category:{name:'IRL'},thumbnail_url:`https://clips.kick.com/${id}/thumbnail.webp`};
+
+test('partial clip retries preserve successful pages and retry only failed channels at the same cursor',async()=>{
+ const requests=[];let fail=true;
+ const service=setup({fetch:async url=>{const channel=new URL(url).pathname.split('/')[4];requests.push(channel);if(channel==='bad'&&fail)throw Error('Temporary failure');return new Response(JSON.stringify({clips:[{...clip,id:channel==='bad'?'clip_01M5VG3B8WEFY068DP0GCHKSGX':id,channel:{slug:channel}}]}));}}).create();
+ const q=api.parse('clips:good,bad');const first=await service.search(q);
+ assert.equal(first.rows.length,1);assert.deepEqual(Array.from(first.failedChannels),['bad']);
+ fail=false;const recovered=await service.search(q,{retryFailed:true});
+ assert.equal(recovered.rows.length,2);assert.deepEqual(requests,['good','bad','bad']);assert.equal(recovered.failedChannels.length,0);
+});
+
+test('scoped channel search retries only failed scopes and retains successful rows',async()=>{
+ const calls=[];let fail=true;
+ const service=setup({fetch:async url=>{const slug=new URL(url).pathname.split('/').pop();calls.push(slug);if(slug==='bad'&&fail)throw Error('Temporary');return new Response(JSON.stringify({slug,user:{username:slug},livestream:null}));}}).create();
+ const q=api.parse('channel:good,bad');const first=await service.search(q);assert.equal(first.rows.length,1);
+ fail=false;const second=await service.search(q,{retryFailed:true});assert.equal(second.rows.length,2);assert.deepEqual(calls,['good','bad','bad']);
+});
+
+test('a failed later clip page retries its cursor without fetching successful scopes again',async()=>{
+ const calls=[];let fail=true;
+ const service=setup({fetch:async url=>{const parsed=new URL(url),slug=parsed.pathname.split('/')[4],cursor=parsed.searchParams.get('cursor')||'';calls.push([slug,cursor]);if(slug==='bad'&&cursor&&fail)throw Error('Temporary');const suffix=slug==='good'?(cursor?'Y':'W'):(cursor?'Z':'X');return new Response(JSON.stringify({clips:[{...clip,id:id.slice(0,-1)+suffix,channel:{slug}}],...(!cursor?{nextCursor:slug+'-next'}:{})}));}}).create();
+ const q=api.parse('clips:good,bad');await service.search(q);const partial=await service.search(q,{append:true});assert.equal(partial.rows.length,3);
+ fail=false;const retry=await service.search(q,{retryFailed:true});assert.equal(retry.rows.length,4);
+ assert.deepEqual(calls,[['good',''],['bad',''],['good','good-next'],['bad','bad-next'],['bad','bad-next']]);
+});
 test('search parses multiple scopes, quoted phrases, exclusions and typed filters',()=>{
  const q=api.parse('clips:cobbruvs,xqc "road trip" -spoiler category:IRL sort:views after:2026-10-01 before:2026-10-28 creator:clipper views:>100 duration:<60');
  assert.equal(q.type,'clips');assert.deepEqual(Array.from(q.channels),['cobbruvs','xqc']);assert.deepEqual(Array.from(q.terms),['road trip']);assert.equal(q.views.op,'>');assert.equal(q.before,Date.parse('2026-10-28T23:59:59.999Z'));

@@ -10,7 +10,7 @@ const context=await browser.newContext({viewport:{width:1600,height:1000}});
 const {fixture,frame}=await workspaceFixtures();
 const manifest=JSON.parse(await readFile('dist/chrome/manifest.json','utf8'));
 const scripts=manifest.content_scripts.find(item=>item.js?.includes('content.js')).js;
-const frameScripts=(await Promise.all(['stream-clock.js','full-player-frame.js','player-controls.js','player-frame.js'].map(file=>readFile(`extension/${file}`,'utf8')))).join('\n');
+const frameScripts=(await Promise.all(['stream-clock.js','player-dom.js','full-player-frame.js','player-controls.js','player-frame.js'].map(file=>readFile(`extension/${file}`,'utf8')))).join('\n');
 const samples=[];
 try{
   await context.addInitScript(()=>{

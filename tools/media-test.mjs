@@ -79,6 +79,13 @@ try{
  assert.equal(await yt.locator('.brand.youtube svg').count(),1);assert.equal(await yt.locator('.stat').count(),0,'YouTube does not receive invented view/like counts');
  assert.equal(await yt.locator('.embed-title').textContent(),youtube.title);await yt.getByRole('button',{name:'Play YouTube video'}).click();
  await yt.locator('iframe').waitFor();assert.ok((await yt.locator('iframe').getAttribute('src')).includes('start=62'));assert.equal(await yt.locator('iframe').getAttribute('allowfullscreen'),'');
+ await yt.locator('iframe').evaluate(frame=>window.keptYouTube=frame);
+ for(const enabled of [false,true]){
+  if(engine==='chromium')await context.serviceWorkers()[0].evaluate(enabled=>chrome.storage.local.set({settings:{xEmbeds:enabled}}),enabled);
+  else await page.evaluate(enabled=>{testX.setEnabled(enabled);testMedia.setOptions({media:true,profiles:enabled});},enabled);
+  await page.waitForTimeout(100);
+  assert.equal(await yt.locator('iframe').evaluate(frame=>frame===window.keptYouTube&&frame.isConnected),true,'unrelated profile preference changes preserve the same YouTube player');
+ }
  assert.equal(new URL(await yt.locator('iframe').getAttribute('src')).searchParams.get('controls'),'1','YouTube native controls are explicitly enabled');
  for(const width of [360,300]){await page.locator('aside').evaluate((node,width)=>node.style.width=width+'px',width);const geometry=await yt.locator('iframe').evaluate(frame=>{const r=frame.getBoundingClientRect(),p=frame.parentElement.getBoundingClientRect(),c=frame.getRootNode().querySelector('.card').getBoundingClientRect(),close=frame.getRootNode().querySelector('.player-close').getBoundingClientRect();return {fits:Math.abs(r.left-p.left)<1&&Math.abs(r.top-p.top)<1&&Math.abs(r.width-p.width)<1&&Math.abs(r.height-p.height)<1&&r.left>=c.left&&r.right<=c.right,height:r.height,closeBelow:close.top>=r.bottom};});assert.equal(geometry.fits,true,'YouTube iframe stays inside its player and card');assert.ok(geometry.height>=200);assert.equal(geometry.closeBelow,true,'close control does not cover provider controls');}
  await yt.frameLocator('iframe').getByRole('button',{name:'Pause',exact:true}).focus();await yt.frameLocator('iframe').getByRole('button',{name:'Pause',exact:true}).press('Enter');

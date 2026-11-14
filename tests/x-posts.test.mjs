@@ -39,7 +39,7 @@ test('X video renditions infer missing dimensions and fall back without selectin
 test('background restricts senders, deduplicates, caches, and omits cookies',async()=>{
   let listener,requests=0,options,endpoint;
   const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async(url,opts)=>{requests++;options=opts;endpoint=url;return new Response(JSON.stringify(fixture));}});
-  vm.runInContext(dataSource,worker);vm.runInContext(workerSource,worker);
+  vm.runInContext(dataSource,worker);vm.runInContext(await readFile('extension/shared.js','utf8'),worker);vm.runInContext(await readFile('extension/preview-queue.js','utf8'),worker);vm.runInContext(workerSource,worker);
   const sender={id:'extension',tab:{id:1},url:'https://kick.com/popout/channel/chat'};
   const request=url=>new Promise(resolve=>assert.equal(listener({type:'immersion:x-post',href:url},sender,resolve),true));
   const replies=await Promise.all([request(href),request(href+'?s=20')]);assert.equal(requests,1);assert.ok(replies.every(r=>r.ok));
@@ -50,7 +50,17 @@ test('background restricts senders, deduplicates, caches, and omits cookies',asy
 test('background caps concurrent requests and returns a clean failure for unavailable posts',async()=>{
   let listener,active=0,max=0;const releases=[];
   const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async()=>{active++;max=Math.max(max,active);await new Promise(resolve=>releases.push(resolve));active--;return new Response('{}',{status:404});}});
-  vm.runInContext(dataSource,worker);vm.runInContext(workerSource,worker);
+  vm.runInContext(dataSource,worker);vm.runInContext(await readFile('extension/shared.js','utf8'),worker);vm.runInContext(await readFile('extension/preview-queue.js','utf8'),worker);vm.runInContext(workerSource,worker);
   const requests=[1,2,3,4].map(id=>new Promise(resolve=>listener({type:'immersion:x-post',href:`https://x.com/person/status/${id}`},{id:'extension',tab:{id:1},url:'https://kick.com/test'},resolve)));
-  assert.equal(releases.length,2);releases.splice(0).forEach(resolve=>resolve());await new Promise(resolve=>setTimeout(resolve,0));assert.equal(releases.length,2);releases.splice(0).forEach(resolve=>resolve());assert.ok((await Promise.all(requests)).every(r=>!r.ok));assert.equal(max,2);
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(releases.length,2);releases.splice(0).forEach(resolve=>resolve());await new Promise(resolve=>setTimeout(resolve,0));assert.equal(releases.length,2);releases.splice(0).forEach(resolve=>resolve());assert.ok((await Promise.all(requests)).every(r=>!r.ok));assert.equal(max,2);
+});
+
+test('manual X retry bypasses negative cache while preserving successful cache entries',async()=>{
+  let listener,requests=0;
+  const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async()=>++requests===1?new Response('',{status:503}):new Response(JSON.stringify(fixture))});
+  vm.runInContext(dataSource,worker);vm.runInContext(await readFile('extension/shared.js','utf8'),worker);vm.runInContext(await readFile('extension/preview-queue.js','utf8'),worker);vm.runInContext(workerSource,worker);
+  const sender={id:'extension',tab:{id:1},url:'https://kick.com/test'};
+  const ask=retry=>new Promise(resolve=>listener({type:'immersion:x-post',href,retry},sender,resolve));
+  assert.equal((await ask(false)).ok,false);assert.equal((await ask(false)).ok,false);assert.equal(requests,1);
+  assert.equal((await ask(true)).ok,true);assert.equal(requests,2);assert.equal((await ask(true)).ok,true);assert.equal(requests,2);
 });
