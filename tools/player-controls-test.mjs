@@ -22,6 +22,11 @@ try{
   await page.evaluate(()=>{const old=document.querySelector('.z-controls');window.keptNativeSource=old.querySelector('button:not([data-kr-action])');old.replaceChildren(Object.assign(document.createElement('button'),{textContent:'Clip'}));});
   await page.locator('[data-kr-action=clip]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-kr-unified-row]').count(),1,'native replacement restores one control row');
+  await page.evaluate(()=>{window.removedBar=document.querySelector('.z-controls');removedBar.remove();});
+  await page.waitForFunction(()=>!removedBar.querySelector('[data-kr-unified-row]'));
+  assert.equal(await page.evaluate(()=>removedBar.querySelectorAll('[data-kr-unified-source],[data-kr-unified-bar]').length),0,'a missing native bar releases its row and source markers before another bar appears');
+  await page.evaluate(()=>{const next=document.createElement('div');next.className='z-controls bottom-0';next.innerHTML='<button aria-label="Quality">Quality</button>';document.getElementById('player').append(next);removedBar=null;});
+  await page.locator('[data-kr-unified-row]').waitFor();
   await page.evaluate(()=>{controlState.startedAt=null;KickRefinedPlayerControls.sync(document.getElementById('player'),options);});
   assert.equal(await page.locator('[data-kr-elapsed]').isVisible(),false,'unknown start time stays hidden');
   await page.evaluate(()=>KickRefinedPlayerControls.clear(document.getElementById('player')));

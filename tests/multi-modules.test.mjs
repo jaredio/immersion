@@ -112,3 +112,15 @@ test('layout scheduling coalesces frames and restores original native styles',as
   assert.deepEqual(values.get('display'),{value:'flex',priority:'important'});assert.equal(values.has('left'),false);
   assert.equal(layout.originalStyle(element,'display'),undefined,'restoration releases native node references');
 });
+
+test('style restoration releases detached menu nodes while preserving connected owners',async()=>{
+  const context=await contextFor('multi-layout');
+  const element=connected=>{const values=new Map([['left','12px']]);return {isConnected:connected,style:{getPropertyValue:key=>values.get(key)||'',getPropertyPriority:()=>'',setProperty:(key,value)=>values.set(key,value),removeProperty:key=>values.delete(key)}};};
+  const menu=element(true),main=element(true),layout=context.KickRefinedMultiLayout.createStyles();
+  layout.style(menu,'left','100px');layout.style(main,'position','relative');
+  menu.isConnected=false;layout.pruneStyles();
+  assert.equal(menu.style.getPropertyValue('left'),'12px');assert.equal(layout.originalStyle(menu,'left'),undefined);
+  assert.equal(layout.snapshot().elements,1);assert.equal(layout.originalStyle(main,'position').value,'');
+  main.isConnected=false;layout.pruneStyles();assert.equal(layout.snapshot().elements,0);
+  layout.restoreStyles();assert.equal(main.style.getPropertyValue('position'),'');
+});

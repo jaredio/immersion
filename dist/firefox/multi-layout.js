@@ -32,14 +32,19 @@
         element.style.setProperty(property, value, 'important');
       }
     }
-    function restoreStyles() {
-      for (const [element, properties] of restored) for (const [property, original] of properties) {
+    function restoreElement(element,properties) {
+      for (const [property, original] of properties) {
         if (original.value) element.style.setProperty(property, original.value, original.priority);
         else element.style.removeProperty(property);
       }
+      restored.delete(element);
+    }
+    function pruneStyles(){for(const [element,properties]of restored)if(element.isConnected===false)restoreElement(element,properties);}
+    function restoreStyles() {
+      for(const [element,properties]of restored)restoreElement(element,properties);
       restored.clear();
     }
-    return {style, restoreStyles, originalStyle: (element, property) => restored.get(element)?.get(property)};
+    return {style,restoreStyles,pruneStyles,originalStyle:(element,property)=>restored.get(element)?.get(property),snapshot:()=>({elements:restored.size,detached:[...restored.keys()].filter(element=>element.isConnected===false).length})};
   }
   function createScheduler({isActive,run}){
     let frame=0,disposed=false;

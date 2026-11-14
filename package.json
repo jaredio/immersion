@@ -36,6 +36,7 @@
     "benchmark:workspace": "node tools/workspace-benchmark.mjs",
     "benchmark:background": "node tools/workspace-background-benchmark.mjs",
     "test:workspace-soak": "node tools/workspace-soak-test.mjs",
+    "test:workspace-endurance": "node tools/workspace-endurance-test.mjs",
     "test:channel-page": "node tools/channel-page-test.mjs",
     "test:theme-start": "node tools/theme-start-test.mjs",
     "test:hydration": "node tools/hydration-test.mjs",

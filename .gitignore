@@ -8,6 +8,7 @@ __pycache__/
 # Generated diagnostics, browser profiles, and research downloads
 /tmp/
 /research/
+/docs/
 /artifacts/
 /test-results/
 /playwright-report/

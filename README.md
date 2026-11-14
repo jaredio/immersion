@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/immersion-banner.svg" alt="Immersion: Kick multistream with Ice Poseidon, xQc, and Adin Ross" width="100%">
+  <img src="assets/immersion-banner.svg" alt="Immersion: Kick multistream with Ice Poseidon, xQc, and Adin Ross" width="100%">
 </p>
 
 <p align="center">
@@ -61,47 +61,14 @@ Requires Firefox 142 or newer. This development install lasts until Firefox rest
 
 You'll find **Immersion** at the bottom of Kick's sidebar. Make it yours from there. To apply an update, reload the extension and refresh Kick.
 
-See the [0.13.0 release notes](docs/releases/0.13.0.md) for changes, validation and rollback details.
-
 ## Made to be yours
 
 Your preferences and saved viewing sessions stay in your browser. Immersion has no analytics or custom backend.
 
-Known analytics and marketing trackers on Kick are blocked by default. You can turn **Block Kick telemetry** off in settings; refresh Kick after changing it. Playback, chat, login and payment services are outside the initial rules. This does not remove all first-party or player telemetry. See the [code and network audit](docs/code-audit.md) for scope, measured samples and remaining performance work.
+Known analytics and marketing trackers on Kick are blocked by default. You can turn **Block Kick telemetry** off in settings; refresh Kick after changing it. Playback, chat, login and payment services are outside the initial rules. This does not remove all first-party or player telemetry.
 
 Found something that feels off? [Open an issue](https://github.com/jaredio/immersion/issues) with your browser, what happened, and a screenshot if it helps. Kick changes often; real-world feedback keeps Immersion improving.
-
-<details>
-<summary><strong>Working on the project</strong></summary>
-
-Requires Node.js 22+ and Python 3.
-
-```sh
-npm ci
-npm run build
-npm test
-```
-
-Source lives in `extension/`. Browser builds and installable ZIPs are written to `dist/`. See [maintenance and release checks](docs/maintenance.md) for the current behavior, supported validation commands and measurement limits. Additional browser checks are listed in [`package.json`](package.json).
-
-The [upgrade roadmap](docs/upgrade-roadmap.md) describes the module boundaries,
-completed performance work and prioritized next improvements. Shared DOM
-subscription checks run with `npm run test:dom`. The [performance batch](docs/performance-batch.md) covers diagnostics, repeatable benchmarks, per-pane player modes and total broadcast uptime.
-
-</details>
 
 ---
 
 <p align="center"><sub>An independent project. Not affiliated with or endorsed by Kick.</sub></p>
-
-Lifecycle modules, chat picker fixes and soak checks: [lifecycle batch](docs/lifecycle-batch.md).
-
-Channel Home, Videos, Clips, Schedule and About views share the dark channel theme.
-Native card links and action handlers stay in place; offscreen library cards can skip
-rendering. Channel identities consolidate duplicate native headers, and portrait
-avatars stay inside their circular frame.
-
-Home, Browse, Categories and category detail pages now share the profile theme,
-with a discovery navigation bar, a desktop featured-creator shelf, consistent
-stream cards and responsive category grids. Native player and filter controls
-stay in place. See [discovery design notes](docs/discovery-batch.md).

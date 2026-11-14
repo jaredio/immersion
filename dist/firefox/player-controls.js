@@ -50,26 +50,37 @@
     if(/volume|sound|speaker|mute/.test(label))return 'volume';
     return '';
   }
+  // Give the observer its own closure: it must not retain the first sync call's
+  // bar and button-handler environment after Kick replaces that native bar.
+  function createOwner(root,options){
+    const owner={bar:null,dirty:true,frame:0,options,marked:new Set()};
+    owner.observer=new MutationObserver(records=>{
+      const relevant=records.some(record=>{
+        const target=record.target.nodeType===1?record.target:record.target.parentElement;
+        if(target?.closest?.('[data-kr-unified-row]'))return false;
+        if(record.type==='attributes')return true;
+        if([...record.removedNodes].some(node=>node.nodeType===1))return true;
+        if([...record.addedNodes].some(node=>node.nodeType===1&&!node.matches('[data-kr-unified-row]')))return true;
+        return !!target?.closest?.('button,input,[role="slider"]');
+      });if(!relevant)return;
+      owner.dirty=true;
+      if(!owner.frame)owner.frame=requestAnimationFrame(()=>{owner.frame=0;if(root.isConnected||root.nodeType===9)sync(root,owner.options);});
+    });
+    owner.observer.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-label','title','data-testid']});roots.set(root,owner);
+    return owner;
+  }
   function sync(root,options){
     if(!root)return false;
     let owner=roots.get(root);
-    const bar=owner?.bar?.isConnected&&root.contains(owner.bar)?owner.bar:root.querySelector('.z-controls.bottom-0:has(button)');if(!bar||!bar.dispatchEvent(new Event('kick-refined:surface-ready',{bubbles:true,cancelable:true})))return false;
-    if(!owner){
-      owner={bar:null,dirty:true,frame:0,options,marked:new Set()};
-      owner.observer=new MutationObserver(records=>{
-        const relevant=records.some(record=>{
-          const target=record.target.nodeType===1?record.target:record.target.parentElement;
-          if(target?.closest?.('[data-kr-unified-row]'))return false;
-          if(record.type==='attributes')return true;
-          if([...record.removedNodes].some(node=>node.nodeType===1))return true;
-          if([...record.addedNodes].some(node=>node.nodeType===1&&!node.matches('[data-kr-unified-row]')))return true;
-          return !!target?.closest?.('button,input,[role="slider"]');
-        });if(!relevant)return;
-        owner.dirty=true;
-        if(!owner.frame)owner.frame=requestAnimationFrame(()=>{owner.frame=0;if(root.isConnected||root.nodeType===9)sync(root,owner.options);});
-      });
-      owner.observer.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-label','title','data-testid']});roots.set(root,owner);
+    const bar=owner?.bar?.isConnected&&root.contains(owner.bar)?owner.bar:root.querySelector('.z-controls.bottom-0:has(button)');
+    if(!bar){
+      // Keep the root observer so a later native bar can be discovered, but let
+      // replaced bars, their sources and control callbacks be collected now.
+      if(owner?.bar){releaseState(owner.state);states.delete(owner.bar);owner.bar=owner.state=null;for(const node of owner.marked)for(const name of ['data-kr-unified-source','data-kr-unified-bar','data-kr-native-timeline'])node.removeAttribute(name);owner.marked.clear();owner.dirty=true;}
+      return false;
     }
+    if(!bar.dispatchEvent(new Event('kick-refined:surface-ready',{bubbles:true,cancelable:true})))return false;
+    if(!owner)owner=createOwner(root,options);
     owner.options=options;
     if(owner.bar!==bar){releaseState(owner.state);if(owner.bar)states.delete(owner.bar);owner.bar=bar;owner.dirty=true;}owner.marked.add(bar);
     if(!style.isConnected)(document.head||document.documentElement).append(style);

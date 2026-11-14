@@ -228,8 +228,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .inline-multi .multi-tile-controls { margin-top:auto; }
 .multi-tile-identity { display:flex;align-items:center;gap:8px;flex:1;min-width:0; }
 .multi-tile-identity img { width:25px;height:25px;border-radius:50%;object-fit:cover;flex-shrink:0; }
-.multi-tile-identity > div { display:flex;flex-direction:column;gap:3px;min-width:0; }
-.multi-tile-identity a { white-space:nowrap; }
+.multi-tile-identity > div { display:flex;flex:1;flex-direction:column;gap:3px;min-width:0; }
+.multi-tile-identity a { display:block;white-space:nowrap; }
 .multi-tile-identity span { color:#777787;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .multi-volume { display:flex;align-items:center;gap:5px;padding:0 4px; }
 .multiview .multi-volume input { width:72px;height:12px;min-width:40px;padding:0;border:0;accent-color:var(--accent); }
@@ -505,7 +505,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-player-options{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;color:#b5b5c3;font-size:12px}
 .multi-player-options span{font-size:11px;color:#9292a0}
 .multi-player-options select{background:#1a1a20;border:1px solid #ffffff14;border-radius:8px;color:#ededf3}
-.multi-player-loading{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;align-content:center;gap:8px;padding:18px;box-sizing:border-box;background:#101014;color:#bdbdca;font-size:12px;text-align:center}
+.multi-player-loading{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;align-content:safe center;gap:8px;padding:18px;box-sizing:border-box;overflow:auto;overflow-wrap:anywhere;background:#101014;color:#bdbdca;font-size:12px;text-align:center}
 .multi-player-loading[hidden]{display:none}
 .multi-player-loading p{flex-basis:100%;margin:0 0 4px;line-height:1.5}
 .multi-player-loading button{border:1px solid #ffffff18;border-radius:8px;padding:7px 10px;background:#ffffff05;color:#e3e3ed}
