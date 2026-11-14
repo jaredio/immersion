@@ -8,8 +8,10 @@ stream CPU performance.
 ## Current behavior
 
 - Clip Studio is removed. Native clip creation and chat clip playback remain.
-- Focus fills the side column to the featured bottom before wrapping below;
-  existing player instances are retained. The last side pane may extend lower.
+- Focus aligns the right column with the featured player's bottom and balances
+  overflow panes into wider rows below. A five-stream setup uses two panes beside
+  the main player and two below at the default split. Existing player instances
+  are retained; videos remain contained without cropping or stretching.
 - Metadata runs at most two channel reads concurrently; queued removed channels
   and late teardown results cannot update the workspace.
 - Clip, X, and media previews each enforce two retained previews per message,

@@ -222,8 +222,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .inline-multi[data-native-chat="true"] .multi-body, .inline-multi .multi-body:has(.multi-chat[hidden]) { grid-template-columns:minmax(0,1fr); }
 .inline-multi .multi-grid { min-height:0;grid-auto-rows:auto;align-content:start;overflow:visible; }
 .inline-multi .multi-grid[data-layout="columns"] { overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain; }
-.inline-multi .multi-tile { min-height:0;align-self:start;container-type:inline-size;overflow:clip; }
-.inline-multi .multi-player { flex:none;position:relative;aspect-ratio:16/9;min-height:0;width:100%; }
+.inline-multi .multi-tile { min-height:0;align-self:start;container-type:inline-size;overflow:clip;height:var(--multi-pane-height,auto); }
+.inline-multi .multi-player { flex:1 1 auto;position:relative;aspect-ratio:16/9;min-height:0;width:100%; }
 .inline-multi .multi-player iframe { position:absolute;inset:0; }
 .inline-multi .multi-tile-controls { margin-top:auto; }
 .multi-tile-identity { display:flex;align-items:center;gap:8px;flex:1;min-width:0; }
@@ -440,7 +440,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 
 .clip-drop-targets{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0;pointer-events:auto}
 .clip-drop-choice{min-width:0;border:0;background:transparent}
-.multi-clip-player{width:100%;min-width:0}.multi-clip-badge{flex-shrink:0;font-size:9px;letter-spacing:.04em;color:var(--accent);padding:4px 6px;border:1px solid #ffffff14;border-radius:5px;white-space:nowrap}
+.multi-clip-player{width:100%;min-width:0;min-height:0;flex:1 1 auto}.multi-clip-badge{flex-shrink:0;font-size:9px;letter-spacing:.04em;color:var(--accent);padding:4px 6px;border:1px solid #ffffff14;border-radius:5px;white-space:nowrap}
 .multi-clip-tile .multi-tile-header>button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;padding:5px;background:transparent;border-color:transparent}
 .multi-clip-tile .multi-tile-header{position:relative;padding-right:44px}
 .multi-clip-tile .multi-tile-header>button:last-child{position:absolute;top:8px;right:8px}

@@ -54,23 +54,36 @@
     };
   }
   function focusPlan({width,focusSize,gap,featured,rail}) {
-    const mainWidth=width*focusSize/100-gap/2,sideWidth=Math.round((width-mainWidth-gap)*1000)/1000;
-    const heightAt=(box,target)=>Math.ceil(box.height-box.playerHeight+(target-box.width+box.playerWidth)*box.playerHeight/box.playerWidth);
-    const mainHeight=heightAt(featured,mainWidth),heights=rail.map(box=>heightAt(box,sideWidth));
-    let count=0,used=0;
-    // Fill to the featured bottom before wrapping, allowing the last side pane
-    // to extend past it rather than leaving a nearly pane-sized empty slot.
-    while(count<heights.length&&(count===0||used+gap<mainHeight-.5)){
-      used+=(count?gap:0)+heights[count++];
+    if(!rail.length)return null;
+    const split=focusSize/100,mainWidth=width*split-gap/2,sideWidth=width-mainWidth-gap;
+    const heightAt=(box,target)=>Math.ceil(box.chromeHeight+(target-box.borderWidth)/box.aspectRatio);
+    const mainHeight=heightAt(featured,mainWidth);
+    let count=1,used=0,best=Infinity;
+    for(let i=0;i<Math.min(4,rail.length);i++){
+      used+=(i?gap:0)+heightAt(rail[i],sideWidth);
+      const distance=Math.abs(used-mainHeight);
+      if(distance<best){best=distance;count=i+1;}
     }
-    const columns=Math.max(1,Math.min(4,Math.round(mainWidth/sideWidth)));
-    const rows=heights.slice(0,count);
-    rows[count-1]=Math.max(rows[count-1],mainHeight-rows.slice(0,-1).reduce((sum,height)=>sum+height+gap,0));
-    return {columns,mainHeight,templateColumns:`repeat(${columns},minmax(0,1fr)) ${sideWidth}px`,
-      templateRows:rows.map(height=>`${height}px`).join(' '),
-      featured:{column:`1 / span ${columns}`,row:`1 / span ${count}`},
-      rail:rail.map((_,index)=>index<count?{column:String(columns+1),row:String(index+1)}:
-        {column:String((index-count)%(columns+1)+1),row:String(count+1+Math.floor((index-count)/(columns+1)))})};
+    // A modest fit adjustment can keep the last stream in the side column.
+    if(rail.length<=4&&rail.length-count===1&&used<=mainHeight*1.25)count++;
+    // Avoid a single small overflow card when two balanced cards fit below.
+    if(rail.length>=4&&rail.length-count===1&&count>1)count--;
+    const rowHeight=(mainHeight-gap*(count-1))/count,overflow=rail.length-count;
+    const capacity=Math.max(2,Math.min(4,Math.round(width/320))),rowCount=Math.ceil(overflow/capacity);
+    const groups=[];let start=count;
+    for(let row=0;row<rowCount;row++){const size=Math.floor(overflow/rowCount)+(row<overflow%rowCount?1:0);groups.push({start,size});start+=size;}
+    // Shared column boundaries let overflow rows divide the entire width evenly
+    // while keeping the user's featured split exact and iframe nodes in place.
+    const boundaries=[0,split,1];
+    for(const {size}of groups)for(let i=1;i<size;i++)if(boundaries.every(value=>Math.abs(value-i/size)*width>gap+1))boundaries.push(i/size);
+    boundaries.sort((a,b)=>a-b);
+    const line=value=>1+boundaries.reduce((best,current,index)=>Math.abs(current-value)<Math.abs(boundaries[best]-value)?index:best,0);
+    const columns=boundaries.slice(1).map((end,index)=>(end-boundaries[index])*width-gap*((index===0||index===boundaries.length-2)?0.5:1));
+    const positions=rail.map((_,index)=>index<count?{column:`${line(split)} / -1`,row:String(index+1),height:rowHeight}:null);
+    for(const [row,{start,size}]of groups.entries())for(let i=0;i<size;i++)positions[start+i]={column:size===1?`1 / ${line(split)}`:`${line(i/size)} / ${line((i+1)/size)}`,row:String(count+row+1)};
+    return {mainHeight,sideCount:count,templateColumns:columns.map(value=>`${value}px`).join(' '),
+      templateRows:Array(count).fill(`${rowHeight}px`).join(' '),
+      featured:{column:`1 / ${line(split)}`,row:`1 / span ${count}`},rail:positions};
   }
   globalThis.KickRefinedMultiLayout=Object.freeze({findContext,createStyles,createScheduler,focusPlan});
 })();

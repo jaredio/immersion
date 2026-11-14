@@ -112,6 +112,11 @@ try{
  assert.equal(await clipTile.getAttribute('data-featured'),'true');
  assert.equal(await clipTile.locator('video').evaluate(video=>video===window.testClipVideo),true);
  assert.equal(await workspace.locator('#multi-chat-channel').inputValue(),'sweatergxd');
+ await workspace.locator('.multi-tile[data-channel="sweatergxd"] .multi-tile-header').dblclick({position:{x:5,y:5}});
+ await page.waitForTimeout(250);
+ const clipFit=await clipTile.evaluate(card=>{const bounds=card.getBoundingClientRect(),video=card.querySelector('.kr-chat-clip').shadowRoot.querySelector('video').getBoundingClientRect(),info=card.querySelector('.kr-chat-clip').shadowRoot.querySelector('.info').getBoundingClientRect();return {bottom:bounds.bottom,videoBottom:video.bottom,controlsBottom:info.bottom,videoHeight:video.height};});
+ assert.ok(clipFit.videoHeight>50&&clipFit.videoBottom<=clipFit.bottom+1&&clipFit.controlsBottom<=clipFit.bottom+1,'a clip fitted beside the main stream keeps its video and controls inside its pane');
+ await clipTile.locator('.multi-clip-badge').dblclick();
  await clipTile.getByRole('button',{name:`Pop out clip ${id}`,exact:true}).click();await floating.waitFor();
  assert.equal(await floating.locator('video').evaluate(video=>video===window.testClipVideo),true,'workspace popout reuses the current video');
  await floating.getByRole('button',{name:'Return clip to workspace',exact:true}).click();

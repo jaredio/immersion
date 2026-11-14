@@ -32,7 +32,7 @@ try{
   }
   const workspace=page.locator('#kr-multi-root');
   await workspace.locator('.multi-tile').nth(5).waitFor({timeout:10000});
-  await page.waitForFunction(()=>document.getElementById('kr-multi-root').shadowRoot.querySelector('#multi-grid').style.gridTemplateColumns.includes('repeat'));
+  await page.waitForFunction(()=>document.getElementById('kr-multi-root').shadowRoot.querySelector('#multi-grid').style.gridTemplateColumns.includes('px'));
   if(engine==='firefox')for(const child of page.frames().filter(frame=>frame!==page.mainFrame()&&frame.url().includes('immersion-frame=full'))){
     for(const file of ['stream-clock.js','performance.js','player-dom.js','full-player-frame.js','player-controls.js','player-frame.js'])await child.addScriptTag({path:`extension/${file}`});
   }
@@ -48,7 +48,8 @@ try{
     const below=others.filter(box=>box.y>=main.bottom-1),side=others.filter(box=>box.y<main.bottom-1);
     assert.ok(below.some(box=>box.x<main.right-1),'overflow streams occupy the space beneath the focused stream');
     assert.ok(side.length>0&&side.every(box=>box.x>=main.right),'side panes stay beside the focused stream');
-    assert.ok(side.at(-1).bottom>=main.bottom-2,'the side column reaches the focused bottom before wrapping');
+    assert.ok(Math.abs(side.at(-1).bottom-main.bottom)<2,'the side column ends at the focused bottom');
+    assert.ok(Math.abs(Math.min(...below.map(box=>box.y))-main.bottom-8)<2,'overflow starts directly below the focused player');
     for(const [i,a]of others.entries())for(const b of others.slice(i+1))assert.ok(a.right<=b.x+1||b.right<=a.x+1||a.bottom<=b.y+1||b.bottom<=a.y+1,'stream panes never overlap');
     assert.ok(Math.abs(dividerHeight-main.height)<2,`divider ends with the focused stream: ${JSON.stringify({main,dividerHeight})}`);
   };
@@ -65,7 +66,16 @@ try{
   assert.equal(await workspace.locator('#multi-grid').evaluate(grid=>grid.style.gridTemplateColumns),'','narrow layouts release desktop placement');
   await page.setViewportSize({width:1500,height:1000});await page.waitForTimeout(250);await verify();
   await mkdir('artifacts',{recursive:true});await page.screenshot({path:`artifacts/${engine}-focus-wrap.png`,fullPage:true});
-  for(const slug of ['e','d'])await workspace.getByRole('button',{name:`Remove ${slug}`,exact:true}).click();
+  await workspace.getByRole('button',{name:'Remove e',exact:true}).click();
+  await divider.evaluate(node=>{node.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));for(let i=0;i<29;i++)node.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));});
+  await page.waitForTimeout(250);await verify();
+  const five=await inspect(),bottom=five.others.filter(box=>box.y>=five.main.bottom-1);
+  assert.equal(bottom.length,2,'five streams have a balanced pair below the main player');
+  assert.ok(Math.abs(bottom[0].width-bottom[1].width)<2,'the lower panes share the full width evenly');
+  assert.ok(bottom[0].width>five.others[0].width*1.5,'overflow panes are larger than rail thumbnails');
+  await page.waitForTimeout(250);assert.deepEqual(await inspect(),five,'fitted pane heights stabilize instead of feeding back into measurements');
+  await page.screenshot({path:`artifacts/${engine}-focus-five-balanced.png`,fullPage:true});
+  await workspace.getByRole('button',{name:'Remove d',exact:true}).click();
   await divider.evaluate(node=>{node.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));for(let i=0;i<21;i++)node.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));});
   await page.waitForTimeout(250);await verify();
   const four=await inspect();assert.equal(four.others.filter(box=>box.y<four.main.bottom-1).length,2,'four streams at a two-thirds split fill two right-side slots');

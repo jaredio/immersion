@@ -124,13 +124,13 @@
       globalThis.KickRefinedPerf?.count('layout.passes');let railStyles=null;
       if(active&&railDirty){
         railDirty=false;
-        // Pack the side rail to the featured height, then wrap beneath it.
+        // Align the side rail with the main player, then balance overflow rows.
         const grid=$('#multi-grid'),all=new Map([...tiles,...clipTiles]),rail=[...all.values()].filter(tile=>tile.slug!==focusKey()),featured=all.get(focusKey());
         let plan=null;
         if(state.layout==='focus'&&stage.clientWidth>640&&innerWidth>900&&rail.length&&featured){
-          const measure=tile=>{const card=tile.card.getBoundingClientRect(),player=tile.player.getBoundingClientRect();return {width:card.width,height:card.height,playerHeight:player.height,playerWidth:player.width};};
+          const measure=tile=>{const card=tile.card.getBoundingClientRect(),player=tile.player.getBoundingClientRect();const extra=tile.item?tile.player.firstElementChild?.shadowRoot?.querySelector('.info')?.getBoundingClientRect().height||0:0;return {chromeHeight:card.height-player.height+extra,borderWidth:card.width-player.width,aspectRatio:16/9,playerWidth:player.width};};
           const main=measure(featured),others=rail.map(measure);
-          if([main,...others].every(box=>box.playerWidth>0&&box.playerHeight>0))plan=KickRefinedMultiLayout.focusPlan({width:grid.clientWidth,focusSize:state.focusSize,gap:parseFloat(getComputedStyle(grid).columnGap)||0,featured:main,rail:others});
+          if([main,...others].every(box=>box.playerWidth>0))plan=KickRefinedMultiLayout.focusPlan({width:grid.clientWidth,focusSize:state.focusSize,gap:parseFloat(getComputedStyle(grid).columnGap)||0,featured:main,rail:others});
         }
         railStyles={grid,all,rail,featured,plan};
       }
@@ -154,7 +154,7 @@
       if(railStyles){const {grid,all,rail,featured,plan}=railStyles;let changed=false;
         const set=(node,key,value)=>{if(node.style[key]!==value){node.style[key]=value;changed=true;}};
         set(grid,'gridTemplateRows',plan?.templateRows||'');set(grid,'gridTemplateColumns',plan?.templateColumns||'');set(grid,'minHeight','');
-        for(const tile of all.values()){const position=plan&&(tile===featured?plan.featured:plan.rail[rail.indexOf(tile)]);set(tile.card,'gridColumn',position?.column||'');set(tile.card,'gridRow',position?.row||'');}
+        for(const tile of all.values()){const position=plan&&(tile===featured?plan.featured:plan.rail[rail.indexOf(tile)]);set(tile.card,'gridColumn',position?.column||'');set(tile.card,'gridRow',position?.row||'');const height=position?.height?`${position.height}px`:'';if(tile.card.style.getPropertyValue('--multi-pane-height')!==height){tile.card.style.setProperty('--multi-pane-height',height);changed=true;}}
         const dividerHeight=plan?`${plan.mainHeight}px`:'';if(stage.style.getPropertyValue('--multi-focus-height')!==dividerHeight)stage.style.setProperty('--multi-focus-height',dividerHeight);
         if(changed)schedulePosition();
       }
