@@ -14,7 +14,11 @@
     }
     function drain(){while(active<2&&queued.length){
       const job=queued.shift();active++;const timer=setTimeout(()=>job.controller.abort(),timeout);
-      Promise.resolve().then(()=>run(job.item,job.controller.signal)).catch(()=>({ok:false})).then(result=>{
+      Promise.resolve().then(()=>{
+        // Cancellation can arrive before this microtask starts the request.
+        job.controller.signal.throwIfAborted();
+        return run(job.item,job.controller.signal);
+      }).catch(()=>({ok:false})).then(result=>{
         if(!job.cancelled)complete(job.key,result);
         if(pending.get(job.key)===job)pending.delete(job.key);
         for(const key of job.consumers){const lease=leases.get(key);if(lease){leases.delete(key);lease.resolve(result);}}

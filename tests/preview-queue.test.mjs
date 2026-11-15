@@ -23,3 +23,18 @@ test('tab closure removes queued work and aborts running work only after its las
   assert.equal(s.jobs[0].signal.aborted,true);assert.equal(s.jobs.length,2,'abandoned queued request never starts');
   s.jobs[1].resolve({ok:true});await b;await tick();assert.deepEqual(s.completed.map(item=>item[0]),['b'],'cancellation never caches a failure');
 });
+
+test('immediate cancellation skips abandoned work and frees its preview slot',async()=>{
+  const s=await setup(),a=s.queue.request('a','a',s.from(1),'a');
+  s.cancel(s.from(1),'a');
+  const b=s.queue.request('b','b',s.from(2),'b'),c=s.queue.request('c','c',s.from(3),'c');
+  try{
+    assert.equal((await a).cancelled,true);await tick();
+    assert.deepEqual(s.jobs.map(job=>job.item),['b','c']);
+    for(const job of s.jobs)job.resolve({ok:true});
+    assert.equal((await b).ok,true);assert.equal((await c).ok,true);await tick();
+    assert.deepEqual(s.completed.map(item=>item[0]),['b','c']);
+  }finally{
+    s.close(2);s.close(3);for(const job of s.jobs)job.resolve({ok:true});await tick();
+  }
+});
