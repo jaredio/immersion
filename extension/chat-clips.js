@@ -22,7 +22,7 @@
     const src=mediaURL(data?.video_url||data?.clip_url||data?.playback_url,clip.id);
     if(!data||data.id!==clip.id||!src)throw Error('This clip is unavailable.');
     const creator=data.creator?.username||data.creator?.slug;
-    return {src,poster:mediaURL(data.thumbnail_url,clip.id),title:typeof data.title==='string'?data.title.slice(0,300):'Kick clip',creator:typeof creator==='string'?creator.trim().slice(0,80):'',duration:Number.isFinite(data.duration)&&data.duration>0?data.duration:0};
+    return {src,poster:mediaURL(data.thumbnail_url,clip.id),title:typeof data.title==='string'?data.title.slice(0,300):'Kick clip',creator:typeof creator==='string'?creator.trim().slice(0,80):'',duration:Number.isFinite(data.duration)&&data.duration>0?data.duration:0,...globalThis.KickRefinedClipTools?.details(data,clip)};
   }
   function parseVOD(value){
     try{const url=new URL(value),match=url.pathname.match(/^\/([a-z0-9_]{1,40})\/videos\/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})\/?$/i);return url.protocol==='https:'&&['kick.com','www.kick.com'].includes(url.hostname)&&!url.port&&!url.username&&!url.password&&match?{id:match[2],channel:match[1],kind:'vod',href:`https://kick.com/${match[1]}/videos/${match[2]}`}:null;}catch{return null;}

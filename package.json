@@ -1,6 +1,6 @@
 {
   "name": "immersion",
-  "version": "0.13.4",
+  "version": "0.13.5",
   "private": true,
   "description": "A restrained dark redesign for Kick, with native chat and navigation preserved.",
   "scripts": {
@@ -53,6 +53,7 @@
     "playwright": "1.56.1"
   },
   "dependencies": {
-    "hls.js": "1.6.16"
+    "hls.js": "1.6.16",
+    "mux.js": "7.1.0"
   }
 }
