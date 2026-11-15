@@ -11,7 +11,7 @@
   const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchFailed=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
   let refreshTimer, routeTimer, routeTimeout, previousFocus;
   let dockPosition = '';
-  let channelPage=null;const discovery=globalThis.KickRefinedDiscovery?.create();
+  let channelPage=null,clipPreview=null;const discovery=globalThis.KickRefinedDiscovery?.create();
   let searchWindow=null,nativeSearch=null,restoringSearchFocus=false;
   let currentPath = location.pathname;
   let disposed = false;
@@ -39,6 +39,7 @@
     }
     updateSidebarRows();
     clips?.setEnabled(settings.enabled&&settings.chatClips&&!settings.textOnly);
+    clipPreview?.setEnabled(settings.enabled);
     xPosts?.setEnabled(settings.enabled&&settings.xEmbeds&&!settings.textOnly);
     mediaCards?.setOptions({media:settings.enabled&&settings.mediaEmbeds&&!settings.textOnly,profiles:settings.enabled&&settings.xEmbeds&&!settings.textOnly});
     replyPreviews?.setEnabled(settings.enabled);
@@ -96,11 +97,11 @@
     const settingsMulti = document.createElement('button'); settingsMulti.textContent = 'Multiview'; settingsMulti.addEventListener('click', () => openMulti());
     shadow.querySelector('#settings-dialog .footer').append(settingsMulti);
     support = KickRefinedSupport.create({enabled:settings.enabled});
-    channelPage=KickRefinedChannelPage.create({onChange:scheduleRefresh,getProfileMount:tab=>channelPanel?.getProfileMount(tab),onKeydown:handleShortcut,onWatch:row=>watchLibraryVideo(row),onDrag:(event,row)=>{
+    channelPage=KickRefinedChannelPage.create({onChange:scheduleRefresh,getProfileMount:tab=>channelPanel?.getProfileMount(tab),onKeydown:handleShortcut,onWatch:row=>watchLibraryVideo(row),onPreview:previewLibraryClip,onDrag:(event,row)=>{
       if(!settings.enabled||!settings.chatClips||settings.textOnly){event.preventDefault();return;}const item=KickRefinedClips.parseClip(row.href)||KickRefinedClips.parseVOD(row.href);if(!item){event.preventDefault();return;}event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('text/uri-list',item.href);startClipDrag(event,{...item,title:row.title,fromLibrary:true,commit:mode=>watchLibraryVideo(row,mode)});
     }});
     channelPanel = KickRefinedChannelPanel.create({support,enabled:settings.enabled,onChange:scheduleRefresh,integratedProfile:true});
-    multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut, support, channelPanel,onWatchProfileVideo:row=>watchLibraryVideo(row) });
+    multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut, support, channelPanel,onWatchProfileVideo:row=>watchLibraryVideo(row),onPreviewProfileClip:previewLibraryClip });
     clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
     clipBridge=KickRefinedClipBridge.create({getClips:()=>clips,multi,startDrag:startClipDrag,endDrag});
     xPosts=KickRefinedX.create({enabled:settings.enabled&&settings.xEmbeds&&!settings.textOnly});
@@ -230,6 +231,10 @@
     multi.open(channel ? [channel.slug] : [], KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname, location.origin));
   }
 
+  function previewLibraryClip(row,opener){
+    if(!settings.enabled||disposed)return false;
+    clipPreview ||= KickRefinedClipPreview.create({onActiveChange:(value,restore)=>multi?.setPreviewMuted(value,restore)});return clipPreview.open(row,opener);
+  }
   async function watchLibraryVideo(row,mode='alongside'){
     if(!settings.enabled||disposed)return false;
     let item;try{item=clips.importItem({href:row.href,title:row.title,time:0,paused:false,volume:1});const added=await multi.addClip(item,mode);if(!added)item.release();return added;}catch{item?.release();return false;}
@@ -483,6 +488,7 @@
     refreshTimer = null;
     globalThis.KickRefinedPerf?.count('page.refreshes');
     if (disposed || !document.body) return;
+    clipPreview?.refresh();
     root = document.documentElement;
     // A late Next/React document hydration can remove extension-owned attributes.
     if (root.dataset.krEnabled !== String(settings.enabled)) apply();
@@ -515,7 +521,7 @@
     searchWindow?.destroy();nativeSearch?.destroy();
     endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; api.storage.onChanged.removeListener?.(onSettingsChanged); abort.abort(); unsubscribeDOM(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
-    clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();discovery?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); settingsStore.destroy(); stopTransition();
+    clipPreview?.destroy();clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();discovery?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); settingsStore.destroy(); stopTransition();
   }
   function handleShortcut(e) {
     if(e.key==='Escape' && drag) { e.preventDefault();endDrag();return; }

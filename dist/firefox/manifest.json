@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Immersion",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "description": "A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.",
   "permissions": [
     "storage",
@@ -108,6 +108,7 @@
         "multi-directory.js",
         "multiview.js",
         "chat-clips.js",
+        "clip-preview.js",
         "clip-bridge.js",
         "x-post-data.js",
         "x-posts.js",

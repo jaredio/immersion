@@ -20,7 +20,7 @@ const tests=(await readdir(new URL('../tests/',import.meta.url))).filter(name=>n
 run(['--test','--test-reporter=spec',...tests]);
 run(['tools/release-test.mjs']);
 for(const engine of engines){
-  for(const file of ['browser-test','dom-test','search-test','retry-ux-test','queued-player-test','focus-layout-test','x-posts-test','media-test','review-checks','channel-page-test','offline-channel-test','workspace-soak-test','workspace-endurance-test'])run([`tools/${file}.mjs`],engine);
+  for(const file of ['browser-test','dom-test','search-test','retry-ux-test','queued-player-test','focus-layout-test','x-posts-test','media-test','review-checks','channel-page-test','offline-channel-test','clip-preview-test','workspace-soak-test','workspace-endurance-test'])run([`tools/${file}.mjs`],engine);
   if(engine==='chromium')run(['tools/session-sync-test.mjs'],engine);
 }
 console.log(`PASS ${checks} test commands across ${engines.join(' and ')}`);

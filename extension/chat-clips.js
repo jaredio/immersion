@@ -37,7 +37,7 @@
     return {src:url.href,title:(doc.querySelector('meta[property="og:title"]')?.getAttribute('content')||'Kick recording').slice(0,300),creator:'',credit:vod.channel,duration:0};
   }
   let hlsModule;
-  function create({enabled=true,onWorkspace=null,onWorkspaceDrag=null}={}) {
+  function create({enabled=true,onWorkspace=null,onWorkspaceDrag=null,observeChat=true}={}) {
     const {api}=KickRefined;
     let list=null,timer=0,active=null,floating=null,disposed=false,visibility=null,prune=false;
     const records=new Set(),dirty=new Set(),cache=new Map(),feedbackTimers=new Set();
@@ -55,6 +55,7 @@
       :host([data-workspace]){display:block;height:100%}:host([data-workspace]) .card{height:100%;display:flex;flex-direction:column}:host([data-workspace]) .viewport{flex:1 1 auto;min-height:0}:host([data-workspace]) .viewport>.media{position:absolute;inset:0;height:100%;aspect-ratio:auto}:host([data-workspace]) .info{flex:0 0 auto}
       .workspace-focus-surface{position:absolute;inset:0 0 48px;z-index:1;cursor:pointer}
       .float .workspace-focus-surface{display:none}
+      :host([data-clip-preview]) .info,:host([data-clip-preview]) .workspace-focus-surface{display:none}
       .info{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 10px}.info>.title{grid-column:1/-1}.words{min-width:0}.words .channel,.words .credit{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.actions{grid-column:2;grid-row:2;align-self:center;gap:2px}.actions button,.actions a{width:24px;height:24px;padding:4px;border-radius:6px}.actions svg{width:14px;height:14px}:host([data-workspace]) .card{width:100%}:host([data-workspace]) .info>.title{display:none}:host([data-workspace]) .info{grid-template-columns:1fr}:host([data-workspace]) .actions{grid-column:1;grid-row:auto;justify-self:end}
     `;
     const byRow=new WeakMap();
@@ -276,15 +277,15 @@
     const subscription=KickRefinedDOM.subscribeChat({onContainer:refresh,onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();},attributes:['href','src','data-index']});
     function refresh(){
       if(disposed)return;
-      const next=enabled?KickRefinedDOM.chat:null;
+      const next=enabled&&observeChat?KickRefinedDOM.chat:null;
       if(next===list)return;
       visibility?.disconnect();for(const record of [...records])if(!record.workspace)release(record);dirty.clear();list=next;
       if(list){visibility=new IntersectionObserver(entries=>{for(const entry of entries)if(!entry.isIntersecting&&active?.host===entry.target&&floating?.record!==active&&!active.workspace&&!active.dragging)reset(active);},{root:list});queue(list);schedule();}
     }
-    function setEnabled(value){if(enabled===value)return;enabled=value;if(!enabled){for(const record of [...records])record.workspace?.remove();closeFloating();clearTimeout(timer);timer=0;}subscription.setEnabled(enabled);refresh();}
+    function setEnabled(value){if(enabled===value)return;enabled=value;if(!enabled){for(const record of [...records])record.workspace?.remove();closeFloating();clearTimeout(timer);timer=0;}subscription.setEnabled(enabled&&observeChat);refresh();}
     function destroy(){disposed=true;subscription.destroy();clearTimeout(timer);for(const timer of feedbackTimers)clearTimeout(timer);feedbackTimers.clear();visibility?.disconnect();closeFloating();for(const record of [...records]){record.workspace?.remove();release(record);}cache.clear();dirty.clear();}
-    const nativeStyle=document.createElement('style');nativeStyle.textContent='html[data-kr-enabled="true"] :is([data-kr-clip-native],[data-kr-clip-link]){display:none!important}';document.head.append(nativeStyle);
-    subscription.setEnabled(enabled);
+    const nativeStyle=document.createElement('style');nativeStyle.textContent='html[data-kr-enabled="true"] :is([data-kr-clip-native],[data-kr-clip-link]){display:none!important}';if(observeChat)document.head.append(nativeStyle);
+    subscription.setEnabled(enabled&&observeChat);
     refresh();
     return {setEnabled,refresh,importItem,destroy(){destroy();nativeStyle.remove();}};
   }

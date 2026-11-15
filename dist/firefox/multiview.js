@@ -3,14 +3,14 @@
   const { channelSlug, multiState, multiURL } = KickRefined;
   const {text,attr,css}=KickRefinedMultiView;
   const pageChannel=()=>globalThis.KickRefinedChannelPage?.routeSlug()||channelSlug(location.pathname,location.origin);
-  function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo }) {
+  function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo, onPreviewProfileClip }) {
     const {host,shadow,panel,directory,chatTabs,toolbarToggle,stage,gridElement,divider,sizing,$,decorate} =
       KickRefinedMultiView.create({onKeydown,onPosition:schedulePosition});
     let accentKey=null,accentValue='',appliedVisualKey='';
     function playerAccent(){const key=document.documentElement.dataset.krAccent||'mint';if(key!==accentKey){accentKey=key;accentValue=getComputedStyle(document.documentElement).getPropertyValue('--kr-accent').trim();}return accentValue;}
     const viewKeys={chat:'',sessions:'',suggestions:''};
     let state = multiState(), sessions = [], audio = new Set(), active = false, destroyed = false, context = null, native = null, toolbarHidden = false;
-    let railDirty = true, catalog = new Map(),sessionBusy=false,metadataFrame=0;
+    let railDirty = true, catalog = new Map(),sessionBusy=false,metadataFrame=0,previewMuted=false;
     const lifetime=KickRefinedLifetime.create();let workspaceScope=null,nativeVideoScope=null,wiredVideo=null;
     const tiles = new Map(), paused = new Set();
     const nativeStyles=KickRefinedMultiLayout.createStyles(),{style,restoreStyles,pruneStyles,originalStyle}=nativeStyles;
@@ -30,7 +30,7 @@
       onChannel:slug=>{if(active&&state.channels.includes(slug)&&!metadataFrame)metadataFrame=workspaceScope.frame(()=>{metadataFrame=0;render();});},
       onPanels:slug=>{if(active&&channelDirectory.expanded===slug)channelDirectory.render();}
     });
-    const channelDirectory=KickRefinedMultiDirectory.create({scope:lifetime,getState:()=>state,getCatalog:()=>catalog,getContext:()=>context,channelPanel,metadata,directory,shadow,$,onKeydown,onWatchProfileVideo,onPosition:schedulePosition});
+    const channelDirectory=KickRefinedMultiDirectory.create({scope:lifetime,getState:()=>state,getCatalog:()=>catalog,getContext:()=>context,channelPanel,metadata,directory,shadow,$,onKeydown,onWatchProfileVideo,onPreviewProfileClip,onPosition:schedulePosition});
     const startup=KickRefinedMultiStartup.create();
     const sessionStore=KickRefinedMultiSession.create({onError:()=>{if(!destroyed)notice('Could not save this workspace.');},onSessions:next=>{sessions=next;if(active&&!destroyed)render();}});
     const playerBus=KickRefinedMultiPlayerBus.create({
@@ -198,6 +198,7 @@
       workspaceScope.frame(()=>{const menu=document.getElementById(button.getAttribute('aria-controls'))||document.querySelector('[role="menu"][data-state="open"]');const wrapper=menu?.closest('[data-radix-popper-content-wrapper]');if(!wrapper)return;const rect=tile.settings.getBoundingClientRect(),size=wrapper.getBoundingClientRect();style(wrapper,'position','fixed');style(wrapper,'transform','none');style(wrapper,'left',`${Math.max(8,Math.min(rect.right-size.width,innerWidth-size.width-8))}px`);style(wrapper,'top',`${Math.max(8,rect.top-size.height-8)}px`);});
     }
     function command(tile,muted,{action='',force=false}={}) {
+      muted=muted||previewMuted;
       const live=catalog.get(tile.slug)?.live||'unknown',startedAt=catalog.get(tile.slug)?.startedAt??null,diagnostics=globalThis.KickRefinedPerf?.enabled===true;
       const accent=playerAccent();
       const signature=`${muted}:${tile.volume}:${state.layout==='focus'&&focusKey()===tile.slug}:${startedAt}:${live}:${accent}:${diagnostics}`;
@@ -270,7 +271,7 @@
       for(const [key,tile]of clipTiles)if(!audio.has(key))tile.item.setMuted(true);
       for(const [slug,tile]of tiles)if(!audio.has(slug)){command(tile,true);updateControls(tile);}
       for(const [slug,tile]of tiles)if(audio.has(slug)){command(tile,false);updateControls(tile);}
-      for(const [key,tile]of clipTiles){tile.item.setMuted(!audio.has(key));tile.card.dataset.audio=String(audio.has(key));updateAudioButton(tile.listen,audio.has(key),`clip ${tile.item.id}`,tile.item.snapshot().volume);}
+      for(const [key,tile]of clipTiles){tile.item.setMuted(previewMuted||!audio.has(key));tile.card.dataset.audio=String(audio.has(key));updateAudioButton(tile.listen,audio.has(key),`clip ${tile.item.id}`,tile.item.snapshot().volume);}
       if(context?.player&&!state.channels.includes(context.slug)) { const video=nativeVideo(); if(video&&!video.muted)video.muted=true; }
       updateAudioLabel();
     }
@@ -475,7 +476,14 @@
       workspace.setAttribute('aria-label',duplicate?'Already in this workspace':full?'Workspace is full':'Add stream to workspace');
       return {element:workspace,allowed:!duplicate&&!full};
     }
-    return {snapshot:()=>({active,streams:tiles.size,clips:clipTiles.size,startup:startup.snapshot(),transport:playerBus.snapshot(),restoration:{...nativeStyles.snapshot(),info:hiddenInfo.size}}),open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),addClip,canAddClip,isChatSource:chat.isSource,chatFrameRect:chat.frameRect,close,refresh,isActive:()=>active,getDropMain:()=>findContext()?.main,dropPreview,destroy:()=>{close({restorePlayback:false});destroyed=true;metadata.destroy();startup.destroy();playerBus.destroy();sessionStore.destroy();layoutScheduler.destroy();lifetime.dispose();}};
+    return {
+      snapshot:()=>({active,streams:tiles.size,clips:clipTiles.size,startup:startup.snapshot(),transport:playerBus.snapshot(),restoration:{...nativeStyles.snapshot(),info:hiddenInfo.size}}),
+      open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),
+      addClip,canAddClip,isChatSource:chat.isSource,chatFrameRect:chat.frameRect,close,refresh,isActive:()=>active,
+      setPreviewMuted(value,restore=true){previewMuted=!!value;if(previewMuted)nativeGestureUntil=0;if(active&&!destroyed&&(previewMuted||restore))syncAudio();},
+      getDropMain:()=>findContext()?.main,dropPreview,
+      destroy:()=>{close({restorePlayback:false});destroyed=true;metadata.destroy();startup.destroy();playerBus.destroy();sessionStore.destroy();layoutScheduler.destroy();lifetime.dispose();}
+    };
   }
   globalThis.KickRefinedMulti=Object.freeze({create});
 })();

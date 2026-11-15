@@ -52,14 +52,24 @@
   `;
   const svg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>';
   const number=new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format;
-  function create({onWatch,onDrag,onNavigate,onKeydown,onSort}={}){
+  function create({onWatch,onPreview,onDrag,onNavigate,onKeydown,onSort}={}){
     const host=document.createElement('div');host.id='kr-channel-library';const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css;
     const ui=document.createElement('section');ui.className='browser';ui.setAttribute('aria-label','Channel library');let lastDrag=-Infinity;
     ui.innerHTML='<nav class="nav" aria-label="Channel sections"></nav><h2 class="watch-heading" hidden></h2><div class="tools" hidden><label class="find"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><input type="search" aria-label="Find a video" placeholder="Find a recording…"></label><select aria-label="Video length"><option value="all">Any length</option><option value="short">Under 10 minutes</option><option value="medium">10–60 minutes</option><option value="long">Over an hour</option></select><select aria-label="Library sort"><option value="recent">Newest</option><option value="views">Most viewed</option><option value="title">Title A–Z</option></select><div class="views" role="group" aria-label="Library view"><button data-view="grid" aria-pressed="true">Grid</button><button data-view="list" aria-pressed="false">List</button></div></div><p class="status catalog-status" role="status" hidden></p><div class="content"></div><button class="more" hidden>Load more</button><p class="notice" role="status" hidden></p>';
     shadow.append(style,ui);const $=selector=>ui.querySelector(selector);let rows=new Map(),context=null,signature='',drawKey='',navKey='',query='',length='all',sort='recent',view='grid',destroyed=false,schedule=null;
     const nodes=new Map(),setText=(node,value)=>{if(node.textContent!==value)node.textContent=value;},setHidden=(node,value)=>{if(node.hidden!==value)node.hidden=value;};
     function navigate(tab){onNavigate?.(tab);}
-    function open(row,event){if(performance.now()-lastDrag<600){event.preventDefault();return;}if(context.newTab||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||event.button>0)return;event.preventDefault();if(row.source?.isConnected)row.source.click();else location.assign(row.href);}
+    async function open(row,event){
+      if(performance.now()-lastDrag<600){event.preventDefault();return;}
+      if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||event.button>0)return;
+      if(row.type==='clip'&&onPreview){
+        event.preventDefault();
+        try{if(await onPreview(row,event.target.closest('a'))===false)throw Error('Preview unavailable');if(!destroyed)$('.notice').hidden=true;}
+        catch{if(!destroyed){$('.notice').hidden=false;setText($('.notice'),'Could not open this clip. Try again or open its link in a new tab.');}}
+        return;
+      }
+      if(context.newTab)return;event.preventDefault();if(row.source?.isConnected)row.source.click();else location.assign(row.href);
+    }
     function card(row){
       let record=nodes.get(row.key);const key=JSON.stringify([row.title,row.image,row.clock,row.views,row.date,row.category]);if(record?.key===key)return record.node;
       const node=document.createElement('article');node.className='card';node.dataset.key=row.key;
@@ -133,7 +143,7 @@
       if(target.dataset.tab){if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();navigate(target.dataset.tab);return;}
       if(target.dataset.view){view=target.dataset.view;render();return;}if(target.matches('.more')){context.more?.();return;}
       const row=rows.get(target.dataset.key||target.closest('[data-key]')?.dataset.key);if(!row)return;
-      if(target.dataset.action==='open')open(row,event);
+      if(target.dataset.action==='open')await open(row,event);
       if(target.dataset.action==='watch'){event.preventDefault();target.disabled=true;try{const result=await onWatch?.(row);if(result===false)throw Error();if(!destroyed)$('.notice').hidden=true;}catch{if(!destroyed){$('.notice').hidden=false;setText($('.notice'),'Could not add this video to the workspace.');}}finally{if(!destroyed)target.disabled=false;}}
     });
     ui.addEventListener('dragstart',event=>{const row=rows.get(event.target.closest('[data-key]')?.dataset.key);if(row&&onDrag){lastDrag=performance.now();onDrag(event,row);}});ui.addEventListener('dragend',()=>lastDrag=performance.now());
