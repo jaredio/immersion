@@ -130,7 +130,8 @@
       const active=tabs.querySelector('[aria-selected="true"],[data-state="active"],[aria-current="page"]');const activeName=active?.textContent.trim().toLowerCase();
       const directTab=profileTab(),nextRoute=`${location.pathname}:${directTab||''}`;
       if(routeKey!==nextRoute){routeKey=nextRoute;selectedTab=null;}
-      const tab=watchPage?(clipPage?'clips':'videos'):selectedTab||directTab||(/^(videos|recordings)/.test(activeName||'')?'videos':/^(about|clips|schedule)/.exec(activeName||'')?.[1]||'home');
+      const defaultTab=getProfileMount&&main.closest('main')?.hasAttribute('data-kr-channel-offline')?'about':'home';
+      const tab=watchPage?(clipPage?'clips':'videos'):selectedTab||directTab||(/^(videos|recordings)/.test(activeName||'')?'videos':/^(about|clips|schedule)/.exec(activeName||'')?.[1]||defaultTab);
       const managed=!watchPage&&!!getProfileMount;
       const mount=managed?getProfileMount(tab):null;
       if(managed&&tab!=='schedule')for(const schedule of main.querySelectorAll('[data-testid="schedule-viewer-page"]'))mark(schedule,'data-kr-library-source');

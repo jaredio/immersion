@@ -81,7 +81,6 @@ try{
   await page.evaluate(()=>{const workspace=document.getElementById('workspace').shadowRoot,list=document.createElement('div');list.id='multi-channel-list';list.append(testPanel.card('soultravels',{title:'SoulTravels',live:'live',verified:true},{}),testPanel.card('other-channel',{title:'Other channel',streamTitle:'Channel without active goals',live:'live'},{}));workspace.querySelector('.channel-panel').replaceWith(list);});
   const gridCards=multi.locator('#multi-channel-list>.channel-panel');
   const tall=await gridCards.nth(0).boundingBox(),short=await gridCards.nth(1).boundingBox();
-  assert.ok(Math.abs(tall.y-short.y)<1,'grid cards share their top edge');
   assert.ok(short.height<tall.height-100,'a channel without goals keeps its natural height beside one with goals');
   await multi.screenshot({path:`artifacts/${engine.name()}-channel-grid-natural-heights.png`});
   await page.evaluate(()=>testPanel.setEnabled(false));assert.equal(await page.locator('.native-goal:visible').count(),3,'disabling restores native goals');

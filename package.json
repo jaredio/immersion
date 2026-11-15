@@ -1,6 +1,6 @@
 {
   "name": "immersion",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "private": true,
   "description": "A restrained dark redesign for Kick, with native chat and navigation preserved.",
   "scripts": {
@@ -26,6 +26,7 @@
     "test:search": "node tools/search-test.mjs",
     "test:checkouts": "node tools/checkouts-test.mjs",
     "test:channels": "node tools/channel-panel-test.mjs",
+    "test:offline": "node tools/offline-channel-test.mjs",
     "test:channel-markup": "node tools/channel-header-current-test.mjs",
     "test:chat-notices": "node tools/chat-notices-test.mjs",
     "test:media": "node tools/media-test.mjs",

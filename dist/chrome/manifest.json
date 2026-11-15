@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Immersion",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "description": "A sleek dark experience for Kick, with inline multistream, adjustable layouts, quick chat tabs and leaner chat scrolling.",
   "permissions": [
     "storage",
@@ -90,6 +90,7 @@
         "channel-library.js",
         "channel-page.js",
         "discovery.js",
+        "channel-offline.js",
         "channel-panel.js",
         "player-controls.js",
         "multi-layout.js",
