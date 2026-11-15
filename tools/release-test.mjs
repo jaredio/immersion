@@ -11,6 +11,8 @@ try{
   const pkg=JSON.parse(await readFile('package.json','utf8')),lock=JSON.parse(await readFile('package-lock.json','utf8'));
   assert.equal(lock.version,pkg.version);assert.equal(lock.packages[''].version,pkg.version);
   for(const browser of ['chrome','firefox'])assert.equal(JSON.parse(await readFile(`dist/${browser}/manifest.json`,'utf8')).version,pkg.version,'manifest version comes from package.json');
+  const firefox=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));
+  assert.ok(firefox.permissions.includes('https://web.kick.com/*'),'Firefox MV2 content scripts need explicit access to the replay server');
   for(const browser of ['chrome','firefox'])await assert.rejects(access(`dist/${browser}/${token}.js`),'build removes obsolete top-level assets');
   const expected=Object.fromEntries(await Promise.all(['chrome','firefox'].map(async browser=>[browser,await releaseFiles(browser)])));
   const verify=`import json,sys

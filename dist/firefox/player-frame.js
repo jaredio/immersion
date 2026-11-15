@@ -44,7 +44,11 @@
   }
   function syncPlaybackControls(){
     const root=document.querySelector('[data-kr-full-player-root]')||document;if(controlsRoot&&controlsRoot!==root)globalThis.KickRefinedPlayerControls?.clear(controlsRoot);controlsRoot=root;
-    return globalThis.KickRefinedPlayerControls?.sync(root,{getVideo:primary,getState:()=>({...desired,focused,startedAt}),onToggle:()=>execute(primary()?.paused?'play':'pause'),onVolume:(muted,volume)=>{desired={muted,volume};for(const video of videos())settings(video);send('kick-refined:audio-intent',desired);scheduleStatus();},onFocus:()=>send('kick-refined:focus')});
+    return globalThis.KickRefinedPlayerControls?.sync(root,{getVideo:primary,getState:()=>({...desired,focused,startedAt}),onToggle:()=>execute(primary()?.paused?'play':'pause'),onVolume:(muted,volume)=>{desired={muted,volume};for(const video of videos())settings(video);send('kick-refined:audio-intent',desired);scheduleStatus();},onFocus:()=>send('kick-refined:focus'),
+      // Keep fullscreen on the frame document. Kick's responsive player container
+      // can be replaced during the transition, ending fullscreen and losing video.
+      onFullscreen:()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()
+    });
   }
   function syncChrome(){syncPlaybackControls();}
   window.addEventListener('resize',()=>{syncChrome();scheduleStatus();});

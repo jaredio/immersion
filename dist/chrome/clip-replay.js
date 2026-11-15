@@ -1,10 +1,10 @@
 /* A read-only replay panel follows the clip's media clock, including seeks. */
 (() => {
   function create({container,video,data,signal,onClose}){
-    const abort=new AbortController(),stop=()=>abort.abort(),cache=new Map(),pending=new Map(),failed=new Set();let disposed=false,lastKey='',lastBucket=-1,active=0,queue=[];
+    const abort=new AbortController(),stop=()=>abort.abort(),cache=new Map(),pending=new Map(),failed=new Map();let disposed=false,lastKey='',lastTime=-1,active=0,queue=[];
     const pane=document.createElement('section');pane.className='replay';pane.setAttribute('aria-label','Clip chat replay');
     const header=document.createElement('div');header.className='replay-header';const heading=document.createElement('strong');heading.textContent='Chat replay';
-    const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close chat replay');close.textContent='×';close.addEventListener('click',onClose);
+    const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close chat replay');close.title='Close chat replay';close.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';close.addEventListener('click',onClose);
     header.append(heading,close);const list=document.createElement('div');list.className='replay-messages';list.setAttribute('role','log');list.setAttribute('aria-label','Replay messages');
     const status=document.createElement('p');status.className='replay-status';status.setAttribute('role','status');
     const retry=document.createElement('button');retry.type='button';retry.className='replay-retry';retry.textContent='Retry chat replay';retry.hidden=true;
@@ -19,22 +19,22 @@
     function render(){
       if(disposed)return;const time=video.currentTime||0,bucket=Math.floor(time/5),seen=new Set(),items=[...cache.values()].flat().filter(row=>row.time<=time&&row.time>=Math.max(0,time-60)).sort((a,b)=>a.time-b.time).filter(row=>{if(seen.has(row.id))return false;seen.add(row.id);return true;}).slice(-200);
       const key=items.map(row=>row.id).join('|');
-      if(key!==lastKey){const follow=list.scrollHeight-list.scrollTop-list.clientHeight<50;list.replaceChildren(...items.map(row=>{const line=document.createElement('p'),stamp=document.createElement('time'),name=document.createElement('strong');stamp.textContent=`${Math.floor(row.time/60)}:${String(Math.floor(row.time%60)).padStart(2,'0')}`;name.style.color=row.color;name.textContent=row.name;line.append(stamp,name,document.createTextNode(' '));content(line,row.content);return line;}));lastKey=key;if(follow||time<lastBucket*5)list.scrollTop=list.scrollHeight;}
-      const missing=failed.has(bucket);status.textContent=missing?'Chat replay could not be loaded.':pending.has(bucket)?'Loading chat replay…':items.length?'':'No messages at this point in the clip.';retry.hidden=!missing;
+      if(key!==lastKey){const follow=list.scrollHeight-list.scrollTop-list.clientHeight<50;list.replaceChildren(...items.map(row=>{const line=document.createElement('p'),stamp=document.createElement('time'),name=document.createElement('strong');stamp.textContent=`${Math.floor(row.time/60)}:${String(Math.floor(row.time%60)).padStart(2,'0')}`;name.style.color=row.color;name.textContent=row.name;line.append(stamp,name,document.createTextNode(' '));content(line,row.content);return line;}));lastKey=key;if(follow||time<lastTime)list.scrollTop=list.scrollHeight;}
+      lastTime=time;const failure=failed.get(bucket);status.textContent=failure?.message||(pending.has(bucket)?'Loading chat replay…':items.length?'':'No messages at this point in the clip.');retry.hidden=!failure?.retryable;note.hidden=!!failure||!cache.has(bucket);
     }
     async function load(bucket){
       try{
         const started=new Date(data.replay.startedAt+bucket*5000).toISOString(),url=`https://web.kick.com/api/v1/chat/${data.replay.channelId}/history?start_time=${encodeURIComponent(started)}`;
         const timeout=AbortSignal.timeout(15000),signal=AbortSignal.any([abort.signal,timeout]);
-        const response=await fetch(url,{signal,credentials:'omit',referrerPolicy:'no-referrer'});if(!response.ok)throw Error('Chat replay unavailable');
+        const response=await fetch(url,{signal,credentials:'omit',referrerPolicy:'no-referrer'});if(!response.ok)throw Object.assign(Error('Chat replay unavailable'),{status:response.status});
         const body=JSON.parse(await KickRefined.readText(response,{maxBytes:2097152,signal}));if(disposed)return;
         cache.set(bucket,KickRefinedClipTools.messages(body,data.replay,duration()));failed.delete(bucket);while(cache.size>30)cache.delete(cache.keys().next().value);
-      }catch{if(!disposed&&!abort.signal.aborted)failed.add(bucket);}
+      }catch(error){if(!disposed&&!abort.signal.aborted)failed.set(bucket,KickRefinedClipTools.replayFailure(error));}
       finally{pending.delete(bucket);active--;if(!disposed){render();drain();}}
     }
     function drain(){while(!disposed&&!abort.signal.aborted&&active<2&&queue.length){const bucket=queue.shift();active++;void load(bucket);}}
     function update(){
-      if(disposed)return;const bucket=Math.floor((video.currentTime||0)/5);lastBucket=bucket;
+      if(disposed)return;const bucket=Math.floor((video.currentTime||0)/5);
       const wanted=[bucket,Math.max(0,bucket-1),bucket+1].filter((value,i,all)=>all.indexOf(value)===i&&value*5<duration());
       for(const value of wanted)if(!cache.has(value)&&!pending.has(value)&&!failed.has(value)){pending.set(value,true);queue.push(value);}
       // Drop speculative queued work after a seek; active requests remain bounded.

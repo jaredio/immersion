@@ -90,5 +90,14 @@
     }
     return out.sort((a,b)=>a.time-b.time);
   }
-  globalThis.KickRefinedClipTools=Object.freeze({image,details,playlist,download,filename,messages});
+  function replayFailure(error){
+    const status=error?.status;
+    if(status===404||status===410)return {message:'Kick no longer has chat replay for this clip.',retryable:false};
+    if(status===401||status===403)return {message:'Kick blocked this replay request. Try again, or check the clip on Kick.',retryable:true};
+    if(status===429)return {message:'Kick is limiting replay requests. Wait a moment and try again.',retryable:true};
+    if(error?.name==='TimeoutError'||error?.name==='AbortError')return {message:'Chat replay timed out. Try again.',retryable:true};
+    if(error?.name==='TypeError')return {message:'Could not connect to Kick chat replay. Reload the updated extension and refresh Kick, then try again.',retryable:true};
+    return {message:'Chat replay is temporarily unavailable. Try again.',retryable:true};
+  }
+  globalThis.KickRefinedClipTools=Object.freeze({image,details,playlist,download,filename,messages,replayFailure});
 })();

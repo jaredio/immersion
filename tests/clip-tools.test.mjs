@@ -6,6 +6,12 @@ const context=vm.createContext({URL});
 for(const file of ['chat-clips','clip-tools'])vm.runInContext(await readFile(`extension/${file}.js`,'utf8'),context);
 const tools=context.KickRefinedClipTools,id='clip_01M5VG3B8WEFY068DP0GCHKSGW',base=`https://clips.kick.com/clips/ab/${id}/playlist.m3u8`,clip={id,channel:'native'};
 const parse=text=>tools.playlist('#EXTM3U\n'+text,base,id);
+for(const status of [404,410])test(`expired replay (${status}) is terminal and does not offer pointless retries`,()=>{
+ const failure=tools.replayFailure({status});assert.equal(failure.retryable,false);assert.match(failure.message,/no longer has chat replay/);
+});
+for(const [label,error,pattern]of [['blocked',{status:403},/blocked/],['rate limited',{status:429},/limiting/],['timeout',{name:'TimeoutError'},/timed out/],['cross-origin failure',{name:'TypeError'},/Reload the updated extension/],['server failure',{status:503},/temporarily unavailable/]])test(`replay reports ${label} and allows recovery`,()=>{
+ const failure=tools.replayFailure(error);assert.equal(failure.retryable,true);assert.match(failure.message,pattern);
+});
 test('channel identity comes from the broadcaster, with bounded names and trusted images',()=>{
  const data=tools.details({channel_id:3,started_at:'2026-11-15T04:29:20Z',channel:{slug:'NATIVE',username:'Native',profile_picture:'https://files.kick.com/avatar.webp'}},clip);
  assert.equal(data.channelName,'Native');assert.equal(data.channelImage,'https://files.kick.com/avatar.webp');assert.equal(data.replay.channelId,3);

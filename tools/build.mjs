@@ -50,7 +50,7 @@ for (const target of ['chrome', 'firefox']) {
     // Firefox MV3 explicitly forbids relaxing framing headers through webRequest.
     // Its supported MV2 build permits the one-response, per-checkout compatibility hook.
     manifest.manifest_version=2;
-    manifest.permissions.push('webRequest','webRequestBlocking',...manifest.host_permissions,'https://kick.com/*','https://www.kick.com/*','https://clips.kick.com/*','https://stream.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*');
+    manifest.permissions.push('webRequest','webRequestBlocking',...manifest.host_permissions,'https://kick.com/*','https://www.kick.com/*','https://clips.kick.com/*','https://stream.kick.com/*','https://web.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*');
     delete manifest.host_permissions;
     manifest.background.scripts.push('support-data.js','support-background.js');
     manifest.background.persistent=false;
