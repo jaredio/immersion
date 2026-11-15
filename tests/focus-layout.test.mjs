@@ -32,7 +32,23 @@ test('overflow rows divide the full width without narrow orphan columns or negat
     if(count>=5&&plan.sideCount>1)assert.notEqual(overflow.length,1);
   }
 });
-test('empty rails need no packing and a single side pane ends with the featured player',()=>{
+test('empty rails need no packing',()=>{
   assert.equal(planFor(1),null);
-  const plan=planFor(2,80);assert.equal(plan.sideCount,1);assert.equal(plan.rail[0].height,plan.mainHeight);
+});
+
+test('a lone side pane keeps its natural video height without collapsing the grid row',()=>{
+  for(const width of [641,850,1155,1600,2200])for(const focusSize of [45,50,66,74,80]){
+    const plan=planFor(2,focusSize,width),mainWidth=width*focusSize/100-4,sideWidth=width-mainWidth-8;
+    const naturalHeight=Math.ceil(box.chromeHeight+(sideWidth-box.borderWidth)/box.aspectRatio);
+    assert.equal(plan.sideCount,1);assert.equal(plan.rail[0].height,naturalHeight);
+    assert.equal(parseFloat(plan.templateRows),Math.max(plan.mainHeight,naturalHeight));
+    if(focusSize>50)assert.ok(plan.rail[0].height<plan.mainHeight,'the thumbnail never inherits the featured height');
+  }
+});
+
+test('a lone side pane accounts for its own header and clip details',()=>{
+  const side={chromeHeight:100,borderWidth:4,aspectRatio:4/3};
+  const plan=context.KickRefinedMultiLayout.focusPlan({width:1200,focusSize:80,gap:8,featured:box,rail:[side]});
+  assert.equal(plan.rail[0].height,100+(236-4)/(4/3));
+  assert.equal(parseFloat(plan.templateRows),plan.mainHeight);
 });

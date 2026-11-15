@@ -80,5 +80,35 @@ try{
   await page.waitForTimeout(250);await verify();
   const four=await inspect();assert.equal(four.others.filter(box=>box.y<four.main.bottom-1).length,2,'four streams at a two-thirds split fill two right-side slots');
   await page.screenshot({path:`artifacts/${engine}-focus-four-66.png`,fullPage:true});
+  for(const slug of ['c','b'])await workspace.getByRole('button',{name:`Remove ${slug}`,exact:true}).click();
+  const header=workspace.locator('.multi-tile[data-channel="native"] .multi-tile-header');
+  const middle=await header.evaluate(node=>({x:node.clientWidth/2,y:node.clientHeight/2}));
+  const cursor=await header.evaluate((node,point)=>{
+    const rect=node.getBoundingClientRect(),target=node.getRootNode().elementFromPoint(rect.left+point.x,rect.top+point.y);
+    const link=node.querySelector('.multi-tile-identity a');
+    return {cursor:getComputedStyle(target).cursor,isLink:!!target.closest('a'),linkWidth:link.getBoundingClientRect().width,headerWidth:rect.width};
+  },middle);
+  assert.equal(cursor.cursor,'default','blank header space uses the regular arrow cursor');
+  assert.equal(cursor.isLink,false,'the channel link does not cover the blank header');
+  assert.ok(cursor.linkWidth<cursor.headerWidth/2,'the profile link occupies only its label');
+  await page.evaluate(()=>window.singleFrame=document.getElementById('kr-multi-root').shadowRoot.querySelector('.multi-player iframe'));
+  await header.dblclick({position:middle});
+  await page.waitForFunction(()=>document.getElementById('kr-multi-root').shadowRoot.querySelector('.multi-tile[data-channel="native"]').dataset.featured==='true');
+  for(const focusSize of [45,66,74,80]){
+    await divider.evaluate((node,size)=>{node.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));for(let i=45;i<size;i++)node.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));},focusSize);
+    await page.waitForTimeout(200);
+    const geometry=await workspace.locator('#multi-grid').evaluate(grid=>{
+      const side=grid.querySelector('.multi-tile:not([data-featured="true"])'),player=side.querySelector('.multi-player').getBoundingClientRect(),main=grid.querySelector('[data-featured="true"]').getBoundingClientRect(),card=side.getBoundingClientRect(),area=grid.getBoundingClientRect();
+      return {playerWidth:player.width,playerHeight:player.height,sideHeight:card.height,mainHeight:main.height,sideTop:card.top,mainTop:main.top,gridBottom:area.bottom,lastBottom:Math.max(card.bottom,main.bottom)};
+    });
+    assert.ok(Math.abs(geometry.playerHeight-geometry.playerWidth*9/16)<2,`single side video retains 16:9 at ${focusSize}%: ${JSON.stringify(geometry)}`);
+    assert.ok(Math.abs(geometry.sideTop-geometry.mainTop)<2,'the single side pane stays top-aligned');
+    assert.ok(geometry.gridBottom>=geometry.lastBottom-2,'both panes remain inside the grid');
+    if(focusSize>50)assert.ok(geometry.sideHeight<geometry.mainHeight,'the single side pane does not stretch to the featured height');
+  }
+  await page.screenshot({path:`artifacts/${engine}-focus-two-natural.png`,fullPage:true});
+  await header.dblclick({position:middle});await page.waitForFunction(()=>document.getElementById('kr-multi-root').shadowRoot.querySelector('#multi-grid').dataset.layout==='grid');
+  await header.dblclick({position:middle});await page.waitForFunction(()=>document.getElementById('kr-multi-root').shadowRoot.querySelector('#multi-grid').dataset.layout==='focus');
+  assert.equal(await page.evaluate(()=>singleFrame.isConnected&&singleFrame===document.getElementById('kr-multi-root').shadowRoot.querySelector('.multi-player iframe')),true,'header double-clicks preserve the existing player');
   assert.deepEqual(errors,[]);console.log(`${engine}: focus overflow, resizing, refocusing, iframe preservation and responsive reset passed`);
 }finally{await context.close();await browser?.close();}

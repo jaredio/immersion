@@ -74,6 +74,7 @@
     // Avoid a single small overflow card when two balanced cards fit below.
     if(rail.length>=4&&rail.length-count===1&&count>1)count--;
     const rowHeight=(mainHeight-gap*(count-1))/count,overflow=rail.length-count;
+    const singleSideHeight=rail.length===1?heightAt(rail[0],sideWidth):null;
     const capacity=Math.max(2,Math.min(4,Math.round(width/320))),rowCount=Math.ceil(overflow/capacity);
     const groups=[];let start=count;
     for(let row=0;row<rowCount;row++){const size=Math.floor(overflow/rowCount)+(row<overflow%rowCount?1:0);groups.push({start,size});start+=size;}
@@ -84,10 +85,10 @@
     boundaries.sort((a,b)=>a-b);
     const line=value=>1+boundaries.reduce((best,current,index)=>Math.abs(current-value)<Math.abs(boundaries[best]-value)?index:best,0);
     const columns=boundaries.slice(1).map((end,index)=>(end-boundaries[index])*width-gap*((index===0||index===boundaries.length-2)?0.5:1));
-    const positions=rail.map((_,index)=>index<count?{column:`${line(split)} / -1`,row:String(index+1),height:rowHeight}:null);
+    const positions=rail.map((_,index)=>index<count?{column:`${line(split)} / -1`,row:String(index+1),height:singleSideHeight??rowHeight}:null);
     for(const [row,{start,size}]of groups.entries())for(let i=0;i<size;i++)positions[start+i]={column:size===1?`1 / ${line(split)}`:`${line(i/size)} / ${line((i+1)/size)}`,row:String(count+row+1)};
     return {mainHeight,sideCount:count,templateColumns:columns.map(value=>`${value}px`).join(' '),
-      templateRows:Array(count).fill(`${rowHeight}px`).join(' '),
+      templateRows:Array(count).fill(`${singleSideHeight===null?rowHeight:Math.max(mainHeight,singleSideHeight)}px`).join(' '),
       featured:{column:`1 / ${line(split)}`,row:`1 / span ${count}`},rail:positions};
   }
   globalThis.KickRefinedMultiLayout=Object.freeze({findContext,createStyles,createScheduler,focusPlan});
