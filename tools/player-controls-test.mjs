@@ -29,7 +29,20 @@ try{
   await page.locator('[data-kr-unified-row]').waitFor();
   await page.evaluate(()=>{controlState.startedAt=null;KickRefinedPlayerControls.sync(document.getElementById('player'),options);});
   assert.equal(await page.locator('[data-kr-elapsed]').isVisible(),false,'unknown start time stays hidden');
+  await page.evaluate(()=>{
+    window.clockIntervals=new Set();const start=window.setInterval.bind(window),stop=window.clearInterval.bind(window);
+    window.setInterval=(...args)=>{const id=start(...args);clockIntervals.add(id);return id;};window.clearInterval=id=>{clockIntervals.delete(id);stop(id);};
+    window.hiddenForTest=false;Object.defineProperty(document,'hidden',{get:()=>hiddenForTest,configurable:true});
+    controlState.startedAt=Date.now()-10000;KickRefinedPlayerControls.sync(document.getElementById('player'),options);
+  });
+  assert.equal(await page.evaluate(()=>clockIntervals.size),1);
+  await page.evaluate(()=>{hiddenForTest=true;document.dispatchEvent(new Event('visibilitychange'));for(let i=0;i<100;i++)KickRefinedPlayerControls.sync(document.getElementById('player'),options);});
+  assert.equal(await page.evaluate(()=>clockIntervals.size),0,'hidden tabs have no player clock interval even during status updates');
+  await page.evaluate(()=>{const before=Date.now();Date.now=()=>before+42000;hiddenForTest=false;document.dispatchEvent(new Event('visibilitychange'));});
+  assert.equal(await page.locator('[data-kr-elapsed]').textContent(),'0:00:52','returning to the tab catches up immediately');
+  assert.equal(await page.evaluate(()=>clockIntervals.size),1,'returning starts exactly one shared clock');
   await page.evaluate(()=>KickRefinedPlayerControls.clear(document.getElementById('player')));
+  assert.equal(await page.evaluate(()=>clockIntervals.size),0,'clearing the final controls releases the clock');
   assert.equal(await page.locator('[data-kr-unified-row]').count(),0);
   assert.equal(await page.evaluate(()=>{document.querySelector('.z-controls').append(keptNativeSource);return keptNativeSource.hasAttribute('data-kr-unified-source');}),false,'retained native buttons have their markers restored after replacement/teardown');
   console.log(`${engine.name()}: total stream time, cached discovery, idle updates, native replacement and teardown passed`);

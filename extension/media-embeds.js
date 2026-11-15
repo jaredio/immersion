@@ -8,14 +8,16 @@
   function logo(provider){return provider==='x'?ui.svg('brand'):`<svg class="filled" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[provider]}"/></svg>`;}
   const person='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3m3-16a3 3 0 0 1 0 6m0 4a5 5 0 0 1 3 5"/></svg>';
   function create({media=true,profiles=true}={}){
-    const api=KickRefined.api,records=new Set(),dirty=new Set();let list=null,timer=0,disposed=false,prune=false;
+    const api=KickRefined.api,records=new Set(),dirty=new Set(),deferred=new Set();let list=null,timer=0,disposed=false,prune=false;
     const allowed=item=>item.provider==='x'?profiles:media;
     const hidden=document.createElement('style');hidden.textContent='[data-kr-media-link]{display:none!important}';document.head.append(hidden);
     const byRow=new WeakMap();
     function stop(record){if(!record.frame)return;record.frame.remove();record.frame=null;record.slot?.querySelector('.player')?.remove();record.slot?.querySelector('.player-close')?.remove();if(record.preview)record.preview.hidden=false;}
     const byHost=new WeakMap();
-    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting)load(record);else stop(record);}}},{rootMargin:'80px'});
-    function release(record){if(record.requestId){try{Promise.resolve(api.runtime.sendMessage({type:'immersion:preview-cancel',requestId:record.requestId})).catch(()=>{});}catch{}record.requestId=null;}stop(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-media-link');clearTimeout(record.feedback);records.delete(record);byRow.get(record.row)?.delete(record.key);}
+    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting){if(document.hidden)deferred.add(record);else{deferred.delete(record);load(record);}}else{deferred.delete(record);stop(record);}}}},{rootMargin:'80px'});
+    function resumePreviews(){if(document.hidden||disposed)return;for(const record of deferred){deferred.delete(record);if(records.has(record)&&record.host.isConnected)load(record);}}
+    document.addEventListener('visibilitychange',resumePreviews);
+    function release(record){deferred.delete(record);if(record.requestId){try{Promise.resolve(api.runtime.sendMessage({type:'immersion:preview-cancel',requestId:record.requestId})).catch(()=>{});}catch{}record.requestId=null;}stop(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-media-link');clearTimeout(record.feedback);records.delete(record);byRow.get(record.row)?.delete(record.key);}
     function button(label,icon,action){const node=document.createElement('button');node.type='button';node.title=label;node.setAttribute('aria-label',label);node.innerHTML=icon;node.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();action();});return node;}
     function open(href,label,icon){const node=document.createElement('a');node.href=href;node.target='_blank';node.rel='noopener noreferrer';node.className='open';node.title=label;node.setAttribute('aria-label',label);node.innerHTML=icon;return node;}
     function render(record,item){
@@ -78,7 +80,7 @@
     const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();}});
     function refresh(force=false){const next=media||profiles?KickRefinedDOM.chat:null;if(next===list){if(!force)return;for(const record of [...records])if(!allowed(record.item))release(record);dirty.clear();if(list){queue(list);schedule();}return;}for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(media||profiles);refresh();
-    return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;clearTimeout(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};
+    return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;clearTimeout(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};
   }
   globalThis.KickRefinedMedia=Object.freeze({create});
 })();

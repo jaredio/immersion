@@ -14,13 +14,15 @@
   globalThis.KickRefinedEmbedUI=Object.freeze({css:cardCSS,svg,playSVG,duration});
   function create({enabled=true}={}){
     let list,timer,disposed=false,prune=false;
-    const records=new Set(),dirty=new Set(),api=KickRefined.api;
+    const records=new Set(),dirty=new Set(),deferred=new Set(),api=KickRefined.api;
     const nativeStyle=document.createElement('style');nativeStyle.textContent='[data-kr-x-link]{display:none!important}';document.head.append(nativeStyle);
     const byHost=new WeakMap();
-    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting)load(record);else stopVideo(record);}}}, {rootMargin:'80px'});
+    const visibility=new IntersectionObserver(entries=>{for(const entry of entries){const record=byHost.get(entry.target);if(record){if(entry.isIntersecting){if(document.hidden)deferred.add(record);else{deferred.delete(record);load(record);}}else{deferred.delete(record);stopVideo(record);}}}}, {rootMargin:'80px'});
+    function resumePreviews(){if(document.hidden||disposed||!enabled)return;for(const record of deferred){deferred.delete(record);if(records.has(record)&&record.host.isConnected)load(record);}}
+    document.addEventListener('visibilitychange',resumePreviews);
     const byRow=new WeakMap();
     function stopVideo(record){const active=record.activeVideo;if(!active)return;record.activeVideo=null;if(active.video){active.video.pause();active.video.removeAttribute('src');active.video.load();}active.frame.remove();active.slot.replaceChildren(active.preview);}
-    function release(record){if(record.requestId){try{Promise.resolve(api.runtime.sendMessage({type:'immersion:preview-cancel',requestId:record.requestId})).catch(()=>{});}catch{}record.requestId=null;}stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);byRow.get(record.row)?.delete(record.post.id);clearTimeout(record.feedback);}
+    function release(record){deferred.delete(record);if(record.requestId){try{Promise.resolve(api.runtime.sendMessage({type:'immersion:preview-cancel',requestId:record.requestId})).catch(()=>{});}catch{}record.requestId=null;}stopVideo(record);record.releaseMessage?.();visibility.unobserve(record.host);byHost.delete(record.host);record.host.remove();for(const link of record.links)link.removeAttribute('data-kr-x-link');records.delete(record);byRow.get(record.row)?.delete(record.post.id);clearTimeout(record.feedback);}
     function hideLinks(record){for(const link of record.links)link.setAttribute('data-kr-x-link','');}
     function button(label,kind,click){const el=document.createElement('button');el.type='button';el.title=label;el.setAttribute('aria-label',label);el.innerHTML=svg(kind);el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();click(el);});return el;}
     function render(record,post){
@@ -105,7 +107,7 @@
     const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();}});
     function refresh(){const next=enabled?KickRefinedDOM.chat:null;if(next===list)return;for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(enabled);refresh();
-    return {setEnabled(value){if(enabled===value)return;enabled=value;clearTimeout(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};
+    return {setEnabled(value){if(enabled===value)return;enabled=value;clearTimeout(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};
   }
   globalThis.KickRefinedX=Object.freeze({create});
 })();

@@ -8,8 +8,10 @@
     if(state.elapsed.hidden!==!time)state.elapsed.hidden=!time;const title=time?'Total stream time':'';if(state.elapsed.title!==title)state.elapsed.title=title;
     if(time)clocks.add(state);else clocks.delete(state);
   }
-  function clockTick(){for(const state of clocks)if(!state.row.isConnected)clocks.delete(state);else if(!document.hidden)updateClock(state);if(!clocks.size){clearInterval(clockTimer);clockTimer=0;}}
-  function syncClock(state){updateClock(state);if(clocks.size&&!clockTimer)clockTimer=setInterval(clockTick,1000);else if(!clocks.size&&clockTimer){clearInterval(clockTimer);clockTimer=0;}}
+  function scheduleClock(){if(clocks.size&&!document.hidden&&!clockTimer)clockTimer=setInterval(clockTick,1000);else if((!clocks.size||document.hidden)&&clockTimer){clearInterval(clockTimer);clockTimer=0;}}
+  function clockTick(){for(const state of clocks)if(!state.row.isConnected)clocks.delete(state);else if(!document.hidden)updateClock(state);scheduleClock();}
+  function syncClock(state){updateClock(state);scheduleClock();}
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)scheduleClock();else clockTick();});
   function releaseState(state){if(state){clocks.delete(state);state.row.remove();}if(!clocks.size&&clockTimer){clearInterval(clockTimer);clockTimer=0;}}
 
   const paths={share:'M18 7a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 23a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 10l7-5M8 14l7 5',report:'M12 3 2 21h20zM12 9v5m0 3v1',play:'m8 5 11 7-11 7z',pause:'M8 5v14M16 5v14',mute:'m11 5-5 4H3v6h3l5 4zM16 9l5 6m0-6-5 6',sound:'m11 5-5 4H3v6h3l5 4zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',clip:'M4 9h16v11H4zM4 9l-1-4 16-3 1 4zM8 4l3 4m3-5 3 4',theatre:'M3 5h18v14H3zM7 5v14m10-14v14',pip:'M3 4h18v16H3zM12 12h7v6h-7z',fullscreen:'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',settings:'M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',focus:'M3 4h18v16H3zM15 4v16',grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z'};
