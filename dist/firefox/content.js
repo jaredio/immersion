@@ -3,6 +3,7 @@
   const { api, normalize, channelSlug } = KickRefined;
   if (/^\/popout\/[^/]+\/chat\/?$/.test(location.pathname)) return;
   if (!api?.storage || document.getElementById('kr-root')) return;
+  const compactNumber=new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format;
   let root = document.documentElement;
   let settings = normalize();
   let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, xPosts, mediaCards, replyPreviews, notices, support, channelPanel, checkouts;
@@ -291,8 +292,8 @@
       info.append(name);if(channel.type==='channel'&&channel.streamTitle){const title=document.createElement('div');title.className='result-stream-title';title.textContent=channel.streamTitle;info.append(title);}info.append(detail); option.append(avatar, info);
       if(channel.type!=='channel'&&channel.duration){const clock=document.createElement('span');clock.className='result-duration';clock.textContent=KickRefinedSearch.duration(channel.duration);avatar.append(clock);}
       const status = document.createElement('span'); status.className = 'live-status'; status.dataset.live = channel.live;
-      status.textContent = channel.live === 'live' ? Number.isFinite(channel.views)?`Live · ${new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(channel.views)}`:channel.viewers && channel.viewers !== 'LIVE' ? `Live · ${channel.viewers}` : 'Live' : channel.live === 'offline' ? 'Offline' : 'Status unavailable'; option.append(status);
-      if(channel.type!=='channel')status.textContent=channel.views===null?'':new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(channel.views)+' views';
+      status.textContent = channel.live === 'live' ? Number.isFinite(channel.views)?`Live · ${compactNumber(channel.views)}`:channel.viewers && channel.viewers !== 'LIVE' ? `Live · ${channel.viewers}` : 'Live' : channel.live === 'offline' ? 'Offline' : 'Status unavailable'; option.append(status);
+      if(channel.type!=='channel')status.textContent=channel.views===null?'':compactNumber(channel.views)+' views';
       if (channel.type==='channel'&&settings.pinned.includes(channel.slug)) { const pin = document.createElement('span'); pin.className = 'pin'; pin.textContent = '★'; option.append(pin); }
       option.addEventListener('pointermove', () => { if (selected !== index) { selected = index; highlight(false); } });
       option.addEventListener('click', () => go(channel));

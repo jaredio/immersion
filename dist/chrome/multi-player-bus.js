@@ -6,6 +6,11 @@
     let revision = 0;
     let disposed = false;
 
+    function detach(tile) {
+      // A removed iframe may already have lost its contentWindow.
+      for (const [source, owner] of sources) if (owner === tile) sources.delete(source);
+    }
+
     function onMessage(event) {
       if (disposed || !isActive()) return;
       const tile = sources.get(event.source);
@@ -25,8 +30,8 @@
     window.addEventListener('message', onMessage);
 
     return {
-      attach(tile) { if (!disposed && tile.frame?.contentWindow) sources.set(tile.frame.contentWindow, tile); },
-      detach(tile) { if (tile.frame?.contentWindow) sources.delete(tile.frame.contentWindow); },
+      attach(tile) { if (!disposed) { detach(tile); if (tile.frame?.contentWindow) sources.set(tile.frame.contentWindow, tile); } },
+      detach,
       nextRevision() { return ++revision; },
       snapshot: () => ({sources: sources.size}),
       send(tile, data) {

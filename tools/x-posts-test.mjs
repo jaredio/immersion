@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {extensionWorker} from './extension-worker.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const engine=process.env.KR_ENGINE||'chromium';
 const id='2114650564600688817',href=`https://x.com/binji_x/status/${id}`;
@@ -13,7 +14,7 @@ if(engine==='chromium')context=await playwright.chromium.launchPersistentContext
 else{browser=await playwright.firefox.launch({headless:true});context=await browser.newContext({viewport:{width:800,height:800}});}
 try{
  if(engine==='chromium'){
-  const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+  const worker=await extensionWorker(context);
   await worker.evaluate(({fixture})=>{globalThis.xTestRequests=[];globalThis.fetch=async(url,options)=>{xTestRequests.push({url,credentials:options.credentials});if(url.endsWith('/404'))return new Response('{}',{status:404});return new Response(JSON.stringify(fixture));};},{fixture});
  }else{
   await context.addInitScript(({fixture})=>{globalThis.xTestRequests=[];window.browser={runtime:{sendMessage:async message=>{xTestRequests.push(message);if(message.href.endsWith('/404'))return {ok:false};return {ok:true,post:KickRefinedXData.metadata(fixture,KickRefinedXData.parse(message.href))};}}};},{fixture});

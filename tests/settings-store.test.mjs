@@ -32,3 +32,52 @@ test('settings worker accepts only own popup or Kick tabs and ignores unknown ke
   const result=await new Promise(resolve=>listener(message,{id:'extension',url:'chrome-extension://extension/popup.html'},resolve));
   assert.equal(result.ok,true);assert.equal(stored.settings.accent,'blue');assert.equal(stored.settings.unexpected,undefined);
 });
+
+test('no-op settings patches avoid disk writes and cross-tab change broadcasts',async()=>{
+  const ctx=await setup();let settings={accent:'blue',pinned:['alpha']},writes=0;
+  const storage={get:async()=>({settings:structuredClone(settings)}),set:async value=>{writes++;settings=structuredClone(value.settings);}};
+  const repo=ctx.KickRefinedSettings.createRepository(storage);
+  await repo.patch({accent:'blue'});await repo.patch({pinned:['ALPHA','alpha']});await repo.patch({unknown:true});
+  assert.equal(writes,0);
+  await Promise.all([repo.patch({accent:'violet'}),repo.patch({accent:'violet'}),repo.patch({chatWidth:400}),repo.patch({chatWidth:400})]);
+  assert.equal(writes,2);assert.equal(settings.accent,'violet');assert.equal(settings.chatWidth,400);
+});
+
+test('queued settings writes read current storage before deciding a patch is unchanged',async()=>{
+  const ctx=await setup();let settings={accent:'mint'},writes=0;
+  const storage={get:async()=>({settings:structuredClone(settings)}),set:async value=>{writes++;settings=structuredClone(value.settings);}};
+  const repo=ctx.KickRefinedSettings.createRepository(storage);
+  await repo.patch({accent:'blue'});settings={...settings,accent:'violet',fontSize:18};
+  const result=await repo.patch({accent:'blue'});assert.equal(result.accent,'blue');assert.equal(result.fontSize,18);assert.equal(writes,2);
+});
+
+test('an old settings reply cannot overwrite newer storage events or pending optimistic edits',async()=>{
+  const ctx=await setup(),replies=[],sent=[];let latest;
+  const api={runtime:{sendMessage:message=>{sent.push(message);return new Promise(resolve=>replies.push(resolve));}}};
+  const store=ctx.KickRefinedSettings.create({api,delay:60000,onUpdate:value=>latest=value});
+  store.accept({accent:'mint'});store.patch({accent:'blue'});const first=store.flush();await new Promise(resolve=>setImmediate(resolve));
+  store.patch({fontSize:18});store.accept({accent:'violet',chatWidth:420});
+  replies.shift()({ok:true,settings:{accent:'blue'}});await first;
+  assert.equal(latest.accent,'violet');assert.equal(latest.chatWidth,420);assert.equal(latest.fontSize,18);
+  const second=store.flush();await new Promise(resolve=>setImmediate(resolve));
+  replies.shift()({ok:true,settings:{accent:'violet',chatWidth:420,fontSize:18}});await second;
+  assert.equal(sent.length,2);assert.equal(sent[1].patch.fontSize,18);assert.equal(sent[1].patch.accent,undefined);await store.destroy();
+});
+
+test('destroy flushes pending settings once and suppresses late rendering and saved callbacks',async()=>{
+  const ctx=await setup();let reply,updates=0,saved=0;
+  const api={runtime:{sendMessage:()=>new Promise(resolve=>reply=resolve)}};
+  const store=ctx.KickRefinedSettings.create({api,delay:60000,onUpdate:()=>updates++,onSaved:()=>saved++});
+  store.patch({accent:'blue'});const closing=store.destroy();await new Promise(resolve=>setImmediate(resolve));
+  store.patch({accent:'violet'});store.accept({accent:'neutral'});reply({ok:true,settings:{accent:'blue'}});await closing;
+  await store.destroy();assert.equal(updates,1);assert.equal(saved,0);
+});
+
+test('failed saves roll back only the failed patch while later optimistic edits remain visible',async()=>{
+  const ctx=await setup(),replies=[];let latest,errors=0;
+  const store=ctx.KickRefinedSettings.create({api:{runtime:{sendMessage:()=>new Promise(resolve=>replies.push(resolve))}},delay:60000,onUpdate:value=>latest=value,onError:()=>errors++});
+  store.accept({accent:'mint'});store.patch({accent:'blue'});const first=store.flush();await new Promise(resolve=>setImmediate(resolve));
+  store.patch({fontSize:18});const second=store.flush();replies.shift()({ok:false});await first;
+  assert.equal(latest.accent,'mint');assert.equal(latest.fontSize,18);assert.equal(errors,1);await new Promise(resolve=>setImmediate(resolve));
+  replies.shift()({ok:true,settings:{accent:'mint',fontSize:18}});await second;assert.equal(latest.fontSize,18);await store.destroy();
+});

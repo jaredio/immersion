@@ -5,24 +5,37 @@
   const owner=(sender,id)=>`${sender.tab.id}:${sender.frameId||0}:${sender.documentId||''}:${id}`;
   function create({api,run,complete,timeout=10000}){
     const pending=new Map(),leases=new Map(),queued=[];let active=0,sequence=0;
+    function finish(job,result){
+      if(job.done)return;job.done=true;
+      clearTimeout(job.timer);job.controller.signal.removeEventListener('abort',job.stop);
+      if(job.running){job.running=false;active--;}
+      if(pending.get(job.key)===job)pending.delete(job.key);
+      const consumers=[];
+      for(const key of job.consumers){const lease=leases.get(key);if(lease?.job===job){leases.delete(key);consumers.push(lease);}}
+      job.consumers.clear();
+      // Cache failures must not strand message replies or poison the queue.
+      try{if(!job.cancelled)complete(job.key,result);}catch{globalThis.KickRefinedPerf?.count('preview.cacheErrors');}
+      for(const lease of consumers)lease.resolve(result);
+      drain();
+    }
     function cancel(key){
       const lease=leases.get(key);if(!lease)return;
       leases.delete(key);lease.job.consumers.delete(key);lease.resolve({ok:false,cancelled:true});
       const job=lease.job;if(job.consumers.size)return;
       job.cancelled=true;if(pending.get(job.key)===job)pending.delete(job.key);
-      const index=queued.indexOf(job);if(index>=0)queued.splice(index,1);job.controller.abort();
+      const index=queued.indexOf(job);if(index>=0)queued.splice(index,1);
+      job.controller.abort();finish(job,{ok:false,cancelled:true});
     }
     function drain(){while(active<2&&queued.length){
-      const job=queued.shift();active++;const timer=setTimeout(()=>job.controller.abort(),timeout);
+      const job=queued.shift();active++;job.running=true;
+      // Settle independently of fetch/body cancellation, which can itself stall.
+      job.stop=()=>finish(job,{ok:false});job.controller.signal.addEventListener('abort',job.stop,{once:true});
+      job.timer=setTimeout(()=>job.controller.abort(),timeout);
       Promise.resolve().then(()=>{
         // Cancellation can arrive before this microtask starts the request.
         job.controller.signal.throwIfAborted();
         return run(job.item,job.controller.signal);
-      }).catch(()=>({ok:false})).then(result=>{
-        if(!job.cancelled)complete(job.key,result);
-        if(pending.get(job.key)===job)pending.delete(job.key);
-        for(const key of job.consumers){const lease=leases.get(key);if(lease){leases.delete(key);lease.resolve(result);}}
-      }).finally(()=>{clearTimeout(timer);active--;drain();});
+      }).then(result=>finish(job,result),()=>finish(job,{ok:false}));
     }}
     api.runtime.onMessage.addListener((message,sender)=>{
       if(message?.type!=='immersion:preview-cancel'||!allowed(api,sender)||!token(message.requestId))return;

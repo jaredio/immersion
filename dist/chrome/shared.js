@@ -1,5 +1,6 @@
 /* Shared by the popup and isolated content script. No remote dependencies. */
 (() => {
+  const compactNumber=new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format;
   const defaults = Object.freeze({
     enabled: true,
     performance: true,
@@ -26,9 +27,12 @@
       if (Number.isFinite(source[key])) result[key] = Math.min(max, Math.max(min, Math.round(source[key])));
     }
     if (['mint', 'violet', 'blue', 'neutral'].includes(source.accent)) result.accent = source.accent;
-    result.pinned = Array.isArray(source.pinned)
-      ? [...new Set(source.pinned.filter(s => typeof s === 'string' && /^[a-zA-Z0-9_]{1,40}$/.test(s)).map(s => s.toLowerCase()))].slice(0, 30)
-      : [];
+    const pinned = new Set();
+    if (Array.isArray(source.pinned)) for (const value of source.pinned) {
+      if (typeof value === 'string' && /^[a-zA-Z0-9_]{1,40}$/.test(value)) pinned.add(value.toLowerCase());
+      if (pinned.size === 30) break;
+    }
+    result.pinned = [...pinned];
     return result;
   }
   const reserved = new Set(['browse', 'categories', 'category', 'following', 'search', 'settings', 'dashboard', 'auth', 'login', 'signup', 'register', 'events', 'clips', 'videos', 'subscriptions', 'transactions', 'wallet', 'drops', 'legal', 'community-guidelines', 'terms-of-service', 'privacy-policy', 'about', 'download', 'rewards', 'account', 'moderator', 'moderation', 'kicks', 'inventory', 'popout']);
@@ -57,8 +61,13 @@
     }
     function multiState(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
-    const channels = Array.isArray(source.channels) ? [...new Set(source.channels.filter(s => typeof s === 'string').map(s => channelSlug(`/${s}`)).filter(Boolean))].slice(0, 6) : [];
-    const sizes={};for(const slug of channels)if(Number.isFinite(source.sizes?.[slug]))sizes[slug]=Math.max(2,Math.min(6,Math.round(source.sizes[slug])));
+    const channels = [];
+    if (Array.isArray(source.channels)) for (const value of source.channels) {
+      if (typeof value !== 'string' || !/^[a-zA-Z0-9_]{1,40}$/.test(value)) continue;
+      const slug = channelSlug(`/${value}`); if (slug && !channels.includes(slug)) channels.push(slug);
+      if (channels.length === 6) break;
+    }
+    const sizes=Object.create(null);for(const slug of channels)if(Number.isFinite(source.sizes?.[slug]))sizes[slug]=Math.max(2,Math.min(6,Math.round(source.sizes[slug])));
     const playerModes=Object.create(null);for(const slug of channels)if(['full','embed'].includes(source.playerModes?.[slug]))playerModes[slug]=source.playerModes[slug];
     return { channels, sizes, playerModes, playerMode:source.playerMode==='embed'?'embed':'full',mixAudio:source.mixAudio===true, layout: ['grid', 'focus', 'columns'].includes(source.layout) ? source.layout : 'grid', chat: channels.includes(source.chat) ? source.chat : channels[0] || '', chatVisible: source.chatVisible !== false, focus: channels.includes(source.focus) ? source.focus : channels[0] || '', focusSize: Number.isFinite(source.focusSize) ? Math.max(45,Math.min(80,Math.round(source.focusSize))) : 74 };
   }
@@ -75,7 +84,7 @@
     return url.href;
   }
   function channelDetails(data,slug){
-    if(!data||typeof data!=='object'||data.slug?.toLowerCase()!==slug)return null;
+    if(!data||typeof data!=='object'||typeof data.slug!=='string'||data.slug.toLowerCase()!==slug)return null;
     const text=value=>typeof value==='string'?value.trim().slice(0,600):'';
     const user=data.user||{},stream=data.livestream,category=stream?.categories?.[0]?.name||data.recent_categories?.[0]?.name;
     const socials=[];
@@ -90,20 +99,23 @@
     const clock=globalThis.KickRefinedStreamClock,startedAt=stream&&stream.is_live!==false?(clock?.parse(stream.start_time)??clock?.parse(stream.started_at)??clock?.parse(stream.created_at)??null):null;
     const rawFollowers=data.followers_count??data.followersCount;
     const count=typeof rawFollowers==='string'&&/^\d+$/.test(rawFollowers)?Number(rawFollowers):rawFollowers;
-    const followers=Number.isSafeInteger(count)&&count>=0?new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(count):'';
+    const followers=Number.isSafeInteger(count)&&count>=0?compactNumber(count):'';
     return {startedAt,title:text(user.username)||slug,streamTitle:text(stream?.session_title),bio:typeof user.bio==='string'?user.bio.trim().slice(0,20000):'',category:text(category),language:text(stream?.language).slice(0,30),mature:stream?.is_mature===true,verified:data.verified===true||!!data.verified&&typeof data.verified==='object',live:stream?.is_live===true?'live':data.livestream===null?'offline':'unknown',viewers:Number.isFinite(stream?.viewer_count)&&stream.viewer_count>=0?Math.floor(stream.viewer_count).toLocaleString('en-US'):'',followers,image,socials};
   }
   async function readText(response,{maxBytes=2097152,signal}={}) {
-    const aborted=()=>{if(signal?.aborted)throw signal.reason||new DOMException('Cancelled','AbortError');};
-    if(Number(response.headers.get('content-length'))>maxBytes){await response.body?.cancel();throw Error('Response is too large.');}
+    const aborted=()=>signal?.throwIfAborted();
+    // Cancellation is best effort: an unresponsive source must not block rejection.
+    const cancel=body=>{void body?.cancel().catch(()=>{});};
+    if(signal?.aborted){cancel(response.body);aborted();}
+    if(Number(response.headers.get('content-length'))>maxBytes){cancel(response.body);throw Error('Response is too large.');}
     aborted();if(!response.body)return '';
     const reader=response.body.getReader(),decoder=new TextDecoder();let bytes=0,text='';
-    const stop=()=>{void reader.cancel().catch(()=>{});};
+    const stop=()=>cancel(reader);
     signal?.addEventListener('abort',stop,{once:true});
     try{
       aborted();
       while(true){const {done,value}=await reader.read();aborted();if(done)break;
-        bytes+=value.byteLength;if(bytes>maxBytes){await reader.cancel();throw Error('Response is too large.');}
+        bytes+=value.byteLength;if(bytes>maxBytes){stop();throw Error('Response is too large.');}
         text+=decoder.decode(value,{stream:true});
       }
       return text+decoder.decode();

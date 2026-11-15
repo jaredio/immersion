@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {extensionWorker} from './extension-worker.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)),engine=process.env.KR_ENGINE||'chromium';
 const id='2114650564600688817',ttId='7700270863769210126',ytId='dQw4w9WgXcQ';
 const links={x:`https://x.com/creator/status/${id}`,tt:'https://vt.tiktok.com/ZSg44YD1X/',tt2:'https://www.tiktok.com/t/ZTfqXW8Cn/',yt:`https://www.youtube.com/watch?v=${ytId}&t=62`,short:`https://www.youtube.com/shorts/${ytId}`,xp:'https://x.com/creator',tp:'https://www.tiktok.com/@creator'};
@@ -19,7 +20,7 @@ if(engine==='chromium')context=await playwright.chromium.launchPersistentContext
 else{browser=await playwright.firefox.launch({headless:true});context=await browser.newContext({viewport:{width:900,height:800}});}
 try{
  if(engine==='chromium'){
-  const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+  const worker=await extensionWorker(context);
   await worker.evaluate(()=>chrome.storage.local.clear());
   await worker.evaluate(({tweet,user,ttVideo,ttProfile,youtube,ttId})=>{
    globalThis.fetch=async(url,options)=>{

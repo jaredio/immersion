@@ -11,16 +11,19 @@
   let pageCharacters = false;
   let linkIndex = new WeakMap();
 
-  function recordRows(record) {
+  function recordRows(record, nearest, descendants) {
     const rows = new Set();
     const add = node => {
       const element = node.nodeType === 1 ? node : node.parentElement;
-      const row = element?.closest?.('[data-index]'); if (row) rows.add(row);
+      if (!element) return;
+      if (!nearest.has(element)) nearest.set(element, element.closest?.('[data-index]'));
+      const row = nearest.get(element); if (row) rows.add(row);
     };
     add(record.target);
     for (const node of record.addedNodes || []) {
       add(node);
-      for (const row of node.querySelectorAll?.('[data-index]') || []) rows.add(row);
+      if (!descendants.has(node)) descendants.set(node, node.querySelectorAll?.('[data-index]') || []);
+      for (const row of descendants.get(node)) rows.add(row);
     }
     return rows;
   }
@@ -50,13 +53,28 @@
 
   function dispatchChat(records) {
     globalThis.KickRefinedPerf?.count('dom.chatBatches');
-    const indexed = new Map(records.map(record => [record, recordRows(record)]));
-    for (const rows of indexed.values()) for (const row of rows) linkIndex.delete(row);
-    for (const subscriber of [...chats]) {
-      if (!chats.has(subscriber)) continue;
+    const subscribers = [...chats], groups = new Map(), indexed = new Map(), nearest = new Map(), descendants = new Map();
+    // Features with identical filters share discovery, but own their delivered sets.
+    for (const subscriber of subscribers) {
+      if (groups.has(subscriber.attributeKey)) continue;
       const relevant = records.filter(record => record.type !== 'attributes' || subscriber.attributes.has(record.attributeName));
-      const rows = new Set(relevant.flatMap(record => [...indexed.get(record)]));
-      if (relevant.length) notify(subscriber.onMutations, relevant, {rows});
+      const rows = new Set();
+      for (const record of relevant) {
+        let found = indexed.get(record);
+        if (!found) {
+          found = recordRows(record, nearest, descendants); indexed.set(record, found);
+          const changedLinks = record.type === 'attributes' ? record.attributeName === 'href' :
+            [...(record.addedNodes || []), ...(record.removedNodes || [])].some(node => node.nodeType === 1);
+          if (changedLinks) for (const row of found) linkIndex.delete(row);
+        }
+        for (const row of found) rows.add(row);
+      }
+      groups.set(subscriber.attributeKey, {records: relevant, rows});
+    }
+    for (const subscriber of subscribers) {
+      if (!chats.has(subscriber)) continue;
+      const group = groups.get(subscriber.attributeKey);
+      if (group.records.length) notify(subscriber.onMutations, [...group.records], {rows: new Set(group.rows)});
     }
   }
   const chatObserver = new MutationObserver(dispatchChat);
@@ -142,7 +160,7 @@
   }
 
   function subscribeChat({onContainer, onMutations, attributes = ['href', 'data-index']}) {
-    const subscriber = {onContainer, onMutations, attributes: new Set(attributes)};
+    const subscriber = {onContainer, onMutations, attributes: new Set(attributes), attributeKey: JSON.stringify([...new Set(attributes)].sort())};
     let disposed = false;
     return {
       setEnabled(enabled) {

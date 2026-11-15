@@ -45,3 +45,31 @@ test('offline and autoplay-blocked players have distinct terminal startup states
   state.begin('full');state.status({hasVideo:true,readyState:4,fullPlayerIsolated:true,error:'NotAllowedError'});assert.equal(state.phase,'blocked');
   state.status({hasVideo:true,readyState:4,fullPlayerIsolated:true,playing:true});assert.equal(state.phase,'ready');
 });
+
+test('reentrant cleanup, nested failures and late registrations release resources exactly once',async()=>{
+  const {KickRefinedLifetime:life}=await setup(),parent=life.create(),child=parent.child(),calls=[];
+  child.defer(()=>{calls.push('child first');throw Error('child cleanup');});child.defer(()=>calls.push('child last'));
+  parent.defer(()=>{calls.push('parent');parent.dispose();parent.defer(()=>calls.push('late'));});
+  assert.throws(()=>parent.dispose(),/Resource cleanup failed/);parent.dispose();child.dispose();
+  assert.deepEqual(calls,['parent','late','child last','child first']);
+  assert.deepEqual(JSON.parse(JSON.stringify(life.snapshot())),{scopes:0,resources:0});
+});
+
+test('resources registered after disposal are immediately removed and children start disposed',async()=>{
+  const {KickRefinedLifetime:life,timers,frames}=await setup(),scope=life.create();scope.dispose();let listeners=0;
+  scope.listen({addEventListener(){listeners++;},removeEventListener(){listeners--;}},'event',()=>assert.fail());
+  scope.timeout(()=>assert.fail(),1);scope.frame(()=>assert.fail());const child=scope.child();
+  assert.equal(child.disposed,true);assert.equal(listeners,0);assert.equal(timers.size,0);assert.equal(frames.size,0);
+  assert.deepEqual(JSON.parse(JSON.stringify(life.snapshot())),{scopes:0,resources:0});
+});
+
+test('thousands of retired player generations cannot update the latest playback state',async()=>{
+  const {KickRefinedPlayerState:players}=await setup(),state=players.create();
+  for(let i=0;i<1000;i++){
+    const old=state.begin('full');state.setPlaying(true);state.reset();const current=state.begin('embed');
+    assert.equal(state.start(old),false);assert.equal(state.fail(old),false);
+    assert.equal(state.status({hasVideo:true,readyState:4,playing:false},{token:old}),false);
+    assert.equal(state.playing,true);assert.equal(state.generation,current);state.start(current);
+  }
+  state.dispose();state.reset();state.setPlaying(true);assert.equal(state.phase,'disposed');assert.equal(state.playing,false);
+});

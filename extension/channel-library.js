@@ -51,7 +51,7 @@
     @media(max-width:720px){.overview{grid-template-columns:1fr;gap:25px}.rail{padding:20px 0 0;border-left:0;border-top:1px solid #ffffff0a}.rail .card{grid-template-columns:130px minmax(0,1fr)}.watch-heading{margin-top:20px}.items{gap:20px 14px;grid-template-columns:repeat(auto-fill,minmax(min(210px,100%),1fr))}.items[data-view=list] .card{grid-template-columns:125px minmax(0,1fr);gap:12px}.items[data-view=list] .title{font-size:13px}.nav a{padding:8px 10px}.tools select{flex:1;max-width:none}.find{flex-basis:100%}.overview-footer{gap:8px}.browse-link{padding:11px;font-size:12px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
   `;
   const svg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>';
-  const number=value=>new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(value);
+  const number=new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format;
   function create({onWatch,onDrag,onNavigate,onKeydown,onSort}={}){
     const host=document.createElement('div');host.id='kr-channel-library';const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css;
     const ui=document.createElement('section');ui.className='browser';ui.setAttribute('aria-label','Channel library');let lastDrag=-Infinity;

@@ -42,6 +42,17 @@ try{
   await page.evaluate(()=>document.querySelector('#chatroom-messages img').setAttribute('src','data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'));
   await page.waitForFunction(count=>log.changes[0]>count,previous[0]);
   assert.deepEqual(await page.evaluate(()=>log.changes.slice(1)),previous.slice(1),'each feature receives only its requested attributes');
+  const cache=await page.evaluate(async()=>{
+    const row=document.querySelector('#chatroom-messages [data-index]'),anchor=row.querySelector('a'),image=row.querySelector('img');
+    const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
+    const before=KickRefinedPerf.snapshot().counters['chat.rowIndexBuilds'];
+    image.removeAttribute('src');row.dataset.index='recycled';anchor.firstChild.data='Changed text';row.append(document.createTextNode('text-only addition'));
+    await settle();const unchanged=KickRefinedPerf.snapshot().counters['chat.rowIndexBuilds']-before;
+    const next=document.createElement('a');next.href='https://example.net';row.append(next);await settle();
+    const inserted=KickRefinedDOM.links(row).length;anchor.removeAttribute('href');await settle();
+    return {unchanged,inserted,remaining:KickRefinedDOM.links(row).length,scans:KickRefinedPerf.snapshot().counters['chat.rowIndexBuilds']-before};
+  });
+  assert.deepEqual(cache,{unchanged:0,inserted:2,remaining:1,scans:2},'real observers preserve text/attribute caches but invalidate inserted links and removed hrefs');
   await page.evaluate(()=>clients[1].setEnabled(false));
   const disabled=await page.evaluate(()=>log.changes[1]);
   await page.evaluate(()=>document.querySelector('#chatroom-messages a').href='https://example.org');

@@ -1,6 +1,7 @@
 /* Public Kick search with bounded requests, explicit query syntax and no API keys. */
 (() => {
   const slug=value=>typeof value==='string'&&/^[a-z0-9_]{1,40}$/i.test(value)?value.toLowerCase():'';
+  const alias=(values,key)=>Object.hasOwn(values,key)?values[key]:null;
   function parse(input='',{allowUnscoped=false}={}){
     if(typeof input!=='string'||input.length>512)throw Error('Keep the query under 512 characters.');
     input=input.trim();if(/^https:\/\/(?:www\.)?kick\.com\/[\w]+\/?$/i.test(input))input=new URL(input).pathname.slice(1).replace(/\/$/,'');
@@ -8,15 +9,15 @@
     for(const char of input){if(escape){token+=char;escape=false;}else if(char==='\\'&&quoted)escape=true;else if(char==='"'){if(!token)literal=true;quoted=!quoted;}else if(/\s/.test(char)&&!quoted){if(token)tokens.push({value:token,literal});token='';literal=false;}else token+=char;}
     if(quoted||escape)throw Error('Close the quotation marks to search.');if(token)tokens.push({value:token,literal});
     const q={type:'channels',channels:[],terms:[],exclude:[],sort:'recent',time:'all',live:null,after:null,before:null,category:'',creator:'',views:null,duration:null};let kind='';
-    function setType(value){const next={channel:'channels',channels:'channels',clip:'clips',clips:'clips',vod:'vods',vods:'vods',video:'vods',videos:'vods'}[value];if(!next)throw Error('Use type:channels, type:clips or type:vods.');if(kind&&kind!==next)throw Error('Search one type at a time: channels, clips or VODs.');kind=q.type=next;}
+    function setType(value){const next=alias({channel:'channels',channels:'channels',clip:'clips',clips:'clips',vod:'vods',vods:'vods',video:'vods',videos:'vods'},value);if(!next)throw Error('Use type:channels, type:clips or type:vods.');if(kind&&kind!==next)throw Error('Search one type at a time: channels, clips or VODs.');kind=q.type=next;}
     function channels(value){for(const part of value.split(',')){const name=slug(part.replace(/^@/,''));if(!name)throw Error('Use a channel name after the colon.');if(!q.channels.includes(name))q.channels.push(name);}if(q.channels.length>3)throw Error('Search up to three channels at once.');}
     function date(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw Error('Dates use YYYY-MM-DD.');const time=Date.parse(value+'T00:00:00Z');if(!Number.isFinite(time)||new Date(time).toISOString().slice(0,10)!==value)throw Error('Enter a valid date.');return time;}
     for(const entry of tokens){const token=entry.value,match=entry.literal?null:/^([a-z]+):(.*)$/i.exec(token);if(!match){if(token.startsWith('-')&&token.length>1)q.exclude.push(token.slice(1).toLowerCase());else q.terms.push(token.toLowerCase());continue;}const key=match[1].toLowerCase(),value=match[2],lower=value.toLowerCase();
       if(['clips','clip','vods','vod','videos','channels'].includes(key)){setType(key);channels(lower);}
       else if(key==='type')setType(lower);
       else if(['channel','in'].includes(key))channels(lower);
-      else if(key==='sort'){q.sort={recent:'recent',date:'recent',newest:'recent',views:'views',popular:'views'}[lower];if(!q.sort)throw Error('Use sort:recent or sort:views.');}
-      else if(key==='time'){q.time={day:'day','24h':'day',week:'week','7d':'week',month:'month','30d':'month',all:'all'}[lower];if(!q.time)throw Error('Use time:day, week, month or all.');}
+      else if(key==='sort'){q.sort=alias({recent:'recent',date:'recent',newest:'recent',views:'views',popular:'views'},lower);if(!q.sort)throw Error('Use sort:recent or sort:views.');}
+      else if(key==='time'){q.time=alias({day:'day','24h':'day',week:'week','7d':'week',month:'month','30d':'month',all:'all'},lower);if(!q.time)throw Error('Use time:day, week, month or all.');}
       else if(key==='live'){if(!['true','false','yes','no'].includes(lower))throw Error('Use live:true or live:false.');q.live=['true','yes'].includes(lower);}
       else if(key==='after')q.after=date(value);
       else if(key==='before')q.before=date(value)+86400000-1;
@@ -91,7 +92,7 @@
       try{globalThis.KickRefinedPerf?.count('network.searchRequests');const response=await fetch(location.origin+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw Error('Kick search is unavailable. Try again.');const body=await KickRefined.readText(response,{signal:controller.signal});let data;if(html)data=catalog(body,html);else try{data=JSON.parse(body);}catch{throw Error('Kick search is unavailable. Try again.');}cache.delete(path);cache.set(path,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);return data;}finally{clearTimeout(timer);signal.removeEventListener('abort',stop);}}
     async function search(q,{append=false,retryFailed=false}={}){
       if(disposed)throw Error('Search closed.');cancel();const controller=new AbortController();active=controller;const key=JSON.stringify(q);
-      if((!append&&!retryFailed)||state?.key!==key)state={key,rows:new Map(),progress:q.channels.map(channel=>({channel,cursor:'',pages:0,loaded:0,done:false}))};const current=state;
+      if((!append&&!retryFailed)||state?.key!==key)state={key,rows:new Map(),progress:q.channels.map(channel=>({channel,cursor:'',cursors:new Set(),pages:0,loaded:0,done:false}))};const current=state;
       if(q.type==='channels'){
         if(!q.channels.length&&!q.terms.length)return {rows:[],loaded:0,more:false};
         if(!q.channels.length){const raw=await read('/api/search?'+new URLSearchParams({searched_word:q.terms.join(' ')}),controller.signal);if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');const rows=normalize(raw,'channels').filter(row=>fits(row,q));return {rows,loaded:rows.length,more:false,failedChannels:[]};}
@@ -107,7 +108,8 @@
         const params=new URLSearchParams({sort:q.sort==='views'?'view':'date',time:q.time});if(item.cursor)params.set('cursor',item.cursor);
         const path=q.type==='clips'?`/api/v2/channels/${item.channel}/clips?${params}`:`/${item.channel}/videos`,raw=await read(path,controller.signal,q.type==='vods'?item.channel:false);if(controller.signal.aborted)return;
         const rows=q.type==='vods'?raw:normalize(raw,q.type,item.channel);for(const row of rows)current.rows.set(row.key,row);item.loaded+=rows.length;item.pages++;item.failed=false;
-        const next=typeof raw.nextCursor==='string'&&raw.nextCursor.length<=2048?raw.nextCursor:'';item.done=q.type!=='clips'||!next||next===item.cursor;item.cursor=next;
+        item.cursors.add(item.cursor);
+        const next=typeof raw.nextCursor==='string'&&raw.nextCursor.length<=2048?raw.nextCursor:'';item.done=q.type!=='clips'||!next||item.cursors.has(next);item.cursor=next;
       }catch{if(controller.signal.aborted)return;failures++;item.failed=true;}}}));
       if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');if(failures===tasks.length&&tasks.length&&!current.rows.size)throw Error('Kick search is unavailable. Try again.');
       const rows=[...current.rows.values()].filter(row=>fits(row,q)).sort((a,b)=>q.sort==='views'?(b.views??-1)-(a.views??-1):b.created-a.created);
@@ -117,6 +119,7 @@
       if(disposed||!slug(channel))throw Error('Recordings unavailable.');
       cancel();const controller=new AbortController();active=controller;
       const list=await read(`/api/v2/channels/${channel}/videos`,controller.signal);
+      controller.signal.throwIfAborted();
       if(!Array.isArray(list))throw Error('Recordings unavailable.');
       return list.slice(0,300).flatMap(item=>{
         const video=item?.video,id=video?.uuid;

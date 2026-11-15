@@ -8,10 +8,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const fixture = (await readFile(path.join(root, 'tests/fixture.html'), 'utf8')).replace('<header>Stream chat</header>','<header style="position:relative"><span>Stream chat</span><button style="position:absolute;right:8px;top:5px;width:36px;height:36px;padding:0" aria-label="Show active chatters" onclick="window.mainChatterOpens=(window.mainChatterOpens||0)+1">People</button></header>').replace('</body>', `<script>${await readFile(path.join(root, 'tests/design-fixture.js'), 'utf8')}</script></body>`);
 await mkdir(path.join(root, 'artifacts'), { recursive: true });
 const report = [];
+const {version}=JSON.parse(await readFile(path.join(root,'package.json'),'utf8'));
 const mediaFixture=`data:audio/wav;base64,${(await readFile(path.join(root,'tests/silence.wav'))).toString('base64')}`;
 
-// Keep browser runtimes in separate processes. On this Windows runner, starting
-// Firefox immediately after Chromium in one process races Firefox target creation.
+// Keep browser runtimes in separate processes on this Windows runner.
 if (!process.env.KR_ENGINE) {
   for (const engine of ['chromium', 'firefox']) {
     const run = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
@@ -735,7 +735,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       await palette.getByRole('combobox',{name:'Search Kick',exact:true}).press('Escape');
     }
     assert.deepEqual(errors, []);
-    report.push({ engine, passed: true, version:'0.10.0', mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','minimal drop cue without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','collapsible settings bar','native chat header dropdown','saved custom split','natural video height with three streams','direct close/fullscreen actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
+    report.push({ engine, passed: true, version, mode: engine === 'chromium' ? 'installed unpacked extension' : 'Firefox engine with extension API shim', checks:['sidebar drag/drop','minimal drop cue without media loads','custom drag chip and cancellation cleanup','native player/chat preservation','responsive layout','reply contrast and keyboard isolation','audio feedback regressions','playback and volume controls','pointer and keyboard resizing','double-click focus','collapsible settings bar','native chat header dropdown','saved custom split','natural video height with three streams','direct close/fullscreen actions','multiple audio sources','click-expanded formatted profiles and safe image panels','focus follows chat','focused-only channel summary','tile edge resizing','tab title restoration','no redundant multistream banner'] });
     console.log(`PASS ${engine}: settings, switcher photos/status, focus geometry, sidebar, native actions, multiview audio/layout/session/limit/cleanup, responsive`);
   } catch(error){for(const page of context.pages())if(page.url().startsWith('https://kick.com/'))await page.screenshot({path:path.join(root,`artifacts/${engine}-workspace-failure.png`)}).catch(()=>{});throw error;} finally { await context.close(); if (browser) await browser.close(); }
 }

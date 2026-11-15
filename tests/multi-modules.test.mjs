@@ -124,3 +124,25 @@ test('style restoration releases detached menu nodes while preserving connected 
   main.isConnected=false;layout.pruneStyles();assert.equal(layout.snapshot().elements,0);
   layout.restoreStyles();assert.equal(main.style.getPropertyValue('position'),'');
 });
+
+test('player bus releases a registered window even after an iframe loses contentWindow',async()=>{
+  const context=await contextFor('multi-player-bus',{window:{addEventListener(){},removeEventListener(){}},crypto:{randomUUID:()=> 'session'}});
+  const bus=context.KickRefinedMultiPlayerBus.create({isActive:()=>true});
+  for(let i=0;i<1000;i++){
+    const tile={frame:{contentWindow:{}}};bus.attach(tile);assert.equal(bus.snapshot().sources,1);
+    tile.frame.contentWindow=null;bus.detach(tile);assert.equal(bus.snapshot().sources,0);
+  }
+  bus.destroy();
+});
+
+test('reattaching a tile retires its old window and detached old tiles cannot remove a new owner',async()=>{
+  let dispatch;const statuses=[];
+  const context=await contextFor('multi-player-bus',{window:{addEventListener:(type,fn)=>dispatch=fn,removeEventListener(){}},crypto:{randomUUID:()=> 'session'}});
+  const bus=context.KickRefinedMultiPlayerBus.create({isActive:()=>true,onReady:tile=>statuses.push(tile)});
+  const first={},second={},tile={frame:{contentWindow:first},frameOrigin:'https://kick.com'};
+  bus.attach(tile);tile.frame.contentWindow=second;bus.attach(tile);assert.equal(bus.snapshot().sources,1);
+  dispatch({source:first,origin:'https://kick.com',data:{type:'kick-refined:ready'}});assert.equal(statuses.length,0);
+  const replacement={frame:{contentWindow:second},frameOrigin:'https://kick.com'};bus.attach(replacement);bus.detach(tile);
+  dispatch({source:second,origin:'https://kick.com',data:{type:'kick-refined:ready'}});assert.deepEqual(statuses,[replacement]);
+  bus.destroy();assert.equal(bus.snapshot().sources,0);bus.attach(tile);assert.equal(bus.snapshot().sources,0);
+});

@@ -4,7 +4,7 @@
   function patchOnly(input){const patch={};for(const key of Object.keys(KickRefined.defaults))if(input&&Object.hasOwn(input,key))patch[key]=input[key];return patch;}
   function createRepository(storage){
     let queue=Promise.resolve();
-    return {patch(input){const patch=patchOnly(input);const job=queue.then(async()=>{const current=normalize((await storage.get('settings')).settings),settings=normalize({...current,...patch});await storage.set({settings});return settings;});queue=job.catch(()=>{});return job;}};
+    return {patch(input){const patch=patchOnly(input);const job=queue.then(async()=>{const current=normalize((await storage.get('settings')).settings),settings=normalize({...current,...patch});if(JSON.stringify(current)!==JSON.stringify(settings))await storage.set({settings});return settings;});queue=job.catch(()=>{});return job;}};
   }
   function create({api=KickRefined.api,onUpdate=()=>{},onError=()=>{},onSaved=()=>{},delay=100}={}){
     const repository=!api.runtime.sendMessage?createRepository(api.storage.local):null;

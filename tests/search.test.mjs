@@ -68,3 +68,32 @@ test('new searches abort old requests instead of returning stale results',async(
  let cancelled=false;const service=setup({fetch:(url,options)=>url.includes('slow')?new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>{cancelled=true;reject(new DOMException('Cancelled','AbortError'));},{once:true})):Promise.resolve(new Response(JSON.stringify({channels:[{slug:'fast',isLive:true,user:{username:'Fast'}}]})))}).create();
  const old=service.search(api.parse('slow')).catch(error=>error.name);const current=await service.search(api.parse('fast'));assert.equal(await old,'AbortError');assert.equal(cancelled,true);assert.equal(current.rows[0].slug,'fast');service.destroy();
 });
+
+for(const filter of ['type','sort','time'])for(const value of ['constructor','__proto__','toString','hasOwnProperty']){
+ test(`search rejects inherited object property ${filter}:${value}`,()=>{
+  assert.throws(()=>api.parse(`channel:cobbruvs ${filter}:${value}`),/Use /);
+ });
+}
+
+test('clip pagination detects cursor cycles of any length without replaying earlier pages',async()=>{
+ const calls=[],cursors=['a','b','c','a'];
+ const service=setup({fetch:async url=>{calls.push(new URL(url).searchParams.get('cursor')||'');return new Response(JSON.stringify({clips:[clip],nextCursor:cursors[calls.length-1]}));}}).create();
+ const query=api.parse('clips:cobbruvs');let result;
+ for(let i=0;i<4;i++)result=await service.search(query,{append:i>0});
+ assert.equal(result.more,false);assert.deepEqual(calls,['','a','b','c']);assert.equal(result.rows.length,1);
+ await service.search(query,{append:true});assert.equal(calls.length,4);service.destroy();
+});
+
+test('cached recordings cannot return after their request has been superseded',async()=>{
+ const recording={session_title:'Cached',duration:1000,video:{uuid:'12345678-1234-1234-1234-123456789abc'}};
+ const service=setup({fetch:async()=>new Response(JSON.stringify([recording]))}).create();
+ assert.equal((await service.recordings('alpha')).length,1);
+ const old=service.recordings('alpha');const rejected=assert.rejects(old,error=>error.name==='AbortError');
+ service.cancel();await rejected;service.destroy();
+});
+
+test('serialized queries round-trip quotes, backslashes, Unicode and operator-like literal terms',()=>{
+ for(const term of ['hello world','title: chapter','a "quoted" phrase','path\\file','\u4e2d\ud83c\udfb5','line\nbreak']){
+  const query=api.parse('clips:cobbruvs');query.terms=[term];assert.equal(JSON.stringify(api.parse(api.serialize(query))),JSON.stringify(query));
+ }
+});
