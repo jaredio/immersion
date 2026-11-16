@@ -5,8 +5,10 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {extensionWorker} from './extension-worker.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)),engine=process.env.KR_ENGINE||'chromium';
+const fastChat=process.env.KR_FAST_CHAT==='1';
 const id='2114650564600688817',ttId='7700270863769210126',ytId='dQw4w9WgXcQ';
-const links={x:`https://x.com/creator/status/${id}`,tt:'https://vt.tiktok.com/ZSg44YD1X/',tt2:'https://www.tiktok.com/t/ZTfqXW8Cn/',yt:`https://www.youtube.com/watch?v=${ytId}&t=62`,short:`https://www.youtube.com/shorts/${ytId}`,xp:'https://x.com/creator',tp:'https://www.tiktok.com/@creator'};
+const photoId='7701411034199805214',photoOembed={provider_url:'https://www.tiktok.com',embed_product_id:photoId,embed_type:'video',html:'<script>window.providerScriptRan=true</script>'};
+const links={x:`https://x.com/creator/status/${id}`,tt:'https://vt.tiktok.com/ZSg44YD1X/',tt2:'https://www.tiktok.com/t/ZTfqXW8Cn/',photo:`https://www.tiktok.com/@grizzthe1rizz_009/photo/${photoId}`,yt:`https://www.youtube.com/watch?v=${ytId}&t=62`,short:`https://www.youtube.com/shorts/${ytId}`,xp:'https://x.com/creator',tp:'https://www.tiktok.com/@creator'};
 const user={screen_name:'creator',name:'Creator',description:'Public profile <script>no()</script>',avatar_url:'https://pbs.twimg.com/avatar.jpg',followers:1200,following:50,statuses:83};
 const tweet={code:200,tweet:{id,text:'Video post',author:user,likes:45,retweets:2,views:1000,media:{videos:[{url:'https://video.twimg.com/demo.mp4',thumbnail_url:'https://pbs.twimg.com/poster.jpg',duration:3,formats:[{url:'https://video.twimg.com/avc1/1280x720/broken.mp4',codec:'h264'},{url:'https://video.twimg.com/avc1/640x360/good.mp4',codec:'h264'}]}]}}};
 const item={id:ttId,desc:'TikTok video title',author:{uniqueId:'creator',nickname:'Creator',avatarThumb:'https://p16.tiktokcdn.com/avatar.jpg'},video:{cover:'https://p16.tiktokcdn.com/cover.jpg',duration:12},stats:{diggCount:12,shareCount:3,playCount:100}};
@@ -22,29 +24,33 @@ try{
  if(engine==='chromium'){
   const worker=await extensionWorker(context);
   await worker.evaluate(()=>chrome.storage.local.clear());
-  await worker.evaluate(({tweet,user,ttVideo,ttProfile,youtube,ttId})=>{
+  await worker.evaluate(value=>chrome.storage.local.set({settings:{fastChat:value}}),fastChat);
+  await worker.evaluate(({tweet,user,ttVideo,ttProfile,youtube,ttId,photoId,photoOembed})=>{
    globalThis.fetch=async(url,options)=>{
     let body,finalURL=url;
     if(url.includes('/status/'))body=JSON.stringify(tweet);
     else if(url.includes('/2/profile/'))body=JSON.stringify({code:200,user});
     else if(url.includes('youtube.com/oembed'))body=JSON.stringify(youtube);
+    else if(url.includes('/oembed?')&&url.includes(photoId))body=JSON.stringify(photoOembed);
+    else if(url.includes('/photo/'))body='<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{"__DEFAULT_SCOPE__":{}}</script>';
     else if(url.includes('tiktok.com/@creator')&&!url.includes('/video/'))body=ttProfile;
     else{body=ttVideo;finalURL=`https://www.tiktok.com/@creator/video/${ttId}`;}
     const response=new Response(body);Object.defineProperty(response,'url',{value:finalURL});return response;
    };
-  },{tweet,user,ttVideo,ttProfile,youtube,ttId});
+  },{tweet,user,ttVideo,ttProfile,youtube,ttId,photoId,photoOembed});
  }else{
-  await context.addInitScript(({tweet,user,ttVideo,ttProfile,youtube,links,ttId})=>{
+  await context.addInitScript(({tweet,user,ttVideo,ttProfile,youtube,links,ttId,photoOembed})=>{
    window.browser={runtime:{sendMessage:async message=>{
     if(message.type==='immersion:x-post')return {ok:true,post:KickRefinedXData.metadata(tweet,KickRefinedXData.parse(message.href))};
     let parsed=KickRefinedMediaData.parse(message.href),value;
     if(parsed.provider==='x')value=KickRefinedMediaData.profile({code:200,user},parsed);
     else if(parsed.provider==='youtube')value=KickRefinedMediaData.oembed(youtube,parsed);
+    else if(parsed.kind==='photo')value=KickRefinedMediaData.oembed(photoOembed,parsed);
     else if(parsed.kind==='profile')value=KickRefinedMediaData.tiktokPage(ttProfile,parsed);
     else{parsed=KickRefinedMediaData.parse(`https://www.tiktok.com/@creator/video/${ttId}`);value=KickRefinedMediaData.tiktokPage(ttVideo,parsed);}
     return {ok:true,item:value};
    }}};
-  },{tweet,user,ttVideo,ttProfile,youtube,links,ttId});
+  },{tweet,user,ttVideo,ttProfile,youtube,links,ttId,photoOembed});
  }
  await context.route('https://kick.com/**',route=>route.fulfill({contentType:'text/html',body:html}));
  await context.route('https://video.twimg.com/**',route=>{videoRequests++;assert.equal(route.request().headers().referer,undefined,'X video requests omit Kick referrer to avoid CDN 403');if(failAllVideos||route.request().url().includes('broken.mp4')){failedVideoRequests++;return route.fulfill({contentType:'text/html',body:'Video unavailable'});}return route.fulfill({contentType:'video/mp4',body:video});});
@@ -54,6 +60,7 @@ try{
  await context.route('https://www.tiktok.com/player/v1/**',player);await context.route('https://www.youtube-nocookie.com/embed/**',player);
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto('https://kick.com/popout/test/chat');
+ if(engine==='firefox')await page.evaluate(value=>document.documentElement.dataset.krFastChat=String(value),fastChat);
  await page.evaluate(()=>{window.senderClicks=0;document.querySelector('#row-tt .sender').addEventListener('click',()=>window.senderClicks++);});
  if(engine==='firefox'){
   for(const file of ['shared.js','dom.js','x-post-data.js','x-posts.js','media-data.js','media-embeds.js'])await page.addScriptTag({path:path.join(root,'extension',file)});
@@ -76,13 +83,17 @@ try{
  await tt.locator('iframe').waitFor();assert.ok((await tt.locator('iframe').getAttribute('src')).includes(`/player/v1/${ttId}`));
  assert.equal(await tt.locator('.player').evaluate(node=>node.getBoundingClientRect().height),300,'inline TikTok playback stays compact');assert.equal(await tt.locator('iframe').getAttribute('allowfullscreen'),'');
  await tt.getByRole('button',{name:'Close embedded player'}).click();assert.equal(await tt.locator('iframe').count(),0);
+ const photo=page.locator('#row-photo .kr-media-embed');await page.locator('#row-photo').scrollIntoViewIfNeeded();await photo.getByRole('button',{name:'View TikTok photos'}).waitFor();
+ assert.equal(await photo.locator('iframe').count(),0,'TikTok photo players load only after a click');assert.equal(await photo.locator('.embed-title').textContent(),'TikTok photo post');assert.equal(await photo.locator('.stat').count(),0,'photo posts do not get invented counters');
+ await photo.getByRole('button',{name:'View TikTok photos'}).click();await photo.locator('iframe').waitFor();assert.ok((await photo.locator('iframe').getAttribute('src')).includes(`/player/v1/${photoId}`));assert.equal(await photo.locator('iframe').getAttribute('title'),'TikTok photo player');
+ await photo.getByRole('button',{name:'Close embedded player'}).click();assert.equal(await photo.locator('iframe').count(),0);
  const yt=page.locator('#row-yt .kr-media-embed');await page.locator('#row-yt').scrollIntoViewIfNeeded();await yt.locator('.name').waitFor();
  assert.equal(await yt.locator('.brand.youtube svg').count(),1);assert.equal(await yt.locator('.stat').count(),0,'YouTube does not receive invented view/like counts');
  assert.equal(await yt.locator('.embed-title').textContent(),youtube.title);await yt.getByRole('button',{name:'Play YouTube video'}).click();
  await yt.locator('iframe').waitFor();assert.ok((await yt.locator('iframe').getAttribute('src')).includes('start=62'));assert.equal(await yt.locator('iframe').getAttribute('allowfullscreen'),'');
  await yt.locator('iframe').evaluate(frame=>window.keptYouTube=frame);
  for(const enabled of [false,true]){
-  if(engine==='chromium')await context.serviceWorkers()[0].evaluate(enabled=>chrome.storage.local.set({settings:{xEmbeds:enabled}}),enabled);
+  if(engine==='chromium')await context.serviceWorkers()[0].evaluate(({enabled,fastChat})=>chrome.storage.local.set({settings:{xEmbeds:enabled,fastChat}}),{enabled,fastChat});
   else await page.evaluate(enabled=>{testX.setEnabled(enabled);testMedia.setOptions({media:true,profiles:enabled});},enabled);
   await page.waitForTimeout(100);
   assert.equal(await yt.locator('iframe').evaluate(frame=>frame===window.keptYouTube&&frame.isConnected),true,'unrelated profile preference changes preserve the same YouTube player');

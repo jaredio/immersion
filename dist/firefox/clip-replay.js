@@ -4,7 +4,7 @@
     const abort=new AbortController(),stop=()=>abort.abort(),cache=new Map(),pending=new Map(),failed=new Map(),rows=new Map();let disposed=false,lastKey='',lastTime=-1,active=0,queue=[];
     const pane=document.createElement('section');pane.className='replay';pane.setAttribute('aria-label','Clip chat replay');
     const header=document.createElement('div');header.className='replay-header';const heading=document.createElement('strong');heading.textContent='Chat replay';
-    const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Close chat replay');close.title='Close chat replay';close.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';close.addEventListener('click',onClose);
+    const close=document.createElement('button');close.type='button';close.className='replay-collapse';close.setAttribute('aria-label','Collapse chat replay');close.title='Collapse chat replay';close.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';close.addEventListener('click',onClose);
     header.append(heading,close);const list=document.createElement('div');list.className='replay-messages';list.setAttribute('role','log');list.setAttribute('aria-label','Replay messages');
     const status=document.createElement('p');status.className='replay-status';status.setAttribute('role','status');
     const retry=document.createElement('button');retry.type='button';retry.className='replay-retry';retry.textContent='Retry chat replay';retry.hidden=true;

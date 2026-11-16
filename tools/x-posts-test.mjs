@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {extensionWorker} from './extension-worker.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const engine=process.env.KR_ENGINE||'chromium';
+const fastChat=process.env.KR_FAST_CHAT==='1';
 const id='2114650564600688817',href=`https://x.com/binji_x/status/${id}`;
 const fixture={code:200,tweet:{id,text:'headed to mumbai next week\n\nwho’s there? <script>window.injected=true</script>',author:{screen_name:'binji_x',name:'binji',avatar_url:'https://pbs.twimg.com/avatar.jpg'},likes:1245,retweets:32,views:125000,media:{photos:[{url:'https://pbs.twimg.com/media/post.jpg'}]}}};
 const body=`<!doctype html><html><head><style>body{background:#0b0b0e;color:#eee;font:14px system-ui;margin:0}aside{width:380px;margin:20px auto;padding:12px;background:#101014;border-radius:12px}#chatroom-messages{height:680px;overflow:auto}[data-index]{padding:8px 0}a{color:#a3eed2;overflow-wrap:anywhere}</style></head><body><aside><h3>Stream chat</h3><div id="chatroom-messages"><div data-index="1" id="message"><b>viewer</b> check this out <a href="${href}?s=20">${href}?s=20</a> <a href="${href}">same post</a></div><div data-index="2" id="failure"><b>another viewer</b> <a href="https://x.com/person/status/404">deleted post</a></div><div style="height:1000px"></div><div data-index="3" id="offscreen"><a href="https://x.com/person/status/123">offscreen post</a></div></div></aside></body></html>`;
@@ -15,6 +16,7 @@ else{browser=await playwright.firefox.launch({headless:true});context=await brow
 try{
  if(engine==='chromium'){
   const worker=await extensionWorker(context);
+  await worker.evaluate(value=>chrome.storage.local.set({settings:{fastChat:value}}),fastChat);
   await worker.evaluate(({fixture})=>{globalThis.xTestRequests=[];globalThis.fetch=async(url,options)=>{xTestRequests.push({url,credentials:options.credentials});if(url.endsWith('/404'))return new Response('{}',{status:404});return new Response(JSON.stringify(fixture));};},{fixture});
  }else{
   await context.addInitScript(({fixture})=>{globalThis.xTestRequests=[];window.browser={runtime:{sendMessage:async message=>{xTestRequests.push(message);if(message.href.endsWith('/404'))return {ok:false};return {ok:true,post:KickRefinedXData.metadata(fixture,KickRefinedXData.parse(message.href))};}}};},{fixture});
@@ -25,12 +27,13 @@ try{
  await context.route('https://clips.kick.com/**',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225"><rect width="400" height="225" fill="#273a39"/></svg>'}));
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('https://kick.com/popout/test/chat');
+ if(engine==='firefox')await page.evaluate(value=>document.documentElement.dataset.krFastChat=String(value),fastChat);
  if(engine==='firefox')for(const name of ['shared.js','dom.js','chat-clips.js','x-post-data.js','x-posts.js'])await page.addScriptTag({path:path.join(root,'extension',name)});
  if(engine==='firefox')await page.evaluate(()=>{document.documentElement.dataset.krEnabled='true';window.testX=KickRefinedX.create();window.testClips=KickRefinedClips.create();});
  // Real Chrome uses the packaged popout content script; settings can be changed in its worker.
  const setEnabled=async enabled=>{
   if(engine==='firefox')return page.evaluate(value=>testX.setEnabled(value),enabled);
-  const worker=context.serviceWorkers()[0];await worker.evaluate(value=>chrome.storage.local.set({settings:{xEmbeds:value}}),enabled);
+  const worker=context.serviceWorkers()[0];await worker.evaluate(({enabled,fastChat})=>chrome.storage.local.set({settings:{xEmbeds:enabled,fastChat}}),{enabled,fastChat});
  };
  const card=page.locator('#message .kr-x-post');await card.locator('.name').waitFor();
  assert.equal(await card.count(),1,'query variants share a single card');assert.equal(await card.locator('.name').textContent(),'binji');assert.equal(await card.locator('.handle').textContent(),'@binji_x');

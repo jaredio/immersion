@@ -7,6 +7,11 @@
   let disposed=false,scanTimer=0,statusTimer=0,action=null,error='',activation=null,gestureUntil=0,focused=false,startedAt=null,lastStatus='',controlsRoot=null;
   const wired=new WeakSet();
   const chromeStyle=document.createElement('style');chromeStyle.textContent='.z-controls.bottom-0 input{accent-color:var(--kr-player-accent,#b0ff8c)}.z-controls.bottom-0 [class*=bg-kick-voltGreen]{background-color:var(--kr-player-accent,#b0ff8c)!important}';
+  chromeStyle.textContent+=`
+    html[data-kr-viewport-locked="true"] .z-controls.bottom-0{width:calc(100% * var(--kr-fullscreen-scale,1))!important;scale:var(--kr-fullscreen-inverse,1)!important;transform-origin:bottom left!important}
+    html[data-kr-viewport-locked="true"] [data-radix-popper-content-wrapper]{scale:var(--kr-fullscreen-inverse,1);transform-origin:top left}
+    html[data-kr-viewport-locked="true"] [role="dialog"]{scale:var(--kr-fullscreen-inverse,1);transform-origin:center}
+  `;
   function nativeSettings(){const buttons=[...document.querySelectorAll('.z-controls button[aria-haspopup="menu"]')];const button=document.querySelector('.z-controls button[aria-label*="settings" i],.z-controls button[aria-label*="quality" i],.z-controls button:has(svg[data-ds-icon="Settings"]),.z-controls button:has(svg[data-ds-icon="Gear"])')||buttons.at(-1);button?.click();requestAnimationFrame(()=>{const menu=document.getElementById(button?.getAttribute('aria-controls'))||document.querySelector('[role="menu"][data-state="open"]'),wrapper=menu?.closest('[data-radix-popper-content-wrapper]');if(wrapper){wrapper.style.setProperty('position','fixed','important');wrapper.style.setProperty('transform','none','important');wrapper.style.setProperty('left',`${Math.max(8,innerWidth-wrapper.getBoundingClientRect().width-8)}px`,'important');wrapper.style.setProperty('top',`${Math.max(8,innerHeight-wrapper.getBoundingClientRect().height-54)}px`,'important');}});}
   window.addEventListener('pointerenter',()=>{if(session)send('kick-refined:hover',{hovered:true});});window.addEventListener('pointerleave',()=>{if(session)send('kick-refined:hover',{hovered:false});});
   function isStreamVideo(video){return video.id!=='clip-creator-player'&&!video.closest('#clip-creator-dialog,[role="dialog"],[role="alertdialog"]');}
@@ -45,12 +50,24 @@
   function syncPlaybackControls(){
     const root=document.querySelector('[data-kr-full-player-root]')||document;if(controlsRoot&&controlsRoot!==root)globalThis.KickRefinedPlayerControls?.clear(controlsRoot);controlsRoot=root;
     return globalThis.KickRefinedPlayerControls?.sync(root,{getVideo:primary,getState:()=>({...desired,focused,startedAt}),onToggle:()=>execute(primary()?.paused?'play':'pause'),onVolume:(muted,volume)=>{desired={muted,volume};for(const video of videos())settings(video);send('kick-refined:audio-intent',desired);scheduleStatus();},onFocus:()=>send('kick-refined:focus'),
-      // Keep fullscreen on the frame document. Kick's responsive player container
-      // can be replaced during the transition, ending fullscreen and losing video.
-      onFullscreen:()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()
+      // The workspace enlarges the pane without resizing this page's viewport.
+      onFullscreen:toggleFullscreen
     });
   }
   function syncChrome(){syncPlaybackControls();}
+  function toggleFullscreen(){
+    if(session){send('kick-refined:fullscreen',{viewport:{width:innerWidth,height:innerHeight}});return Promise.resolve();}
+    return document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+  }
+  // Kick can replace its bar before our replacement controls have been rebuilt.
+  // Catch that native button too, while the click still has user activation.
+  window.addEventListener('click',event=>{
+    const button=event.composedPath().find(node=>node?.matches?.('button,[role="button"]'));
+    if(!button||!button.closest('.z-controls,[data-kr-unified-bar],[data-kr-full-player-root]')&&button.dataset.testid!=='video-player-fullscreen'||button.closest('#clip-creator-dialog,[role="dialog"],[role="alertdialog"]'))return;
+    const label=[button.dataset.krAction,button.dataset.testid,button.getAttribute('aria-label'),button.title,button.querySelector('svg')?.getAttribute('data-ds-icon')].filter(Boolean).join(' ');
+    if(!/full.?screen/i.test(label))return;
+    event.preventDefault();event.stopImmediatePropagation();void toggleFullscreen().catch(()=>{});
+  },true);
   window.addEventListener('resize',()=>{syncChrome();scheduleStatus();});
   const gesture=event=>{if(event.type==='pointermove'&&!event.buttons)return;const control=event.target.closest?.('button,input,[role=slider]');if(control&&/volume|sound|speaker|mute|slider|range/i.test([control.getAttribute('aria-label'),control.title,control.getAttribute('role'),control.type,control.querySelector('svg')?.getAttribute('data-ds-icon')].join(' ')))gestureUntil=Date.now()+1500;};document.addEventListener('pointerdown',gesture,true);document.addEventListener('pointermove',gesture,true);document.addEventListener('keydown',gesture,true);
   function scan(){
@@ -67,7 +84,11 @@
       ||typeof data.session!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(data.session)||!Number.isSafeInteger(data.revision)||data.revision<0
       ||typeof data.muted!=='boolean'||!Number.isFinite(data.volume)||data.volume<0||data.volume>1)return;
     if(session&&session!==data.session||data.revision<=revision)return;
-    session=data.session;revision=data.revision;lastStatus='';if('startedAt' in data)startedAt=globalThis.KickRefinedStreamClock?.valid(data.startedAt)??null;globalThis.KickRefinedPerf?.configure(data.diagnostics===true);origin=event.origin;if(data.muted)gestureUntil=0;desired={muted:data.muted,volume:data.volume};focused=data.focused===true;if(typeof data.accent==='string'&&/^#[a-f0-9]{6}$/i.test(data.accent))document.documentElement.style.setProperty('--kr-player-accent',data.accent);syncChrome();
+    session=data.session;revision=data.revision;lastStatus='';if('startedAt' in data)startedAt=globalThis.KickRefinedStreamClock?.valid(data.startedAt)??null;globalThis.KickRefinedPerf?.configure(data.diagnostics===true);origin=event.origin;if(data.muted)gestureUntil=0;desired={muted:data.muted,volume:data.volume};focused=data.focused===true;if(typeof data.accent==='string'&&/^#[a-f0-9]{6}$/i.test(data.accent))document.documentElement.style.setProperty('--kr-player-accent',data.accent);
+    const root=document.documentElement,scale=Number.isFinite(data.fullscreenScale)&&data.fullscreenScale>0&&data.fullscreenScale<=64?data.fullscreenScale:1;
+    if(data.viewportLocked===true){if(root.dataset.krViewportLocked!=='true')root.dataset.krViewportLocked='true';if(root.style.getPropertyValue('--kr-fullscreen-scale')!==String(scale)){root.style.setProperty('--kr-fullscreen-scale',String(scale));root.style.setProperty('--kr-fullscreen-inverse',String(1/scale));}}
+    else if(root.hasAttribute('data-kr-viewport-locked')){delete root.dataset.krViewportLocked;root.style.removeProperty('--kr-fullscreen-scale');root.style.removeProperty('--kr-fullscreen-inverse');}
+    syncChrome();
     for(const video of videos())settings(video);
     if(['play','pause'].includes(data.action))execute(data.action);else if(data.action==='settings')nativeSettings();
     scheduleStatus();
@@ -76,7 +97,9 @@
     if(!session||event.target.closest?.('button,a,input,select,textarea,[role="button"],[contenteditable="true"]'))return;
     event.preventDefault();event.stopImmediatePropagation();send('kick-refined:focus');
   },true);
-  document.addEventListener('keydown',event=>{
+  window.addEventListener('keydown',event=>{
+    if(session&&event.key==='Escape'&&document.documentElement.dataset.krViewportLocked==='true'){event.preventDefault();event.stopImmediatePropagation();send('kick-refined:fullscreen',{exit:true});return;}
+    if(session&&!event.defaultPrevented&&!event.repeat&&event.code==='KeyF'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey&&!event.composedPath().some(node=>node?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(node?.tagName))){event.preventDefault();event.stopImmediatePropagation();void toggleFullscreen().catch(()=>{});return;}
     if(!session||event.defaultPrevented||event.repeat||event.code!=='KeyC'||event.ctrlKey||event.metaKey||event.altKey||event.shiftKey||event.composedPath().some(node=>node?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(node?.tagName)))return;
     event.preventDefault();event.stopImmediatePropagation();send('kick-refined:clip');
   },true);

@@ -1,7 +1,7 @@
 /* Channel directory ownership: cards, channel picker and expanded profiles. */
 (() => {
   const {attr}=KickRefinedMultiView;
-  function create({scope,getState,getCatalog,getContext,channelPanel,metadata,directory,shadow,$,onKeydown,onWatchProfileVideo,onPreviewProfileClip,onPosition:schedulePosition}) {
+  function create({scope,getState,getCatalog,getContext,channelPanel,metadata,directory,shadow,$,onKeydown,onWatchProfileVideo,onPreviewProfileClip,onPopoutProfileMedia,onDragProfileMedia,onPosition:schedulePosition}) {
     const channelPicker=document.createElement('span');
     channelPicker.className='channel-name-options';
     channelPicker.setAttribute('role','group');
@@ -82,7 +82,7 @@
             const region=document.createElement('div');region.className='channel-profile-region';
             const profile={slug,region,tab:initialTab,controller:null,bio:null};
             directoryProfile=profile;
-            profile.controller=profileFactory({remoteSlug:slug,initialTab,onKeydown,onWatch:onWatchProfileVideo,onPreview:onPreviewProfileClip,onTabChange:tab=>{
+            profile.controller=profileFactory({remoteSlug:slug,initialTab,onKeydown,onWatch:onWatchProfileVideo,onPreview:onPreviewProfileClip,onPopout:onPopoutProfileMedia,onDrag:onDragProfileMedia,onTabChange:tab=>{
               profile.tab=tab;if(profile.bio)profile.bio.hidden=tab!=='about';
             }});
             profile.controller.refresh();region.append(profile.controller.host);

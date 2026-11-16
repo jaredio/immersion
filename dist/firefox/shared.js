@@ -4,6 +4,7 @@
   const defaults = Object.freeze({
     enabled: true,
     performance: true,
+    fastChat: false,
     blockTelemetry: true,
     diagnostics: false,
     compact: false,
@@ -20,7 +21,7 @@
   function normalize(input = {}) {
     const source = input && typeof input === 'object' ? input : {};
     const result = { ...defaults };
-    for (const key of ['enabled', 'performance', 'blockTelemetry', 'diagnostics', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds', 'mediaEmbeds']) {
+    for (const key of ['enabled', 'performance', 'fastChat', 'blockTelemetry', 'diagnostics', 'compact', 'hideRecommended', 'textOnly', 'chatClips', 'xEmbeds', 'mediaEmbeds']) {
       if (typeof source[key] === 'boolean') result[key] = source[key];
     }
     for (const [key, min, max] of [['chatWidth', 280, 440], ['fontSize', 12, 18]]) {

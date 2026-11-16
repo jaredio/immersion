@@ -29,6 +29,27 @@ test('profile and oEmbed metadata validate identity and never invent counters',(
  assert.throws(()=>oembed({title:'Video',author_name:'Wrong',author_url:'https://www.tiktok.com/@another'},parse(tt)));
  assert.ok(player(parse(yt+'&t=62')).includes('start=62'));assert.equal(new URL(player(parse(yt))).searchParams.get('controls'),'1');assert.ok(player(parse(tt)).startsWith('https://www.tiktok.com/player/v1/'));assert.equal(player(parse('https://x.com/creator')),'');
 });
+
+test('TikTok photo links use the official image-post player and accept its ID-verified oEmbed response',()=>{
+ const href='https://www.tiktok.com/@grizzthe1rizz_009/photo/7701411034199805214',item=parse(href);
+ assert.equal(item.kind,'photo');assert.equal(item.id,'7701411034199805214');assert.equal(item.href,href);
+ assert.equal(new URL(player(item)).pathname,'/player/v1/7701411034199805214');
+ const raw={provider_url:'https://www.tiktok.com',embed_product_id:item.id,embed_type:'video',html:'<iframe src="https://evil.test"></iframe>'},result=oembed(raw,item);
+ assert.equal(result.kind,'photo');assert.equal(result.html,undefined);assert.equal(result.title,'TikTok photo post');assert.deepEqual(Object.keys(result.stats),[]);
+ assert.throws(()=>oembed({...raw,embed_product_id:'123'},item));assert.throws(()=>oembed({...raw,provider_url:'https://evil.test'},item));
+ assert.equal(tiktokPage('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{"__DEFAULT_SCOPE__":{}}</script>',item),null,'a client-rendered photo shell can fall back to oEmbed');
+ for(const value of [href+'/extra',href.replace('tiktok.com','tiktok.com.evil.test'),href.replace('https:','http:')])assert.equal(parse(value),null);
+});
+
+test('photo metadata falls back through TikTok’s video-form oEmbed URL without injecting provider HTML',async()=>{
+ let listener;const requests=[];const id='7701411034199805214',href=`https://www.tiktok.com/@grizzthe1rizz_009/photo/${id}`;
+ const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async url=>{
+  requests.push(url);if(url.includes('/oembed?'))return Response.json({provider_url:'https://www.tiktok.com',embed_product_id:id,embed_type:'video',html:'<iframe>Never inject</iframe>'});
+  const response=new Response('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{"__DEFAULT_SCOPE__":{}}</script>');Object.defineProperty(response,'url',{value:`https://www.tiktok.com/@grizzthe1rizz_009/video/${id}`});return response;
+ }});vm.runInContext(source,worker);for(const file of ['shared','preview-queue'])vm.runInContext(await readFile(`extension/${file}.js`,'utf8'),worker);vm.runInContext(workerSource,worker);
+ const result=await new Promise(resolve=>listener({type:'immersion:media-preview',href},{id:'extension',tab:{id:1},url:'https://kick.com/channel'},resolve));
+ assert.equal(result.ok,true);assert.equal(result.item.kind,'photo');assert.equal(new URL(requests[1]).searchParams.get('url'),`https://www.tiktok.com/@grizzthe1rizz_009/video/${id}`);
+});
 test('metadata worker resolves short links, deduplicates and restricts senders',async()=>{
  let listener,requests=0;const options=[];
  const worker=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch:async(url,opts)=>{

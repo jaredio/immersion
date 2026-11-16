@@ -17,10 +17,12 @@
     }catch{if(target.kind==='shortlink'||signal.aborted)throw Error('TikTok link unavailable');}
     if(page){
       const resolved=data.parse(page.url);
-      if(!resolved||resolved.provider!=='tiktok'||!['video','profile'].includes(resolved.kind))throw Error('Not a public TikTok page');
-      target=resolved;const metadata=data.tiktokPage(page.body,target);if(metadata)return metadata;
+      if(!resolved||resolved.provider!=='tiktok'||!['video','photo','profile'].includes(resolved.kind))throw Error('Not a public TikTok page');
+      if(['video','photo'].includes(item.kind)&&resolved.id!==item.id)throw Error('TikTok post mismatch');
+      target=item.kind==='photo'?{...resolved,kind:'photo',href:item.href,key:item.key}:resolved;const metadata=data.tiktokPage(page.body,target);if(metadata)return metadata;
     }
-    return data.oembed(JSON.parse((await read(`https://www.tiktok.com/oembed?url=${encodeURIComponent(target.href)}`)).body),target);
+    const href=target.kind==='photo'?`https://www.tiktok.com/@${target.handle}/video/${target.id}`:target.href;
+    return data.oembed(JSON.parse((await read(`https://www.tiktok.com/oembed?url=${encodeURIComponent(href)}`)).body),target);
   }
   const jobs=KickRefinedPreviewQueue.create({api,run:async(item,signal)=>({ok:true,item:await preview(item,signal)}),complete:(key,result)=>{cache.set(key,{result,until:Date.now()+(result.ok?120000:15000)});while(cache.size>80)cache.delete(cache.keys().next().value);}});
   api.runtime.onMessage.addListener((message,sender,reply)=>{

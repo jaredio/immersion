@@ -28,11 +28,11 @@
       const brand=document.createElement('span');brand.className=`brand ${item.provider}`;brand.title=labels[item.provider];brand.innerHTML=logo(item.provider);author.append(avatar,identity,brand);body.append(author);
       const description=item.kind==='profile'?item.description:item.title;
       if(description){const text=document.createElement('div');text.className='text'+(item.kind==='profile'?'':' embed-title');text.textContent=description;body.append(text);}
-      if(item.kind==='video'){
+      if(item.kind==='video'||item.kind==='photo'){
         const slot=document.createElement('div');slot.className='video-slot'+(item.provider==='tiktok'||item.shorts?' portrait':'');slot.style.marginTop='11px';record.slot=slot;
-        const preview=button(`Play ${labels[item.provider]} ${item.shorts?'Short':'video'}`,'',()=>{
+        const preview=button(item.kind==='photo'?'View TikTok photos':`Play ${labels[item.provider]} ${item.shorts?'Short':'video'}`,'',()=>{
           for(const other of records)stop(other);
-          const frame=document.createElement('iframe');frame.src=data.player(item);frame.title=`${labels[item.provider]} video player`;frame.referrerPolicy='strict-origin-when-cross-origin';frame.allow='autoplay; encrypted-media; fullscreen; picture-in-picture';frame.allowFullscreen=true;
+          const frame=document.createElement('iframe');frame.src=data.player(item);frame.title=item.kind==='photo'?'TikTok photo player':`${labels[item.provider]} video player`;frame.referrerPolicy='strict-origin-when-cross-origin';frame.allow='autoplay; encrypted-media; fullscreen; picture-in-picture';frame.allowFullscreen=true;
           const player=document.createElement('div');player.className='player';player.append(frame);record.frame=frame;preview.hidden=true;
           const close=button('Close embedded player',item.provider==='youtube'?'Close player':'&#10005;',()=>stop(record));close.className='player-close';slot.append(player,close);
         });preview.className='video-preview';record.preview=preview;
@@ -45,7 +45,7 @@
         stat.innerHTML=['followers','following'].includes(kind)?person:['likes','shares','views'].includes(kind)?ui.svg({likes:'like',shares:'repost',views:'views'}[kind]):ui.playSVG;
         stat.append(document.createTextNode(compactNumber(value)));footer.append(stat);
       }
-      if(!footer.childNodes.length){const type=document.createElement('span');type.className='handle';type.textContent=item.kind==='profile'?'Profile':item.shorts?'Short':'Video';footer.append(type);}
+      if(!footer.childNodes.length){const type=document.createElement('span');type.className='handle';type.textContent=item.kind==='profile'?'Profile':item.kind==='photo'?'Photos':item.shorts?'Short':'Video';footer.append(type);}
       const actions=document.createElement('div');actions.className='actions';const copy=button('Copy link',ui.svg('copy'),async()=>{try{await navigator.clipboard.writeText(item.href);copy.title='Copied';}catch{copy.title='Could not copy';}clearTimeout(record.feedback);record.feedback=setTimeout(()=>copy.title='Copy link',1500);});
       actions.append(copy,open(item.href,`Open on ${labels[item.provider]}`,ui.svg('open')));footer.append(actions);record.card.append(body,footer);for(const link of record.links)link.setAttribute('data-kr-media-link','');
     }
@@ -69,18 +69,18 @@
         for(const link of record.links)if(!record.row.contains(link)||data.parse(link.href)?.key!==record.key){link.removeAttribute('data-kr-media-link');record.links.delete(link);}
         if(!list?.contains(record.row)||!record.row.contains(record.host)||!record.links.size||!allowed(record.item))release(record);
       }
-      for(const row of KickRefinedDOM.drainRows(dirty)){if(!list?.contains(row))continue;const seen=new Set(byRow.get(row)?.keys());for(const anchor of KickRefinedDOM.links(row)){
+      for(const row of KickRefinedDOM.drainRows(dirty)){if(!list?.contains(row))continue;const seen=new Set(byRow.get(row)?.keys());for(const anchor of KickRefinedDOM.links(row,'media')){
         const item=data.parse(anchor.href);if(!item||!allowed(item))continue;
         const existing=byRow.get(row)?.get(item.key);if(existing){existing.links.add(anchor);if(existing.loaded)anchor.setAttribute('data-kr-media-link','');continue;}
         if(seen.size>=2||records.size>=80)continue;seen.add(item.key);add(row,anchor,item);
       }}if(dirty.size)schedule(0);
     }
     function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);}
-    function schedule(delay=60){if(!timer&&!disposed&&(media||profiles))timer=setTimeout(flush,delay);}
+    function schedule(delay=60){if(!timer&&!disposed&&(media||profiles))timer=KickRefinedDOM.deferChatWork(flush,delay);}
     const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();}});
     function refresh(force=false){const next=media||profiles?KickRefinedDOM.chat:null;if(next===list){if(!force)return;for(const record of [...records])if(!allowed(record.item))release(record);dirty.clear();if(list){queue(list);schedule();}return;}for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(media||profiles);refresh();
-    return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;clearTimeout(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};
+    return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;KickRefinedDOM.cancelChatWork(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();KickRefinedDOM.cancelChatWork(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};
   }
   globalThis.KickRefinedMedia=Object.freeze({create});
 })();

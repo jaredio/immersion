@@ -113,6 +113,17 @@ test('layout scheduling coalesces frames and restores original native styles',as
   assert.equal(layout.originalStyle(element,'display'),undefined,'restoration releases native node references');
 });
 
+test('fullscreen intents require the attached frame origin and session, and distinguish explicit exit',async()=>{
+ let dispatch;const intents=[];
+ const context=await contextFor('multi-player-bus',{window:{addEventListener:(type,fn)=>dispatch=fn,removeEventListener(){}},crypto:{randomUUID:()=> 'session'}});
+ const bus=context.KickRefinedMultiPlayerBus.create({isActive:()=>true,onFullscreen:(...args)=>intents.push(args)}),source={};
+ const tile={frame:{contentWindow:source},frameOrigin:'https://kick.com',commandRevision:4};bus.attach(tile);
+ const event={source,origin:'https://kick.com',data:{type:'kick-refined:fullscreen',session:'session',revision:3,viewport:{width:640,height:360}}};
+ dispatch({...event,source:{}});dispatch({...event,origin:'https://evil.test'});dispatch({...event,data:{...event.data,session:'wrong'}});assert.equal(intents.length,0);
+ dispatch(event);assert.equal(intents[0][0],tile);assert.deepEqual(intents[0][1],{width:640,height:360});assert.equal(intents[0][2],false,'a recent parent settings update cannot discard a user gesture');
+ dispatch({...event,data:{...event.data,exit:true}});assert.equal(intents[1][2],true);bus.detach(tile);dispatch(event);assert.equal(intents.length,2);bus.destroy();
+});
+
 test('style restoration releases detached menu nodes while preserving connected owners',async()=>{
   const context=await contextFor('multi-layout');
   const element=connected=>{const values=new Map([['left','12px']]);return {isConnected:connected,style:{getPropertyValue:key=>values.get(key)||'',getPropertyPriority:()=>'',setProperty:(key,value)=>values.set(key,value),removeProperty:key=>values.delete(key)}};};

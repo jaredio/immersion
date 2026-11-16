@@ -14,6 +14,9 @@ test('stored settings cannot create unsafe URLs or invalid layout values', () =>
   assert.equal(settings.accent, 'mint');
   assert.deepEqual(Array.from(settings.pinned), ['xqc', 'valid_name']);
   assert.equal(normalize(null).chatWidth, 340);
+  assert.equal(normalize().fastChat,false,'the local experiment is opt-in');
+  assert.equal(normalize({fastChat:true}).fastChat,true);
+  assert.equal(normalize({fastChat:'true'}).fastChat,false,'only an explicit boolean enables the experiment');
 });
 
 test('channel navigation excludes external, account and non-channel URLs', () => {
@@ -48,11 +51,11 @@ test('both packages contain only scoped permissions and local assets', async () 
     assert.equal(manifest.name,'Immersion');
     assert.equal((manifest.action||manifest.browser_action).default_title,'Immersion');
     assert.equal(manifest.manifest_version,browser==='firefox'?2:3);
-    const metadataHosts=['https://api.fxtwitter.com/*','https://www.tiktok.com/*','https://vt.tiktok.com/*','https://vm.tiktok.com/*','https://www.youtube.com/oembed*'];
+    const metadataHosts=['https://api.fxtwitter.com/*','https://www.tiktok.com/*','https://vt.tiktok.com/*','https://vm.tiktok.com/*','https://www.youtube.com/*','https://www.instagram.com/*','https://discord.com/api/v10/invites/*','https://www.twitch.tv/*','https://www.facebook.com/*'];
     assert.deepEqual(manifest.permissions, browser==='firefox'?['storage','declarativeNetRequest','webRequest','webRequestBlocking',...metadataHosts,'https://kick.com/*','https://www.kick.com/*','https://clips.kick.com/*','https://stream.kick.com/*','https://web.kick.com/*','https://kickbot.com/*','https://www.kickbot.com/*','https://streamelements.com/*','https://www.streamelements.com/*']:[ 'storage','declarativeNetRequest']);
     assert.ok(!manifest.externally_connectable);
     assert.deepEqual(manifest.host_permissions,browser==='firefox'?undefined:metadataHosts);
-    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['shared.js','settings-store.js','settings-background.js','session-data.js','session-background.js','privacy-background.js','preview-queue.js','x-post-data.js','x-background.js','media-data.js','media-background.js','support-data.js','support-background.js'],persistent:false}:{service_worker:'background.js'});
+    assert.deepEqual(manifest.background,browser==='firefox'?{scripts:['shared.js','settings-store.js','settings-background.js','session-data.js','session-background.js','privacy-background.js','preview-queue.js','x-post-data.js','x-background.js','media-data.js','media-background.js','social-profile-data.js','social-profile-background.js','support-data.js','support-background.js'],persistent:false}:{service_worker:'background.js'});
     for (const script of manifest.content_scripts) {
       for (const match of script.matches) assert.ok(['https://kick.com/*', 'https://www.kick.com/*', 'https://kick.com/popout/*/chat', 'https://www.kick.com/popout/*/chat', 'https://player.kick.com/*','https://powerchat.live/*','https://www.powerchat.live/*','https://kickbot.com/tips/*','https://www.kickbot.com/tips/*','https://streamelements.com/*/tip*','https://www.streamelements.com/*/tip*'].includes(match), match);
       if(script.matches.some(match=>match.includes('powerchat.live')||match.includes('kickbot.com')))assert.deepEqual(script.js,['support-data.js','support-frame.js'],'provider pages only receive the gated form stylesheet bridge');
@@ -92,7 +95,7 @@ test('Immersion layout preferences migrate safely and share only bounded sizes',
 test('player audio bridge rejects unrelated frames and untrusted commands', async () => {
   const source = (await readFile('extension/player-dom.js','utf8')) + '\n' + await readFile(new URL('../extension/player-frame.js', import.meta.url), 'utf8');
   const sent=[],listeners = {}, parent = { postMessage(data) {sent.push(data);} }, video = { closest:()=>null,muted:true,volume:1,paused:true,addEventListener(){} };
-  const document = { documentElement: {append(){}}, createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll: () => [video] };
+  const document = { documentElement: {append(){},hasAttribute:()=>false}, createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll: () => [video] };
   const window = { name: 'kick-refined:xqc', parent, top: {}, addEventListener: (name, cb) => { listeners[name] = cb; } };
   class Observer { observe() {} }
   vm.runInNewContext(source, { window, document, MutationObserver: Observer, setTimeout });
@@ -146,7 +149,7 @@ test('a delayed player obeys the latest pause and avoids repeated media setters'
     get volume(){return volume;},set volume(value){mutations++;volume=value;}};
   const window={name:'kick-refined:test',parent,top:{},addEventListener:(name,cb)=>{listeners[name]=cb;}};
   const preview={id:'clip-creator-player',nodeType:1,muted:false,volume:.7,paused:false,closest:()=>({}),matches:selector=>selector==='video',querySelectorAll:()=>[],play(){throw Error('workspace must not play the clip preview');},pause(){throw Error('workspace must not pause the clip preview');}};
-  const document={documentElement:{append(){}},createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll:()=>present?[preview,video]:[]};
+  const document={documentElement:{append(){},hasAttribute:()=>false},createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll:()=>present?[preview,video]:[]};
   class Observer{constructor(callback){observer=callback;}observe(){}}
   vm.runInNewContext(source,{window,document,MutationObserver:Observer,setTimeout:callback=>{timers.push(callback);return timers.length;}});
   const send=(revision,action)=>listeners.message({source:parent,origin:'https://kick.com',data:{type:'kick-refined:control',session:'race-test',revision,muted:true,volume:1,action}});

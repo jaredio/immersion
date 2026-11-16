@@ -237,6 +237,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .multi-tile[data-audio="true"] { border-color:color-mix(in srgb,var(--accent) 24%,transparent); }
 .multi-tile:fullscreen { width:100vw;height:100dvh;border:0;border-radius:0; }
 .multi-tile:fullscreen .multi-player { flex:1;aspect-ratio:auto; }
+.inline-multi .multi-tile[data-kr-viewport-locked]:fullscreen { width:100vw!important;height:100dvh!important;background:#000!important;border:0!important;border-radius:0!important; }
+.inline-multi .multi-tile[data-kr-viewport-locked]:fullscreen > :is(.multi-tile-header,.multi-tile-controls,.multi-tile-resize) { display:none!important; }
+.inline-multi .multi-tile[data-kr-viewport-locked]:fullscreen > .multi-player { width:100%;height:100%;flex:1;aspect-ratio:auto; }
 .inline-multi .multi-grid[data-layout="focus"] .multi-tile:not([data-featured="true"]) { align-self:start; }
 .inline-multi .multi-grid[data-layout="focus"]:not([data-count="1"]) { grid-template-columns:minmax(0,calc(var(--multi-featured,74%) - 5px)) minmax(0,1fr); }
 .inline-multi .multi-grid[data-layout="focus"]:not([data-count="1"]) .multi-tile[data-featured="true"] { grid-column:1; }
@@ -345,7 +348,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .profile-socials { display:flex;flex-wrap:wrap;gap:7px;margin:18px 0 22px; }
 .profile-socials a { display:inline-flex;align-items:center;padding:7px 11px;border:1px solid #ffffff12;border-radius:8px;background:#ffffff04;color:#dadbe5;text-decoration:none;font-size:11px; }
 .profile-socials a:hover { border-color:color-mix(in srgb,var(--accent) 35%,transparent);color:var(--accent); }
-.profile-social-link { display:inline-flex;align-items:center;gap:8px;border-radius:7px;transition:color .15s,background-color .15s,border-color .15s,box-shadow .15s; }
+.profile-social-link { display:inline-flex;align-items:center;gap:8px;max-width:100%;min-width:0;border-radius:7px;transition:color .15s,background-color .15s,border-color .15s,box-shadow .15s; }
+.profile-social-link>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .profile-social-link svg { width:17px;height:17px;flex:none;fill:currentColor; }
 .profile-rich-text a.profile-social-link { padding:3px 7px;text-decoration:none;border:1px solid #ffffff12; }
 .profile-socials a.profile-social-link,.profile-rich-text a.profile-social-link { color:var(--social-color);border-color:color-mix(in srgb,var(--social-color) 40%,transparent);background:color-mix(in srgb,var(--social-color) 9%,transparent); }
@@ -441,9 +445,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 12px; }
 .clip-drop-targets{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0;pointer-events:auto}
 .clip-drop-choice{min-width:0;border:0;background:transparent}
 .multi-clip-player{width:100%;min-width:0;min-height:0;flex:1 1 auto}.multi-clip-badge{flex-shrink:0;font-size:9px;letter-spacing:.04em;color:var(--accent);padding:4px 6px;border:1px solid #ffffff14;border-radius:5px;white-space:nowrap}
+.multi-clip-details.media-details{display:flex;align-items:center;flex-wrap:wrap;flex:0 0 auto;gap:6px 14px;min-width:0;padding:8px 10px;border-top:1px solid #ffffff0c;background:#111115;color:#9292a5;font-size:11px;line-height:1.5;font-variant-numeric:tabular-nums}.multi-clip-details:empty{display:none}.multi-clip-details .media-detail{display:inline-flex;align-items:center;gap:5px;min-width:0;overflow-wrap:anywhere}.multi-clip-details .media-detail svg{display:block;width:14px;height:14px;flex:none;color:#77778c}.multi-clip-details time{white-space:nowrap}
+.inline-multi .multi-clip-tile:fullscreen>.multi-clip-details{display:none}
 .multi-clip-tile .multi-tile-header>button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;padding:5px;background:transparent;border-color:transparent}
-.multi-clip-tile .multi-tile-header{position:relative;padding-right:44px}
-.multi-clip-tile .multi-tile-header>button:last-child{position:absolute;top:8px;right:8px}
+.multi-clip-tile .multi-tile-header{position:relative;flex-wrap:wrap}
+.multi-clip-tile .multi-tile-header>button:last-child{position:static}
 .inline-multi{position:relative}
 .inline-multi .multi-header{padding-right:64px}
 .inline-multi .multi-workspace-close{position:absolute;top:8px;right:16px;z-index:6;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;min-width:36px;padding:8px;margin:0;background:#ffffff05;border:1px solid #ffffff14;border-radius:9px}

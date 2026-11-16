@@ -26,7 +26,7 @@
     }
     return [...headers];
   }
-  function create({onWatch,onPreview,onDrag,onChange,onKeydown,getProfileMount,remoteSlug,initialTab='home',onTabChange}={}){
+  function create({onWatch,onPreview,onPopout,onDrag,onChange,onKeydown,getProfileMount,remoteSlug,initialTab='home',onTabChange}={}){
     const marks=new Map(),sourceCards=new WeakMap();let current='',currentMode='',library=null,navigation=null;
     const previews=new Map(),catalogs=new Map();let catalogSort='recent',selectedTab=remoteSlug?initialTab:null,routeKey='';
     const previewDate=new Intl.DateTimeFormat('en-US',{dateStyle:'medium'});
@@ -95,7 +95,7 @@
       if(source?.isConnected){source.click();onChange?.();}else location.assign('/'+current+(tab==='home'?'':'/'+tab));
     }
     function ensureLibrary(){
-      if(!library)library=KickRefinedChannelLibrary.create({onWatch,onPreview,onDrag,onNavigate:navigate,onKeydown,onSort:sort=>{catalogSort=sort;refresh();}});
+      if(!library)library=KickRefinedChannelLibrary.create({onWatch,onPreview,onPopout,onDrag,onNavigate:navigate,onKeydown,onSort:sort=>{catalogSort=sort;refresh();}});
     }
     function refreshRemote(){
       current=remoteSlug;

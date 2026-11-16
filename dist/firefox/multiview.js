@@ -3,7 +3,7 @@
   const { channelSlug, multiState, multiURL } = KickRefined;
   const {text,attr,css}=KickRefinedMultiView;
   const pageChannel=()=>globalThis.KickRefinedChannelPage?.routeSlug()||channelSlug(location.pathname,location.origin);
-  function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo, onPreviewProfileClip }) {
+  function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo, onPreviewProfileClip, onPopoutProfileMedia, onDragProfileMedia }) {
     const {host,shadow,panel,directory,chatTabs,toolbarToggle,stage,gridElement,divider,sizing,$,decorate} =
       KickRefinedMultiView.create({onKeydown,onPosition:schedulePosition});
     let accentKey=null,accentValue='',appliedVisualKey='';
@@ -30,7 +30,7 @@
       onChannel:slug=>{if(active&&state.channels.includes(slug)&&!metadataFrame)metadataFrame=workspaceScope.frame(()=>{metadataFrame=0;render();});},
       onPanels:slug=>{if(active&&channelDirectory.expanded===slug)channelDirectory.render();}
     });
-    const channelDirectory=KickRefinedMultiDirectory.create({scope:lifetime,getState:()=>state,getCatalog:()=>catalog,getContext:()=>context,channelPanel,metadata,directory,shadow,$,onKeydown,onWatchProfileVideo,onPreviewProfileClip,onPosition:schedulePosition});
+    const channelDirectory=KickRefinedMultiDirectory.create({scope:lifetime,getState:()=>state,getCatalog:()=>catalog,getContext:()=>context,channelPanel,metadata,directory,shadow,$,onKeydown,onWatchProfileVideo,onPreviewProfileClip,onPopoutProfileMedia,onDragProfileMedia,onPosition:schedulePosition});
     const startup=KickRefinedMultiStartup.create();
     const sessionStore=KickRefinedMultiSession.create({onError:()=>{if(!destroyed)notice('Could not save this workspace.');},onSessions:next=>{sessions=next;if(active&&!destroyed)render();}});
     const playerBus=KickRefinedMultiPlayerBus.create({
@@ -38,9 +38,11 @@
       onReady:tile=>command(tile,!audio.has(tile.slug),{force:true}),
       onAudioIntent:acceptAudioIntent,
       onFocus:tile=>focusStream(tile.slug),
+      onFullscreen:(tile,viewport,exit)=>exit?fullscreen.exit(tile):fullscreen.toggle(tile,viewport),
       onHover:(tile,hovered)=>{tile.card.dataset.hovered=String(hovered);},
       onStatus:receivePlayerStatus
     });
+    const fullscreen=KickRefinedMultiFullscreen.create({shadow,onChange:(tile,locked,scale)=>{tile.viewportLocked=locked;tile.fullscreenScale=scale;tile.lastSettings='';if(active&&!destroyed)command(tile,!audio.has(tile.slug),{force:true});},onError:()=>notice('Fullscreen could not be opened. Try the player control again.')});
     const layoutScheduler=KickRefinedMultiLayout.createScheduler({isActive:()=>active,run:positionNative});
     const resize = new ResizeObserver(() => {railDirty=true;schedulePosition();});
     const loaded=sessionStore.load().then(data=>{
@@ -72,7 +74,7 @@
       if(mainMarker===null)mainMarker={value:context.main.getAttribute('data-kr-multi-active')};
       context.main.dataset.krMultiActive='true';
       for(const child of context.main.children){
-        if(!context.player||child.matches(`#kr-channel-library,#kr-channel-root[data-profile-open],${nativeOverlaySelector}`)||child.querySelector(`#kr-channel-library,#kr-channel-root[data-profile-open],[data-testid="channel-videos-tab"],${nativeOverlaySelector}`)){restoreInfoChild(child);continue;}
+        if(!context.player||child.matches(`#kr-channel-library,${nativeOverlaySelector}`)||child.querySelector(`#kr-channel-library,[data-testid="channel-videos-tab"],${nativeOverlaySelector}`)){restoreInfoChild(child);continue;}
         if(child===host||child===context.player||child.matches('script,style,link'))continue;
         if(!hiddenInfo.has(child))hiddenInfo.set(child,child.getAttribute('data-kr-single-info'));
         if(child.dataset.krSingleInfo!=='true')child.dataset.krSingleInfo='true';
@@ -122,6 +124,7 @@
     }
     function isNative(slug) { return !!context?.player && slug===context.slug; }
     function positionNative() {
+      fullscreen.refresh();
       globalThis.KickRefinedPerf?.count('layout.passes');let railStyles=null;
       if(active&&railDirty){
         railDirty=false;
@@ -201,7 +204,7 @@
       muted=muted||previewMuted;
       const live=catalog.get(tile.slug)?.live||'unknown',startedAt=catalog.get(tile.slug)?.startedAt??null,diagnostics=globalThis.KickRefinedPerf?.enabled===true;
       const accent=playerAccent();
-      const signature=`${muted}:${tile.volume}:${state.layout==='focus'&&focusKey()===tile.slug}:${startedAt}:${live}:${accent}:${diagnostics}`;
+      const signature=`${muted}:${tile.volume}:${state.layout==='focus'&&focusKey()===tile.slug}:${startedAt}:${live}:${accent}:${diagnostics}:${tile.viewportLocked===true}:${tile.fullscreenScale||1}`;
       const actual=isNative(tile.slug)?nativeVideo():null;
       if(!force&&!action&&signature===tile.lastSettings&&(!isNative(tile.slug)||(actual&&actual.muted===muted&&Math.abs(actual.volume-tile.volume)<=.001)))return;
       if(['play','pause'].includes(action))tile.pendingAction=action;
@@ -214,7 +217,7 @@
         if(nextAction==='play')video.play()?.catch(reason=>{if(reason?.name==='NotAllowedError')notice('Click Play inside the current stream to enable playback.');});
         if(nextAction==='pause'&&!video.paused)video.pause();tile.pendingAction='';
         tile.playing=!video.paused&&!video.ended;updateControls(tile);
-      } else playerBus.send(tile,{muted,volume:tile.volume,focused:state.layout==='focus'&&focusKey()===tile.slug,accent,startedAt,diagnostics,...(nextAction?{action:nextAction}:{})});
+      } else playerBus.send(tile,{muted,volume:tile.volume,focused:state.layout==='focus'&&focusKey()===tile.slug,accent,startedAt,diagnostics,viewportLocked:tile.viewportLocked===true,fullscreenScale:tile.fullscreenScale||1,...(nextAction?{action:nextAction}:{})});
     }
     function updateAudioButton(button,selected,label,volume=1){
       const on=selected&&volume>0;
@@ -287,7 +290,7 @@
       state.channels.push(slug);state=multiState(state);notice();if(!deferRender){render();persist();}return true;
     }
     function makeTile(slug){
-      return KickRefinedMultiStreamTile.create({slug,meta:catalog.get(slug),native:isNative(slug),video:isNative(slug)?nativeVideo():null,volume:listeningVolume,scope:workspaceScope.child(),decorate,onAction:streamAction,onResize:bindStreamResize,onDispose:tile=>resize.unobserve(tile.player)});
+      return KickRefinedMultiStreamTile.create({slug,meta:catalog.get(slug),native:isNative(slug),video:isNative(slug)?nativeVideo():null,volume:listeningVolume,scope:workspaceScope.child(),decorate,onAction:streamAction,onResize:bindStreamResize,onDispose:tile=>{fullscreen.forget(tile);resize.unobserve(tile.player);}});
     }
     function streamAction(action,tile){
       const slug=tile.slug;
@@ -302,7 +305,7 @@
       if(action==='pause'){if(isNative(slug)&&native)native.pausedByUs=false;command(tile,!audio.has(slug),{action:tile.playing?'pause':'play'});return;}
       if(action==='settings'){if(isNative(slug))openNativeSettings(tile);else command(tile,!audio.has(slug),{action:'settings'});return;}
       if(action==='mode'){state.playerModes[slug]=tile.frameMode==='full'?'embed':'full';tile.embedFallback=false;tile.pendingAction=tile.pendingAction||(tile.playing||!tile.everLoaded?'play':'pause');dropPlayerFrame(tile);mountPlayer(tile);syncAudio();updateControls(tile);persist();return;}
-      if(action==='fullscreen'){if(isNative(slug))context.player.querySelector('[data-testid="video-player-fullscreen"]')?.click();else tile.card.requestFullscreen().catch(()=>notice('Use the player fullscreen control if fullscreen is unavailable.'));return;}
+      if(action==='fullscreen'){if(isNative(slug))context.player.querySelector('[data-testid="video-player-fullscreen"]')?.click();else void fullscreen.toggle(tile);return;}
       if(action!=='remove')return;
       state.channels=state.channels.filter(s=>s!==slug);state=multiState(state);paused.delete(slug);audio.delete(slug);
       if(isNative(slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}persist();
@@ -368,6 +371,7 @@
     }
     async function activate(seeds=[],current='',shared=null,fresh=false) {
       await loaded;if(destroyed)return;
+      const profileSelection=!active?channelPanel?.profileSelection:null;
       if(!active){
         context=findContext();if(!context)return;
         $('.multi-options').hidden=true;$('#multi-manage').setAttribute('aria-expanded','false');$('#multi-add').value='';notice();
@@ -378,10 +382,11 @@
         if(context.player)mountNative();else audio.clear();
       } else if(shared){discardClips();state=multiState(shared);audio.clear();paused.clear();}
       for(const slug of seeds)if(!state.channels.includes(slug))add(slug,{deferRender:true});
+      if(profileSelection&&state.channels.includes(profileSelection.slug))channelDirectory.select(profileSelection.slug,profileSelection.tab,{reveal:false});
       render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();
     }
     function close({restorePlayback=true}={}) {
-      if(!active)return;finishResize();sessionStore.flush();channelDirectory.reset();active=false;viewKeys.chat=viewKeys.sessions=viewKeys.suggestions='';layoutScheduler.cancel();resize.disconnect();
+      if(!active)return;fullscreen.close();finishResize();sessionStore.flush();channelDirectory.reset();active=false;viewKeys.chat=viewKeys.sessions=viewKeys.suggestions='';layoutScheduler.cancel();resize.disconnect();
       workspaceScope?.dispose();workspaceScope=null;nativeVideoScope=null;wiredVideo=null;nativeStatusFrame=0;titleFrame=metadataFrame=0;chat.reset();
       for(const tile of clipTiles.values()){tile.scope.dispose();}clipTiles.clear();clipFocus='';retainedChat='';if(clipReturn){state.layout=clipReturn.layout;state.focus=clipReturn.focus;clipReturn=null;}
       for(const tile of tiles.values())tile.scope.dispose();tiles.clear();paused.clear();
@@ -412,7 +417,7 @@
       updateControls(tile);
       if(data.error==='NotAllowedError'&&audio.has(slug))notice(`Click “Enable playback” inside ${catalog.get(slug)?.title||slug} to allow sound in Firefox.`);
     }
-    lifetime.listen(window,'resize',schedulePosition);lifetime.listen(document,'fullscreenchange',schedulePosition);
+    lifetime.listen(window,'resize',schedulePosition);lifetime.listen(document,'fullscreenchange',()=>{fullscreen.changed();schedulePosition();});
     function nativeDoubleClick(event){
       if(!active||!context?.player?.contains(event.target)||!tiles.has(context.slug)||event.target.closest?.('button,a,input,select,textarea,[role="button"],[contenteditable="true"]'))return;
       event.preventDefault();event.stopImmediatePropagation();focusStream(context.slug);

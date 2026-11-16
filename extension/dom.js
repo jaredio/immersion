@@ -10,6 +10,29 @@
   let chatAttributes = '';
   let pageCharacters = false;
   let linkIndex = new WeakMap();
+  let candidateIndex=new WeakMap();
+  const chatJobs=new Set();let chatFrame=0,chatFallback=0,chatDeadline=null;
+  const fastChat=()=>document.documentElement?.dataset.krEnabled==='true'&&document.documentElement.dataset.krFastChat==='true';
+  function scheduleChatFrame(){
+    if(chatFrame||chatFallback||!chatJobs.size)return;
+    if(document.hidden)chatFallback=setTimeout(runChatJobs,100);else chatFrame=requestAnimationFrame(runChatJobs);
+  }
+  function runChatJobs(){
+    chatFrame=chatFallback=0;const deadline=fastChat()?performance.now()+2:Infinity;
+    try{
+      for(const job of chatJobs){chatJobs.delete(job);if(job.cancelled)continue;chatDeadline=deadline;notify(job.callback);chatDeadline=null;if(performance.now()>=deadline)break;}
+    }finally{chatDeadline=null;scheduleChatFrame();}
+  }
+  function deferChatWork(callback,delay=0){
+    const job={callback,timer:0,cancelled:false};
+    job.timer=setTimeout(()=>{job.timer=0;if(job.cancelled)return;if(fastChat()){chatJobs.add(job);scheduleChatFrame();}else notify(callback);},delay);
+    return job;
+  }
+  function cancelChatWork(job){
+    if(!job)return;job.cancelled=true;clearTimeout(job.timer);chatJobs.delete(job);
+    if(!chatJobs.size){cancelAnimationFrame(chatFrame);clearTimeout(chatFallback);chatFrame=chatFallback=0;}
+  }
+  document.addEventListener?.('visibilitychange',()=>{if(!chatJobs.size)return;cancelAnimationFrame(chatFrame);clearTimeout(chatFallback);chatFrame=chatFallback=0;scheduleChatFrame();});
 
   function recordRows(record, nearest, descendants) {
     const rows = new Set();
@@ -27,19 +50,31 @@
     }
     return rows;
   }
-  function links(row) {
+  function links(row,kind) {
     let anchors = linkIndex.get(row);
     if (!anchors) {
       anchors = [...row.querySelectorAll('a[href]')]; linkIndex.set(row, anchors);
       globalThis.KickRefinedPerf?.count('chat.rowIndexBuilds');
     }
-    return anchors;
+    if(!kind||!fastChat())return anchors;
+    let candidates=candidateIndex.get(anchors);
+    if(!candidates){
+      candidates={clips:[],x:[],media:[]};
+      for(const anchor of anchors)try{
+        const url=new URL(anchor.href),host=url.hostname.replace(/^www\./,'');if(url.protocol!=='https:')continue;
+        if(['kick.com','www.kick.com'].includes(host)){if(url.pathname.toLowerCase().includes('/clips/')||url.searchParams.has('clip'))candidates.clips.push(anchor);}
+        else if(host==='x.com'||host.endsWith('.x.com')||host==='twitter.com'||host.endsWith('.twitter.com')){candidates.x.push(anchor);candidates.media.push(anchor);}
+        else if(host==='youtube.com'||host.endsWith('.youtube.com')||host==='youtu.be'||host==='tiktok.com'||host.endsWith('.tiktok.com'))candidates.media.push(anchor);
+      }catch{}
+      candidateIndex.set(anchors,candidates);globalThis.KickRefinedPerf?.count('chat.candidateIndexBuilds');
+    }
+    return candidates[kind]||anchors;
   }
   function* drainRows(dirty, {maxRows = 24, budgetMs = 4} = {}) {
-    const start = performance.now(); let count = 0;
+    const start = performance.now(),experimental=fastChat(),deadline=Math.min(start+(experimental?Math.min(1,budgetMs):budgetMs),chatDeadline??Infinity);let count = 0;
     for (const row of dirty) {
-      dirty.delete(row); yield row; count++;
-      if (count >= maxRows || performance.now() - start >= budgetMs) break;
+      dirty.delete(row);if(!experimental||row.isConnected!==false){yield row;count++;}
+      if (count >= maxRows || performance.now() >= deadline) break;
     }
     globalThis.KickRefinedPerf?.count('chat.rowsProcessed', count);
     globalThis.KickRefinedPerf?.sample('chat.batchMs', performance.now() - start);
@@ -63,8 +98,10 @@
         let found = indexed.get(record);
         if (!found) {
           found = recordRows(record, nearest, descendants); indexed.set(record, found);
-          const changedLinks = record.type === 'attributes' ? record.attributeName === 'href' :
-            [...(record.addedNodes || []), ...(record.removedNodes || [])].some(node => node.nodeType === 1);
+          const changedLinks = record.type === 'attributes' ? record.attributeName === 'href' : !fastChat()?
+            [...(record.addedNodes || []), ...(record.removedNodes || [])].some(node=>node.nodeType===1):
+            [...(record.addedNodes||[])].some(node=>node.nodeType===1&&(node.matches?.('a[href]')||node.querySelector?.('a[href]')))||
+            [...(record.removedNodes||[])].some(node=>node.nodeType===1)&&[...found].some(row=>linkIndex.get(row)?.some(anchor=>!row.contains(anchor)||!anchor.hasAttribute('href')));
           if (changedLinks) for (const row of found) linkIndex.delete(row);
         }
         for (const row of found) rows.add(row);
@@ -103,7 +140,7 @@
     // Discard queued records for the old container; subscribers release its rows.
     chatObserver.disconnect();
     watchingChat = false;
-    currentChat = next;linkIndex=new WeakMap();
+    currentChat = next;linkIndex=new WeakMap();candidateIndex=new WeakMap();
     observeChat();
     for (const subscriber of [...chats]) {
       if (chats.has(subscriber)) notify(subscriber.onContainer, currentChat);
@@ -188,5 +225,5 @@
   function isReady(node){
     return !!node?.isConnected&&node.dispatchEvent(new Event('kick-refined:surface-ready',{bubbles:true,cancelable:true}));
   }
-  globalThis.KickRefinedDOM = Object.freeze({subscribePage, subscribeChat, links, drainRows, isReady, get chat() { return currentChat; }});
+  globalThis.KickRefinedDOM = Object.freeze({subscribePage, subscribeChat, links, drainRows, deferChatWork, cancelChatWork, isReady, get chat() { return currentChat; }});
 })();

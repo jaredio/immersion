@@ -10,7 +10,7 @@
   });
   Promise.all([pending,rootReady]).then(([saved,root])=>{
     const settings=saved?.settings||{};
-    for(const [key,attribute,fallback]of [['enabled','krEnabled',true],['performance','krPerformance',true],['compact','krCompact',false],['hideRecommended','krHideRecommended',false],['textOnly','krTextOnly',false]])root.dataset[attribute]=String(typeof settings[key]==='boolean'?settings[key]:fallback);
+    for(const [key,attribute,fallback]of [['enabled','krEnabled',true],['performance','krPerformance',true],['fastChat','krFastChat',false],['compact','krCompact',false],['hideRecommended','krHideRecommended',false],['textOnly','krTextOnly',false]])root.dataset[attribute]=String(typeof settings[key]==='boolean'?settings[key]:fallback);
     root.dataset.krAccent=['mint','violet','blue','neutral'].includes(settings.accent)?settings.accent:'mint';
     for(const [key,property,min,max,fallback]of [['chatWidth','--kr-chat-width',280,440,340],['fontSize','--kr-font-size',12,18,14]])root.style.setProperty(property,`${Number.isFinite(settings[key])?Math.min(max,Math.max(min,Math.round(settings[key]))):fallback}px`);
   });

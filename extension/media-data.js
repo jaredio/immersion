@@ -20,7 +20,7 @@
         const canonical=new URL(shorts?`https://www.youtube.com/shorts/${id}`:`https://www.youtube.com/watch?v=${id}`);if(start)canonical.searchParams.set('t',String(start));
         item={provider:'youtube',kind:'video',id,shorts,start,href:canonical.href};
       }else if(['tiktok.com','m.tiktok.com'].includes(host)){
-        if((match=/^\/@([a-zA-Z0-9._]{1,32})\/video\/(\d{10,25})\/?$/.exec(path)))item={provider:'tiktok',kind:'video',handle:match[1],id:match[2],href:`https://www.tiktok.com/@${match[1]}/video/${match[2]}`};
+        if((match=/^\/@([a-zA-Z0-9._]{1,32})\/(video|photo)\/(\d{10,25})\/?$/.exec(path)))item={provider:'tiktok',kind:match[2]==='photo'?'photo':'video',handle:match[1],id:match[3],href:`https://www.tiktok.com/@${match[1]}/${match[2]}/${match[3]}`};
         else if((match=/^\/@([a-zA-Z0-9._]{1,32})\/?$/.exec(path)))item={provider:'tiktok',kind:'profile',handle:match[1],id:match[1].toLowerCase(),href:`https://www.tiktok.com/@${match[1]}`};
         else if((match=/^\/t\/([a-zA-Z0-9]{5,80})\/?$/.exec(path)))item={provider:'tiktok',kind:'shortlink',id:match[1],href:`https://www.tiktok.com/t/${match[1]}/`};
       }else if(['vt.tiktok.com','vm.tiktok.com'].includes(host)&&(match=/^\/([a-zA-Z0-9]{5,80})\/?$/.exec(path)))item={provider:'tiktok',kind:'shortlink',id:match[1],href:`https://${host}/${match[1]}/`};
@@ -39,8 +39,9 @@
   function tiktokPage(html,item){
     const match=/<script\b[^>]*\bid=["']__UNIVERSAL_DATA_FOR_REHYDRATION__["'][^>]*>([\s\S]*?)<\/script>/i.exec(html);
     if(!match)return null;let scope;try{scope=JSON.parse(match[1]).__DEFAULT_SCOPE__;}catch{return null;}
-    if(item.kind==='video'){
+    if(item.kind==='video'||item.kind==='photo'){
       const video=scope?.['webapp.video-detail']?.itemInfo?.itemStruct,user=video?.author;
+      if(!video)return null;
       if(video?.id!==item.id||user?.uniqueId?.toLowerCase()!==item.handle.toLowerCase()||video.privateItem||video.takeDown||user.isEmbedBanned)throw Error('Video unavailable');
       const stats=video.stats||video.statsV2||{};
       return {...item,title:text(video.desc,300)||'TikTok video',description:'',author:text(user.nickname,100)||item.handle,handle:user.uniqueId,avatar:image(user.avatarThumb,'tiktok'),thumbnail:image(video.video?.cover,'tiktok'),duration:count(video.video?.duration),stats:{likes:count(stats.diggCount),shares:count(stats.shareCount),views:count(stats.playCount)}};
@@ -50,6 +51,9 @@
     return {...item,title:text(user.nickname,100)||item.handle,author:text(user.nickname,100)||item.handle,description:text(user.signature,3000),avatar:image(user.avatarThumb,'tiktok'),stats:{followers:count(stats.followerCount),likes:count(stats.heartCount),videos:count(stats.videoCount)}};
   }
   function oembed(data,item){
+    // TikTok's image-post endpoint can return a player-only response. Its post
+    // ID proves which public post it belongs to; never inject its HTML.
+    if(item.provider==='tiktok'&&['video','photo'].includes(item.kind)&&data?.embed_product_id===item.id&&data?.embed_type==='video'&&data?.provider_url==='https://www.tiktok.com'&&typeof data.title!=='string')return {...item,title:item.kind==='photo'?'TikTok photo post':'TikTok video',author:item.handle,authorHref:`https://www.tiktok.com/@${item.handle}`,description:'',thumbnail:image(data.thumbnail_url,'tiktok'),avatar:'',stats:{}};
     if(!data||typeof data.title!=='string'||typeof data.author_name!=='string')throw Error('Preview unavailable');
     const authorURL=item.provider==='tiktok'?parse(data.author_url):null;
     if(item.provider==='tiktok'&&(!authorURL||authorURL.provider!=='tiktok'||authorURL.kind!=='profile'||authorURL.handle.toLowerCase()!==item.handle.toLowerCase()))throw Error('Creator mismatch');
@@ -58,7 +62,7 @@
     return {...item,title:text(data.title,500),author:text(data.author_name,100),authorHref,description:'',thumbnail:image(data.thumbnail_url,item.provider),avatar:'',stats:{}};
   }
   function player(item){
-    if(item.kind!=='video')return '';
+    if(item.kind!=='video'&&!(item.provider==='tiktok'&&item.kind==='photo'))return '';
     if(item.provider==='youtube'){const url=new URL(`https://www.youtube-nocookie.com/embed/${item.id}`);url.search='autoplay=1&playsinline=1&rel=0&controls=1&fs=1';if(item.start)url.searchParams.set('start',String(item.start));return url.href;}
     if(item.provider==='tiktok')return `https://www.tiktok.com/player/v1/${item.id}?autoplay=1&controls=1&description=0&music_info=0`;
     return '';

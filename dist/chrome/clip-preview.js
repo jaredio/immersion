@@ -1,4 +1,4 @@
-/* One demand-loaded profile clip dialog. The shared clip engine owns playback. */
+/* One demand-loaded profile media dialog. The shared clip engine owns playback. */
 (() => {
   const css=`
     :host{color-scheme:dark;font:13px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;--accent:var(--kr-accent,#b0ff8c)}*{box-sizing:border-box}
@@ -9,6 +9,8 @@
     dialog[data-replay]{width:min(1200px,calc(100vw - 28px))}dialog[data-replay] .body{grid-template-columns:minmax(0,1fr) 300px}.replay{display:flex;flex-direction:column;min-height:0;max-height:calc(100dvh - 210px);border-left:1px solid #ffffff0e;background:#121217}.replay-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid #ffffff0a}.replay-header strong{font-size:11px;font-weight:600}.replay-header button{display:grid;place-items:center;width:26px;height:26px;padding:0;line-height:1}.replay-header button svg{display:block;width:14px;height:14px}.replay-messages{flex:1;min-height:80px;overflow:auto;overscroll-behavior:contain;padding:8px 12px;scrollbar-width:thin;font-size:12px;line-height:1.6;overflow-wrap:anywhere}.replay-messages p{margin:0 0 7px}.replay-messages strong{font-weight:600}.replay-messages time{margin-right:7px;color:#727286;font-size:9px;font-variant-numeric:tabular-nums}.replay-emote{width:26px;height:26px;object-fit:contain;vertical-align:middle}.replay-status{margin:0;padding:10px 12px;color:#9292a5;font-size:11px}.replay-retry{width:auto;align-self:flex-start;margin:0 12px 10px;padding:4px 8px;font-size:11px}.replay-note{padding:8px 12px;border-top:1px solid #ffffff0a;color:#737388;font-size:10px}
     @media(max-width:760px){dialog[data-replay] .body{grid-template-columns:minmax(0,1fr)}.replay{height:260px;max-height:38dvh;border-left:0;border-top:1px solid #ffffff0e}footer{align-items:flex-start;flex-wrap:wrap}.footer-actions{justify-content:flex-start;margin-left:0}}@media(max-width:540px){dialog,dialog[data-replay]{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:11px}header{padding:12px;gap:10px}.avatar{width:36px;height:36px}.stage{max-height:calc(100dvh - 210px)}footer{padding:10px 12px;gap:8px}.footer-actions{width:100%}footer a,footer button{padding:6px 8px;font-size:10px}.action-status{padding-left:12px;padding-right:12px}}
   `;
+  // Chat history must not contribute an intrinsic height to the player row.
+  const replayLayoutCSS='.replay{contain:size;overflow:hidden}.replay-header,.replay-status,.replay-retry,.replay-note{flex-shrink:0}.replay-status:empty{display:none}.replay-messages{min-height:0}.replay-collapse svg{transition:transform .12s}@media(max-width:760px){.replay-collapse svg{transform:rotate(90deg)}}';
   function create({onActiveChange=()=>{}}={}){
     let active=null,players=null,enabled=true,disposed=false;
     function close({resume=true,focus=true,notify=true}={}){
@@ -25,22 +27,25 @@
     }
     function open(row,opener){
       if(disposed||!enabled)return false;
-      const clip=KickRefinedClips.parseClip(row?.href);if(!clip)return false;
+      const clip=KickRefinedClips.parseClip(row?.href)||KickRefinedClips.parseVOD(row?.href);if(!clip)return false;
+      const recording=clip.kind==='vod',noun=recording?'recording':'clip';
       const paused=active?.url===location.href?[...active.paused]:[];
       close({resume:false,focus:false,notify:false});
-      const host=document.createElement('div');host.id='kr-clip-preview';const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css;
+      const host=document.createElement('div');host.id='kr-clip-preview';const shadow=host.attachShadow({mode:'open'}),style=document.createElement('style');style.textContent=css+replayLayoutCSS+KickRefinedClips.metadataCSS;
       const dialog=document.createElement('dialog');dialog.setAttribute('aria-labelledby','clip-preview-title');dialog.setAttribute('aria-describedby','clip-preview-source');
       const header=document.createElement('header'),heading=document.createElement('div');heading.className='heading';
       const avatar=document.createElement('span');avatar.className='avatar';avatar.setAttribute('aria-hidden','true');avatar.textContent=clip.channel[0].toUpperCase();
-      const label=document.createElement('span');label.className='eyebrow';label.id='clip-preview-source';const channelName=document.createElement('span');channelName.textContent=clip.channel;const badge=document.createElement('small');badge.textContent='Clip';label.append(channelName,badge);
-      const title=document.createElement('h2');title.id='clip-preview-title';title.textContent=typeof row.title==='string'?row.title.slice(0,300):'Kick clip';heading.append(label,title);
-      const dismiss=document.createElement('button');dismiss.type='button';dismiss.setAttribute('aria-label','Close clip preview');dismiss.title='Close clip preview';dismiss.autofocus=true;dismiss.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';header.append(avatar,heading,dismiss);
+      const label=document.createElement('span');label.className='eyebrow';label.id='clip-preview-source';const channelName=document.createElement('span');channelName.textContent=clip.channel;const badge=document.createElement('small');badge.textContent=recording?'Recording':'Clip';label.append(channelName,badge);
+      const title=document.createElement('h2');title.id='clip-preview-title';title.textContent=typeof row.title==='string'?row.title.slice(0,300):`Kick ${noun}`;heading.append(label,title);
+      const dismiss=document.createElement('button');dismiss.type='button';dismiss.setAttribute('aria-label',`Close ${noun} preview`);dismiss.title=`Close ${noun} preview`;dismiss.autofocus=true;dismiss.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';header.append(avatar,heading,dismiss);
       const stage=document.createElement('div');stage.className='stage';
-      const footer=document.createElement('footer'),credit=document.createElement('span');credit.className='credit';
+      const footer=document.createElement('footer'),credit=document.createElement('div');credit.className='credit';let details=KickRefinedClips.mediaDetails(row);KickRefinedClips.renderDetails(credit,details);
       const actions=document.createElement('div');actions.className='footer-actions';
       const action=(text,path)=>{const button=document.createElement('button');button.type='button';button.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${path}"/></svg>`;const label=document.createElement('span');label.textContent=text;button.append(label);button.disabled=true;return button;};
       const download=action('Download','M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5');download.title='Download clip as MP4';download.setAttribute('aria-label','Download clip');
       const chat=action('Chat replay','M4 4h16v13H9l-5 4V4zM8 8h8M8 12h5');chat.title='Chat replay is unavailable for this clip';chat.setAttribute('aria-label','Pop out chat replay');chat.setAttribute('aria-expanded','false');
+      // Downloads and replay currently support clip metadata and media only.
+      download.hidden=chat.hidden=recording;
       const original=document.createElement('a');original.href=clip.href;original.target='_blank';original.rel='noopener noreferrer';original.textContent='Open on Kick ↗';actions.append(download,chat,original);footer.append(credit,actions);
       const body=document.createElement('div');body.className='body';body.append(stage);const actionStatus=document.createElement('p');actionStatus.className='action-status';actionStatus.setAttribute('role','status');
       dialog.append(header,body,footer,actionStatus);shadow.append(style,dialog);document.body.append(host);
@@ -53,7 +58,7 @@
         dialog.setAttribute('data-replay','');chat.setAttribute('aria-expanded','true');session.replay=KickRefinedClipReplay.create({container:body,video,data:session.data,signal,onClose:closeReplay});
       },{signal});
       download.addEventListener('click',async()=>{
-        if(session.download){session.download.abort();return;}if(!session.data?.src)return;
+        if(session.download){session.download.abort();return;}if(recording||!session.data?.src)return;
         const controller=session.download=new AbortController(),stop=()=>controller.abort();signal.addEventListener('abort',stop,{once:true});
         download.querySelector('span').textContent='Cancel download';download.setAttribute('aria-label','Cancel clip download');download.title='Cancel clip download';actionStatus.textContent='Preparing MP4…';
         try{
@@ -77,10 +82,10 @@
           if(!paused.includes(video))paused.push(video);video.pause();
         }
         players ||= KickRefinedClips.create({enabled:true,observeChat:false});
-        session.item=players.importItem({href:clip.href,title:title.textContent,time:0,paused:false,volume:1});
+        session.item=players.importItem({...details,href:clip.href,title:title.textContent,time:0,paused:false,volume:1});
         session.item.mount(stage,{info:data=>{
-          if(!valid())return;if(data.title)title.textContent=data.title;credit.textContent=data.creator?`Clipped by ${data.creator}`:data.credit||'';
-          if(!data.src)return;session.data=data;download.disabled=false;chat.disabled=!data.replay;if(data.replay)chat.title='Pop out synchronized chat replay';channelName.textContent=data.channelName||clip.channel;
+          if(!valid())return;if(data.title)title.textContent=data.title;details={...details,...data,views:data.views??details.views,created:data.created||details.created,date:data.date||details.date,creator:data.creator||details.creator};KickRefinedClips.renderDetails(credit,details);
+          if(!data.src)return;session.data=data;download.disabled=recording;chat.disabled=recording||!data.replay;if(data.replay)chat.title='Pop out synchronized chat replay';channelName.textContent=data.channelName||clip.channel;
           if(data.channelImage){const image=document.createElement('img');image.alt='';image.src=data.channelImage;image.referrerPolicy='no-referrer';image.addEventListener('error',()=>image.remove(),{once:true});avatar.querySelector('img')?.remove();avatar.append(image);}
         },audio(){},ended(){},focus(){},remove:()=>{if(valid())close();}});
         stage.firstElementChild.setAttribute('data-clip-preview','');session.item.setMuted(false);dismiss.focus({preventScroll:true});return true;

@@ -45,6 +45,7 @@
     mediaCards.setOptions({media:s.enabled&&s.mediaEmbeds&&!s.textOnly,profiles:s.enabled&&s.xEmbeds&&!s.textOnly});
     replyPreviews.setEnabled(s.enabled);
     root.dataset.krEnabled = String(s.enabled); root.dataset.krPerformance = String(s.performance);
+    root.dataset.krFastChat = String(s.fastChat);
     root.dataset.krTextOnly = String(s.textOnly); root.dataset.krAccent = s.accent;
     root.dataset.krChatFrame = String(window !== window.top);
     if(workspaceChat&&s.enabled&&!unsubscribeHeader)unsubscribeHeader=KickRefinedDOM.subscribePage(syncHeader);

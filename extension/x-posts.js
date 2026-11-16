@@ -98,16 +98,16 @@
       }
       for(const row of KickRefinedDOM.drainRows(dirty)){
         if(!list?.contains(row))continue;const seen=new Set(byRow.get(row)?.keys());
-        for(const anchor of KickRefinedDOM.links(row)){const post=parse(anchor.href);if(!post)continue;const existing=byRow.get(row)?.get(post.id);if(existing){existing.links.add(anchor);if(existing.loaded)hideLinks(existing);continue;}if(seen.size>=2||records.size>=80)continue;seen.add(post.id);add(row,anchor,post);}
+        for(const anchor of KickRefinedDOM.links(row,'x')){const post=parse(anchor.href);if(!post)continue;const existing=byRow.get(row)?.get(post.id);if(existing){existing.links.add(anchor);if(existing.loaded)hideLinks(existing);continue;}if(seen.size>=2||records.size>=80)continue;seen.add(post.id);add(row,anchor,post);}
       }
       if(dirty.size)schedule(0);
     }
     function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const row of node.querySelectorAll('[data-index]'))dirty.add(row);}
-    function schedule(delay=60){if(!timer&&enabled&&!disposed)timer=setTimeout(flush,delay);}
+    function schedule(delay=60){if(!timer&&enabled&&!disposed)timer=KickRefinedDOM.deferChatWork(flush,delay);}
     const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();}});
     function refresh(){const next=enabled?KickRefinedDOM.chat:null;if(next===list)return;for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(enabled);refresh();
-    return {setEnabled(value){if(enabled===value)return;enabled=value;clearTimeout(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();clearTimeout(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};
+    return {setEnabled(value){if(enabled===value)return;enabled=value;KickRefinedDOM.cancelChatWork(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();KickRefinedDOM.cancelChatWork(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};
   }
   globalThis.KickRefinedX=Object.freeze({create});
 })();

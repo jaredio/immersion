@@ -4,6 +4,7 @@
       <p class="eyebrow">Experience</p>
       <div class="row"><div><label for="enabled">Enable Immersion</label><p class="help">The full dark redesign.</p></div><input id="enabled" type="checkbox"></div>
       <div class="row"><div><label for="performance">Lean chat & motion</label><p class="help">Instant chat scroll. Fewer visual effects.</p></div><input id="performance" type="checkbox"></div>
+      <div class="row"><div><label for="fastChat">Experimental fast chat</label><p class="help">Give live messages priority during floods. Media previews may appear a little later.</p></div><input id="fastChat" type="checkbox"></div>
       <div class="row"><div><label for="blockTelemetry">Block Kick telemetry</label><p class="help">Block known analytics and marketing trackers on Kick. Refresh tabs after changing.</p></div><input id="blockTelemetry" type="checkbox"></div>
       <div class="row"><div><label for="textOnly">Hide chat images</label><p class="help">Hide emotes, badges & media. Keep spacing.</p></div><input id="textOnly" type="checkbox"></div>
       <div class="row"><div><label for="chatClips">Playable chat clips</label><p class="help">Click to play Kick clips in chat or a floating player.</p></div><input id="chatClips" type="checkbox"></div>

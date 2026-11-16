@@ -69,8 +69,8 @@
     .channel-panel .channel-profile-region{padding:16px clamp(12px,2vw,22px) 20px;border-top:1px solid #ffffff0b}
     .channel-panel .channel-profile-region>.multi-expanded-profile{padding:18px 0 0;border:0}
     .channel-panel .channel-profile-region [hidden]{display:none!important}
-    .channel-panel .channel-goals{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:12px;padding:16px 20px;border-top:1px solid #ffffff0b}
-    .channel-panel .channel-goal{min-width:0;display:flex;flex-direction:column;gap:10px;padding:13px 14px;border:1px solid #ffffff0b;border-radius:10px;background:#ffffff03}
+    .channel-panel .channel-goals{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;margin:18px 0 22px}
+    .channel-panel .channel-goal{min-width:0;width:100%;max-width:340px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:13px 14px;border:1px solid #ffffff0b;border-radius:10px;background:#ffffff03}
     .channel-panel .channel-goal-heading,.channel-panel .channel-goal-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}.channel-panel .channel-goal-title{font:600 13px/1.4 Inter,system-ui,sans-serif;color:#e7e7ed}.channel-panel .channel-goal-time{font-size:11px;color:#9696a6}
     .channel-panel .channel-goal-action{display:grid;place-items:center;width:30px;height:30px;flex:none;padding:6px;border:1px solid #ffffff10;border-radius:7px;background:#ffffff05;color:var(--accent);cursor:pointer}.channel-panel .channel-goal-action:hover{background:#ffffff0d}.channel-panel .channel-goal-action svg{width:16px;height:16px}
     .channel-panel .channel-goal progress{appearance:none;width:100%;height:6px;border:0;border-radius:999px;overflow:hidden;background:#ffffff0b;color:var(--accent)}.channel-panel .channel-goal progress::-webkit-progress-bar{background:#ffffff0b}.channel-panel .channel-goal progress::-webkit-progress-value{background:var(--accent);border-radius:999px}.channel-panel .channel-goal progress::-moz-progress-bar{background:var(--accent);border-radius:999px}
@@ -89,7 +89,7 @@
     if(node.matches('a')){try{if(new URL(node.href).origin!==location.origin)return false;}catch{return false;}}
     return true;
   }
-  function bio(slug,meta,panels,{fullProfile=false}={}){
+  function bio(slug,meta,panels,{fullProfile=false,renderGoals}={}){
     const profile=document.createElement('section');profile.className='multi-expanded-profile';profile.id=`multi-profile-${slug}`;profile.setAttribute('role','region');profile.setAttribute('aria-label',`About ${meta.title||slug}`);
     const followerCount=String(meta.followers??'').replace(/\s+followers?\s*$/i,'').trim();
     if(followerCount){
@@ -101,6 +101,7 @@
     const text=document.createElement('div');text.className='profile-rich-text profile-bio';KickRefinedProfile.formatted(text,meta.bio||'No bio available.');profile.append(text);
     const socials=document.createElement('div');socials.className='profile-socials';for(const social of meta.socials||[]){const link=KickRefinedProfile.link(social.href);if(link){link.textContent=social.label;socials.append(link);}}
     const open=KickRefinedProfile.link(`${location.origin}/${slug}${fullProfile?'?tab=overview':''}`);open.textContent=fullProfile?'Open full profile ↗':'Open channel ↗';socials.append(open);profile.append(socials);
+    if(meta.goals?.length&&renderGoals)profile.append(renderGoals(slug,meta.goals));
     const grid=document.createElement('div');grid.className='profile-panels';if(!panels){const message=document.createElement('p');message.className='profile-muted';message.textContent='Loading channel panels…';grid.append(message);}else for(const item of panels){if(!item.title&&!item.description&&!item.image)continue;const panel=document.createElement('article');panel.className='profile-panel';if(item.image){const image=KickRefinedProfile.image(item.image,item.title||'Channel panel');if(image){const link=KickRefinedProfile.link(item.href);if(link){link.append(image);panel.append(link);}else panel.append(image);}}if(item.title){const heading=document.createElement('h4');heading.textContent=item.title;panel.append(heading);}if(item.description){const description=document.createElement('div');description.className='profile-rich-text';KickRefinedProfile.formatted(description,item.description);panel.append(description);}grid.append(panel);}profile.append(grid);KickRefinedProfile.decorateSocials(profile);return profile;
   }
   function create({support,enabled=true,onChange,integratedProfile=false}={}){
@@ -108,7 +109,7 @@
     const marked=new Set(),actionButtons=new Map();
     const offline=globalThis.KickRefinedOffline?.create();let expansionChoice=null,wasOffline=false;
     const sourceObserver=new MutationObserver(()=>onChange?.());
-    const sourceStyle=document.createElement('style');sourceStyle.textContent='html[data-kr-enabled="true"] :is([data-kr-channel-source],[data-kr-channel-goal-source]){display:none!important}html[data-kr-enabled="true"]:has(main[data-kr-multi-active="true"]) #kr-channel-root:not([data-profile-open]){display:none!important}[data-kr-channel-popover]{position:fixed!important;transform:none!important;left:var(--kr-channel-popover-left)!important;top:var(--kr-channel-popover-top)!important;max-width:calc(100vw - 16px)!important}';document.head.append(sourceStyle);
+    const sourceStyle=document.createElement('style');sourceStyle.textContent='html[data-kr-enabled="true"]:has(#kr-channel-root[data-styles-ready]:not([hidden])) :is([data-kr-channel-source],[data-kr-channel-goal-source]):not(:has(#kr-channel-root)){display:none!important}html[data-kr-enabled="true"]:has(main[data-kr-multi-active="true"]) #kr-channel-root{display:none!important}[data-kr-channel-popover]{position:fixed!important;transform:none!important;left:var(--kr-channel-popover-left)!important;top:var(--kr-channel-popover-top)!important;max-width:calc(100vw - 16px)!important}';document.head.append(sourceStyle);
     function clearPopover(){if(activePopover){activePopover.removeAttribute('data-kr-channel-popover');activePopover.style.removeProperty('--kr-channel-popover-left');activePopover.style.removeProperty('--kr-channel-popover-top');activePopover=null;}}
     function positionPopover(){if(!activeAction)return;const node=activeAction.node;if(!node.isConnected||node.getAttribute('aria-expanded')==='false'){clearPopover();activeAction=null;return;}const popup=document.getElementById(node.getAttribute('aria-controls'))?.closest('[data-radix-popper-content-wrapper]');if(!popup)return;if(popup!==activePopover){clearPopover();activePopover=popup;}const size=popup.getBoundingClientRect(),anchor=activeAction.rect;popup.setAttribute('data-kr-channel-popover','');popup.style.setProperty('--kr-channel-popover-left',`${Math.max(8,Math.min(anchor.right-size.width,innerWidth-size.width-8))}px`);popup.style.setProperty('--kr-channel-popover-top',`${Math.max(8,Math.min(anchor.bottom+8,innerHeight-size.height-8))}px`);}
     function invoke(node,button){clearPopover();activeAction=node.hasAttribute('aria-controls')?{node,rect:button.getBoundingClientRect()}:null;node.click();requestAnimationFrame(()=>{if(!destroyed){positionPopover();onChange?.();}});}
@@ -171,7 +172,9 @@
     function read(header){
       const username=header.querySelector('#channel-username,[data-testid=channel-username]')||globalThis.KickRefinedChannelPage?.username(header),avatar=header.querySelector('#channel-avatar,[data-testid=channel-avatar]')||globalThis.KickRefinedChannelPage?.avatar(header),streamTitle=header.querySelector('[data-testid="livestream-title"]');
       const nameButton=username?.closest('button,a'),nameLine=nameButton?.parentElement;
-      const actionRoot=streamTitle?header.lastElementChild:header;
+      const control=header.querySelector('[data-testid="follow-button"],[data-testid="sub-button"],[data-testid="viewer-count"]');
+      let actionRoot=streamTitle?header.lastElementChild:header;
+      if(streamTitle&&control){actionRoot=control.parentElement||header;while(actionRoot.parentElement&&actionRoot.parentElement!==header&&!actionRoot.parentElement.contains(username)&&!actionRoot.parentElement.contains(avatar))actionRoot=actionRoot.parentElement;}
       const actions=[...actionRoot.querySelectorAll('button,a')].filter(node=>isAction(node)&&node!==nameButton&&!node.contains(username)&&!node.contains(avatar)&&!node.matches('a[href*="/category/"]')&&node.getAttribute('aria-disabled')!=='true').filter((node,index,nodes)=>nodes.findIndex(other=>classify(other)===classify(node))===index);
       // Profile pages can expose Subscribe/Follow in a second native header.
       // Keep one themed identity and forward each missing action to its real owner.
@@ -224,7 +227,7 @@
       if(support)primary.insertBefore(support.makeButton(channel),primary.querySelector('[data-kind=subscribe]'));if(info.viewers||info.recorded){const viewers=document.createElement('span');viewers.className='channel-viewers';viewers.append(icon('viewers'),document.createTextNode(info.recorded?`${info.recordingKind||'Recording'}${info.recordingMeta?' \u00b7 '+info.recordingMeta:''}`:`${info.viewers} watching`));secondary.prepend(viewers);}actions.append(primary,secondary);header.append(actions);
       const regionId=`${onOpenProfile?'channel':'multi'}-profile-${channel}`;
       if(onOpenProfile)for(const button of [avatar,name]){button.setAttribute('aria-expanded',String(expanded));button.setAttribute('aria-controls',regionId);}
-      const toggle=document.createElement('button');toggle.type='button';toggle.className='channel-expand';toggle.dataset.channel=channel;toggle.setAttribute('aria-label',`Channel details for ${channel}`);toggle.title=expanded?'Collapse channel profile':'Expand channel profile';toggle.setAttribute('aria-expanded',String(expanded));toggle.setAttribute('aria-controls',regionId);if(showPool)toggle.append(document.createTextNode(expanded?'Hide details':'Details'));toggle.append(icon('chevron'));toggle.addEventListener('click',onToggle);header.append(toggle);entry.append(header);if(info.goals?.length)entry.append(goalsRow(channel,info.goals));if(expanded&&!onOpenProfile)entry.append(bio(channel,info,panels,{fullProfile}));return entry;
+      const toggle=document.createElement('button');toggle.type='button';toggle.className='channel-expand';toggle.dataset.channel=channel;toggle.setAttribute('aria-label',`Channel details for ${channel}`);toggle.title=expanded?'Collapse channel profile':'Expand channel profile';toggle.setAttribute('aria-expanded',String(expanded));toggle.setAttribute('aria-controls',regionId);if(showPool)toggle.append(document.createTextNode(expanded?'Hide details':'Details'));toggle.append(icon('chevron'));toggle.addEventListener('click',onToggle);header.append(toggle);entry.append(header);if(expanded&&!onOpenProfile)entry.append(bio(channel,info,panels,{fullProfile,renderGoals:goalsRow}));return entry;
     }
     let profileLocation='',profileView=null;
     function setExpanded(value){
@@ -247,7 +250,6 @@
         entry.dataset.live=next.dataset.live;
         entry.firstElementChild.replaceWith(next.firstElementChild);
         entry.querySelector(':scope > .channel-goals')?.remove();
-        const goals=next.querySelector('.channel-goals');if(goals)entry.firstElementChild.after(goals);
       }
       host.toggleAttribute('data-profile-open',managed&&expanded);
       let region=entry.querySelector(':scope > .channel-profile-region');
@@ -256,7 +258,7 @@
           region=document.createElement('section');region.className='channel-profile-region';region.id=`channel-profile-${slug}`;region.setAttribute('aria-label',`${nativeData?.title||slug} profile`);
           const slot=document.createElement('div');slot.className='channel-library-slot';region.append(slot);entry.append(region);
         }
-        const profile=bio(slug,{...details,...nativeData},host._panels);
+        const profile=bio(slug,{...details,...nativeData},host._panels,{renderGoals:goalsRow});
         profile.hidden=profileView!==null&&profileView!=='about';
         region.querySelector(':scope > .multi-expanded-profile')?.remove();region.append(profile);
       }else region?.remove();
@@ -277,6 +279,12 @@
       const main=source?.closest('main');if(main)sourceObserver.observe(main,{subtree:true,attributes:true,attributeFilter:['src','srcset']});
     }
     function unmount(){pendingBio++;offline?.clear();clearPopover();activeAction=null;sourceObserver.disconnect();observedHeaders=[];host?.remove();host=shadow=null;for(const node of marked){node.removeAttribute('data-kr-channel-source');node.removeAttribute('data-kr-channel-goal-source');}marked.clear();source=null;signature='';nativeData=null;actionButtons.clear();}
+    function placeHeader(header){
+      const container=header.closest('#channel-content');
+      if(container&&container!==header){if(host.parentElement!==container)container.prepend(host);return;}
+      let anchor=header;while(anchor.parentElement?.matches('[class~=contents]'))anchor=anchor.parentElement;
+      if(host.parentElement!==anchor.parentElement||header.contains(host))anchor.before(host);
+    }
     function refresh(){
       if(destroyed)return false;positionPopover();const next=globalThis.KickRefinedChannelPage?.routeSlug()||globalThis.KickRefinedChannelPage?.watchSlug()||globalThis.KickRefinedChannelPage?.clipSlug()||KickRefined.channelSlug(location.pathname,location.origin)||'';if(!enabled||!next){unmount();expanded=false;expansionChoice=null;wasOffline=false;profileLocation='';return false;}if(next!==slug){unmount();slug=next;details=null;expanded=false;expansionChoice=null;wasOffline=false;profileLocation='';profileView=null;}
       const tab=integratedProfile&&KickRefinedChannelPage.routeSlug()?KickRefinedChannelPage.profileTab():null;
@@ -298,9 +306,14 @@
       profileHeaders=globalThis.KickRefinedChannelPage?.findHeaders()||[];for(const variant of profileHeaders)if(!headers.includes(variant))headers.push(variant);
       const visibleWrapper=node=>{for(let parent=node.parentElement;parent&&parent!==document.body;parent=parent.parentElement)if(parent.hidden||getComputedStyle(parent).display==='none')return false;return true;};
       const visible=headers.filter(visibleWrapper),pool=visible.length?visible:headers;
-      const header=pool.find(node=>node.querySelector('[data-testid=livestream-title]')&&node.querySelector('[data-testid=sub-button],[data-testid=follow-button]'))||pool.find(node=>node.querySelector('[data-testid=sub-button],[data-testid=follow-button]'))||pool[0]||document.querySelector('.stream-info');if(!header||globalThis.KickRefinedDOM?.isReady&&!KickRefinedDOM.isReady(header))return false;
-      if(source!==header||!host?.isConnected){unmount();source=header;host=document.createElement('div');host.id='kr-channel-root';shadow=host.attachShadow({mode:'open'});const sheet=document.createElement('link');sheet.rel='stylesheet';sheet.href=KickRefined.api.runtime.getURL('ui.css');const style=document.createElement('style');style.textContent=styles;shadow.append(sheet,style);const container=header.closest('#channel-content');if(container&&container!==header)container.prepend(host);else{let anchor=header;while(anchor.parentElement?.matches('[class~=contents]'))anchor=anchor.parentElement;anchor.before(host);}header.setAttribute('data-kr-channel-source','');marked.add(header);signature='';const current=slug;support.channel(current).then(meta=>{if(!destroyed&&enabled&&current===slug&&host){details=meta;signature='';onChange?.();}}).catch(()=>{});support.panels(current).then(panels=>{if(!destroyed&&enabled&&current===slug&&host){host._panels=panels;syncLegacyPanels();onChange?.();}}).catch(()=>{});}
-      for(const variant of headers)if(variant!==header){if(!variant.hasAttribute('data-kr-channel-source'))variant.setAttribute('data-kr-channel-source','');marked.add(variant);}
+      const header=pool.find(node=>node.querySelector('[data-testid=livestream-title]')&&node.querySelector('[data-testid=sub-button],[data-testid=follow-button]'))||pool.find(node=>node.querySelector('[data-testid=sub-button],[data-testid=follow-button]'))||pool[0]||document.querySelector('.stream-info');
+      if(!header||globalThis.KickRefinedDOM?.isReady&&[header,...header.querySelectorAll('#channel-username,[data-testid="channel-username"],[data-testid="livestream-title"],[data-testid="channel-avatar"],[data-testid="sub-button"],[data-testid="follow-button"]')].some(node=>!KickRefinedDOM.isReady(node)))return false;
+      // Responsive and hydrated headers can change owners without replacing our
+      // already styled surface or briefly exposing the native header again.
+      if(host?.isConnected&&(source!==header||header.contains(host))){placeHeader(header);source=header;signature='';actionButtons.clear();}
+      if(!host?.isConnected){unmount();source=header;host=document.createElement('div');host.id='kr-channel-root';host.hidden=true;shadow=host.attachShadow({mode:'open'});const sheet=document.createElement('link');sheet.rel='stylesheet';sheet.href=KickRefined.api.runtime.getURL('ui.css');const mountedHost=host;sheet.addEventListener('load',()=>{if(destroyed||!enabled||host!==mountedHost)return;mountedHost.dataset.stylesReady='true';mountedHost.hidden=false;onChange?.();},{once:true});const style=document.createElement('style');style.textContent=styles;shadow.append(sheet,style);const container=header.closest('#channel-content');if(container&&container!==header)container.prepend(host);else{let anchor=header;while(anchor.parentElement?.matches('[class~=contents]'))anchor=anchor.parentElement;anchor.before(host);}header.setAttribute('data-kr-channel-source','');marked.add(header);signature='';const current=slug;support.channel(current).then(meta=>{if(!destroyed&&enabled&&current===slug&&host){details=meta;signature='';onChange?.();}}).catch(()=>{});support.panels(current).then(panels=>{if(!destroyed&&enabled&&current===slug&&host){host._panels=panels;syncLegacyPanels();onChange?.();}}).catch(()=>{});}
+      if(!header.hasAttribute('data-kr-channel-source'))header.setAttribute('data-kr-channel-source','');marked.add(header);
+      for(const variant of headers)if(variant!==header&&!variant.contains(host)){if(!variant.hasAttribute('data-kr-channel-source'))variant.setAttribute('data-kr-channel-source','');marked.add(variant);}
       observeHeaders(headers);syncLegacyPanels();syncActions();const data=read(header);
       const offlineRoute=integratedProfile&&!data.recorded&&!!KickRefinedChannelPage.routeSlug();
       const offlinePage=offlineRoute?(offline?.refresh({main:header.closest('main'),slug,title:data.title,header,live:details?.live,nativeLive:data.live})??(data.live==='offline'&&details?.live==='offline')):false;
@@ -310,7 +323,7 @@
       const nextSignature=JSON.stringify([expanded,data.title,data.streamTitle,data.image,data.live,data.viewers,data.recorded,data.recordingKind,data.recordingMeta,data.followers,data.category,data.tags,data.badges.map(n=>n.outerHTML),data.verified?.outerHTML,data.goals.map(({title,current,target,time,count,image})=>[title,current,target,time,count,image]),data.actions.map(n=>classify(n))]);
       if(signature===nextSignature&&nativeData?.actions.every((node,index)=>node===data.actions[index])&&nativeData?.goals.every((goal,index)=>goal.node===data.goals[index]?.node&&goal.button===data.goals[index]?.button))return false;signature=nextSignature;nativeData=data;if(data.verified)verifiedVisual=cloneVisual(data.verified);version++;renderNative();return true;
     }
-    return {card,identity,refresh,getProfileMount,get version(){return version;},setEnabled(value){enabled=value;if(!enabled){unmount();expanded=false;expansionChoice=null;wasOffline=false;profileLocation='';profileView=null;}else refresh();},destroy(){destroyed=true;unmount();sourceStyle.remove();}};
+    return {card,identity,refresh,getProfileMount,get profileSelection(){return expanded?{slug,tab:profileView||'about'}:null;},get version(){return version;},setEnabled(value){enabled=value;if(!enabled){unmount();expanded=false;expansionChoice=null;wasOffline=false;profileLocation='';profileView=null;}else refresh();},destroy(){destroyed=true;unmount();sourceStyle.remove();}};
   }
   globalThis.KickRefinedChannelPanel=Object.freeze({create,bio,styles,verificationBadge});
 })();
