@@ -2,13 +2,14 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import {extensionWorker} from './extension-worker.mjs';
 
 const extension=path.resolve('dist/chrome');
-const context=await chromium.launchPersistentContext(path.resolve('tmp/privacy-test-profile'),{
+const context=await chromium.launchPersistentContext(path.resolve(`tmp/privacy-test-${Date.now()}`),{
   executablePath:chromium.executablePath(),headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]
 });
 try{
-  const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+  const worker=await extensionWorker(context);
   await worker.evaluate(()=>chrome.storage.local.set({settings:{}}));
   const enabled=()=>worker.evaluate(()=>chrome.declarativeNetRequest.getEnabledRulesets());
   const waitEnabled=async expected=>{for(let i=0;i<50;i++){if((await enabled()).includes('kick-telemetry')===expected)return;await new Promise(resolve=>setTimeout(resolve,50));}assert.fail('Telemetry preference did not apply');};

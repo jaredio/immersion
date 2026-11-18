@@ -2,11 +2,11 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {workspaceFixtures} from './workspace-benchmark-fixture.mjs';
+import {extensionWorker} from './extension-worker.mjs';
 const extension=path.join(process.cwd(),'dist/chrome'),{fixture}=await workspaceFixtures();
 const context=await chromium.launchPersistentContext(path.join(process.cwd(),`tmp/session-sync-${Date.now()}`),{executablePath:chromium.executablePath(),headless:true,viewport:{width:1500,height:1000},args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
 try{
-  const worker=context.serviceWorkers().find(worker=>worker.url().startsWith('chrome-extension:'))||await context.waitForEvent('serviceworker',{predicate:worker=>worker.url().startsWith('chrome-extension:')});
-  let ready=false;for(let i=0;i<40;i++){if(await worker.evaluate(()=>!!globalThis.chrome?.storage?.local)){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,50));}if(!ready)throw Error('Storage not ready');
+  const worker=await extensionWorker(context);
   await worker.evaluate(async()=>{await chrome.storage.local.clear();await chrome.storage.local.set({multiSessions:[{name:'Legacy',state:{channels:['native']}}]});});
   await context.route('https://kick.com/**',route=>{
     const url=new URL(route.request().url());

@@ -34,7 +34,7 @@ await page.goto('https://kick.com/native');await page.addStyleTag({path:'extensi
   await page.evaluate(()=>{
     const channels=['native','alpha','beta','gamma'].map(slug=>({slug,title:slug,live:'live',image:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="green"/></svg>'}));
     window.workspace=KickRefinedMulti.create({getChannels:()=>channels,onKeydown:()=>{},support:{channel:async slug=>channels.find(item=>item.slug===slug),panels:async()=>[]},channelPanel:{version:0,card:slug=>{const element=document.createElement('div');element.className='channel-panel';element.textContent=slug;return element;}}});
-    window.KickRefinedClips={parseClip:()=>({}),parseVOD:()=>null};window.KickRefinedSearch={duration:String};
+    window.KickRefinedClips={parseClip:()=>({}),parseVOD:()=>null,renderDetails(){}};window.KickRefinedSearch={duration:String};
     window.clipReleased=0;window.staleCallbacks=[];
     window.measure=()=>({lifetime:KickRefinedLifetime.snapshot(),workspace:workspace.snapshot(),mutation:observed.mutation.size,resize:observed.resize.size,frames:document.querySelectorAll('iframe').length});
   });
@@ -90,12 +90,13 @@ const baseline=await page.evaluate(()=>measure());
       await page.evaluate(()=>{history.replaceState({},'','/native');window.profile.destroy();document.getElementById('test-profile').remove();document.getElementById('fixture-banner').remove();workspace.refresh();});
     }
     await picker.getByRole('button',{name:'Chat channel',exact:true}).click();await page.keyboard.press('Escape');assert.equal(await picker.getByRole('listbox').isVisible(),false);
-    await page.evaluate(async()=>{
+    assert.equal(await page.evaluate(async()=>{
       const callbacks=[];
       const item={id:'soak',href:'https://kick.com/native?clip=soak',title:'Soak clip',mount(node,handlers){callbacks.push(handlers);node.append(document.createElement('video'));handlers.info({title:'Soak clip'});},release(){clipReleased++;for(const handlers of callbacks){handlers.remove();handlers.audio(true);}},snapshot:()=>({paused:false,volume:1}),setMuted(){},resume(){},popout(){}};
-      await workspace.addClip(item,'featured');staleCallbacks.push(...callbacks);
+      const added=await workspace.addClip(item,'featured');staleCallbacks.push(...callbacks);
       const old=document.querySelector('main video');old.replaceWith(old.cloneNode(true));workspace.refresh();old.dispatchEvent(new Event('volumechange'));
-    });
+      return added;
+    }),true,'the clip fixture mounts successfully');
     await root.getByRole('button',{name:'Remove clip soak',exact:true}).click();
     if(cycle%2)await page.evaluate(()=>{history.pushState({},'','/other');workspace.refresh();});else await page.evaluate(()=>workspace.close());
     await page.waitForFunction(()=>!document.querySelector('#kr-multi-root'));

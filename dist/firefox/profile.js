@@ -92,12 +92,13 @@ a{color:var(--social-color);text-decoration:none}a:hover{text-decoration:underli
         if(data.provider==='youtube'){const title=document.createElement('span');title.className='post-title';title.textContent=picture.alt;anchor.append(title);}gallery.append(anchor);
       }position();
     };
-    const cached=previewCache.get(identity.href);if(cached&&Date.now()-cached.time<120000){render(cached.data);return;}
-    const item=globalThis.KickRefinedSocialData?.parse(identity.href),unavailable=()=>{if(socialPreview!==current)return;card.setAttribute('aria-busy','false');retry.disabled=false;retry.hidden=false;status.textContent='This public profile could not be loaded. Try again or view the full profile.';position();};
+    const item=globalThis.KickRefinedSocialData?.parse(identity.href),cached=previewCache.get(item?.key);
+    if(cached&&Date.now()-cached.time<600000){render(cached.data);return;}
+    const unavailable=()=>{if(socialPreview!==current)return;card.setAttribute('aria-busy','false');retry.disabled=false;retry.hidden=false;status.textContent='This public profile could not be loaded. Try again or view the full profile.';position();};
     const request=(again=false)=>{
       if(!item||!globalThis.KickRefined?.api?.runtime?.sendMessage){unavailable();retry.hidden=true;return;}
       card.setAttribute('aria-busy','true');status.textContent='Loading profile…';retry.disabled=true;const requestId=current.requestId=crypto.randomUUID();
-      Promise.resolve().then(()=>KickRefined.api.runtime.sendMessage({type:'immersion:social-profile',href:item.href,requestId,retry:again})).then(result=>{current.requestId=null;if(socialPreview!==current)return;if(!result?.ok||result.item?.provider!==item.provider||result.item?.id!==item.id){unavailable();return;}previewCache.set(identity.href,{data:result.item,time:Date.now()});while(previewCache.size>30)previewCache.delete(previewCache.keys().next().value);render(result.item);}).catch(()=>{current.requestId=null;unavailable();});
+      Promise.resolve().then(()=>KickRefined.api.runtime.sendMessage({type:'immersion:social-profile',href:item.href,requestId,retry:again})).then(result=>{current.requestId=null;if(socialPreview!==current)return;if(!result?.ok||result.item?.provider!==item.provider||result.item?.id!==item.id){unavailable();return;}previewCache.set(item.key,{data:result.item,time:Date.now()});while(previewCache.size>30)previewCache.delete(previewCache.keys().next().value);render(result.item);}).catch(()=>{current.requestId=null;unavailable();});
     };
     retry.addEventListener('click',()=>request(true),{signal:abort.signal});request();
   }

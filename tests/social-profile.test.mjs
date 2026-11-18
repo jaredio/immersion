@@ -42,10 +42,10 @@ test('public profile pages validate the canonical account and decode metadata as
 });
 
 async function worker(fetch){
-  let listener;const context=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>listener=fn}}},fetch});
+  let listener;const handlers=[],context=vm.createContext({URL,AbortController,TextDecoder,setTimeout,clearTimeout,chrome:{runtime:{id:'extension',onMessage:{addListener:fn=>{listener=fn;handlers.push(fn);}}}},fetch});
   for(const file of ['shared','preview-queue','media-data','social-profile-data','social-profile-background'])vm.runInContext(await readFile(`extension/${file}.js`,'utf8'),context);
   const sender={id:'extension',tab:{id:1},url:'https://kick.com/creator'};
-  return {listener,sender,ask:(href,patch={})=>new Promise(resolve=>listener({type:'immersion:social-profile',href,...patch},sender,resolve))};
+  return {listener,sender,advance:ms=>vm.runInContext(`Date.now=()=>${Date.now()+ms}`,context),cancel:requestId=>handlers.forEach(fn=>fn({type:'immersion:preview-cancel',requestId},sender,()=>{})),ask:(href,patch={})=>new Promise(resolve=>listener({type:'immersion:social-profile',href,...patch},sender,resolve))};
 }
 
 test('social worker uses fixed public endpoints, omits cookies, deduplicates and blocks unrelated senders',async()=>{
@@ -60,8 +60,38 @@ test('social worker uses fixed public endpoints, omits cookies, deduplicates and
 
 test('profile retry bypasses failed cache entries and uses the current X profile endpoint',async()=>{
   let fail=true,reads=0,lastURL='';const service=await worker(async url=>{reads++;lastURL=url;return fail?new Response('',{status:503}):Response.json({code:200,user:{screen_name:'creator',name:'Creator',tweets:21,followers:123,banner_url:'https://pbs.twimg.com/profile_banners/123/456',verification:{verified:true}}});});
-  assert.equal((await service.ask('https://x.com/creator')).ok,false);fail=false;assert.equal((await service.ask('https://x.com/creator')).ok,false);assert.equal(reads,1);
+  assert.equal((await service.ask('https://x.com/creator')).ok,false);fail=false;assert.equal((await service.ask('https://x.com/creator')).ok,false);assert.equal(reads,3);
   const result=await service.ask('https://x.com/creator',{retry:true});assert.equal(result.ok,true);assert.equal(result.item.stats.posts,21);assert.equal(result.item.verified,true);assert.equal(result.item.banner,'https://pbs.twimg.com/profile_banners/123/456');assert.equal(lastURL,'https://api.fxtwitter.com/2/profile/creator');
+});
+
+test('social hovers recover from one transient server or network failure without a manual retry',async()=>{
+  for(const failure of [()=>new Response('',{status:503}),()=>{throw new TypeError('Network interrupted');}]){
+    let reads=0;const service=await worker(async()=>++reads===1?failure():new Response(embed(user)));
+    const result=await service.ask('https://instagram.com/creator');assert.equal(result.ok,true);assert.equal(result.item.author,'Creator Name');assert.equal(reads,2);
+    await service.ask('https://instagram.com/creator');assert.equal(reads,2,'successful recovery is cached');
+  }
+});
+
+test('social retry is bounded, respects long rate limits and never retries a missing profile',async()=>{
+  for(const [status,headers,expected]of [[503,{},2],[404,{},1],[429,{'Retry-After':'60'},1]]){
+    let reads=0;const service=await worker(async()=>{reads++;return new Response('',{status,headers});});
+    assert.equal((await service.ask('https://instagram.com/creator')).ok,false);assert.equal(reads,expected);
+  }
+});
+
+test('leaving a hover cancels retry backoff without poisoning the next hover',async()=>{
+  let reads=0,started;const firstRead=new Promise(resolve=>started=resolve);
+  const service=await worker(async()=>{reads++;started();return reads===1?new Response('',{status:503}):new Response(embed(user));});
+  const first=service.ask('https://instagram.com/creator',{requestId:'first-hover'});await firstRead;
+  await new Promise(resolve=>setTimeout(resolve,30));service.cancel('first-hover');assert.equal((await first).cancelled,true);assert.equal(reads,1);
+  assert.equal((await service.ask('https://instagram.com/creator',{requestId:'second-hover'})).ok,true);assert.equal(reads,2);
+});
+
+test('a brief outage does not pin later hovers to a failed response for fifteen seconds',async()=>{
+  let fail=true,reads=0;const service=await worker(async()=>{reads++;return fail?new Response('',{status:503}):new Response(embed(user));});
+  assert.equal((await service.ask('https://instagram.com/creator')).ok,false);assert.equal(reads,2);
+  fail=false;service.advance(3000);assert.equal((await service.ask('https://instagram.com/creator')).ok,true);assert.equal(reads,3);
+  service.advance(300000);await service.ask('https://instagram.com/creator');assert.equal(reads,3,'healthy profile data remains reusable across repeated visits');
 });
 
 test('X bio hovers resolve Twitter aliases with current profile data and reject mismatched accounts',async()=>{
@@ -74,6 +104,21 @@ test('X bio hovers resolve Twitter aliases with current profile data and reject 
   assert.equal(result.ok,true);assert.equal(result.item.id,'gewnzilla');assert.equal(result.item.description,'Public profile bio');assert.equal(result.item.stats.posts,7649);assert.equal(result.item.stats.followers,3382);assert.ok(result.item.avatar);
   assert.deepEqual(requests,['https://api.fxtwitter.com/2/profile/gewnzilla']);
   assert.equal((await service.ask('https://x.com/other')).ok,false,'another account must never appear under the requested handle');
+});
+
+test('X hovers tolerate independently available v2 and legacy profile routes with either counter schema',async()=>{
+  for(const legacyOnly of [false,true]){
+    const requests=[];const service=await worker(async url=>{
+      requests.push(url);if(legacyOnly&&url.includes('/2/profile/'))return Response.json({code:404,message:'User not found'},{status:404});
+      return Response.json({code:200,user:{screen_name:'Creator',name:'Creator',followers:100,...legacyOnly?{tweets:25}:{statuses:25}}});
+    });
+    const result=await service.ask('https://x.com/creator');assert.equal(result.ok,true);assert.equal(result.item.stats.posts,25);assert.equal(result.item.id,'creator');
+    assert.deepEqual(requests,legacyOnly?['https://api.fxtwitter.com/2/profile/creator','https://api.fxtwitter.com/creator']:['https://api.fxtwitter.com/2/profile/creator']);
+  }
+  const service=await worker(async()=>Response.json({code:200,user:{screen_name:'another',name:'Wrong account'}}));
+  assert.equal((await service.ask('https://x.com/creator')).ok,false,'neither fallback can bypass account identity validation');
+  const requests=[],limited=await worker(async url=>{requests.push(url);return new Response('',{status:429,headers:{'Retry-After':'60'}});});
+  assert.equal((await limited.ask('https://x.com/creator')).ok,false);assert.deepEqual(requests,['https://api.fxtwitter.com/2/profile/creator'],'a provider rate limit must not trigger alternate-route requests');
 });
 
 test('Instagram requests normalize uppercase Kick handles before fetching the profile embed',async()=>{

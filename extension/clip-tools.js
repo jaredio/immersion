@@ -37,10 +37,16 @@
   }
   async function bytes(response,limit,signal){
     if(!response.ok)throw Error(`Clip download failed (${response.status}).`);
-    if(Number(response.headers.get('content-length'))>limit){void response.body?.cancel();throw Error('Clip download is too large.');}
+    if(Number(response.headers.get('content-length'))>limit){void response.body?.cancel().catch(()=>{});throw Error('Clip download is too large.');}
+    signal.throwIfAborted();
+    if(!response.body)throw Error('Clip download returned no media.');
     const reader=response.body.getReader(),parts=[];let size=0;
-    try{while(true){signal.throwIfAborted();const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>limit)throw Error('Clip download is too large.');parts.push(value);}}
-    finally{void reader.cancel().catch(()=>{});reader.releaseLock();}
+    const cancel=()=>{void reader.cancel().catch(()=>{});};
+    signal.addEventListener('abort',cancel,{once:true});
+    try{
+      while(true){const {done,value}=await reader.read();signal.throwIfAborted();if(done)break;size+=value.byteLength;if(size>limit)throw Error('Clip download is too large.');parts.push(value);}
+    }finally{signal.removeEventListener('abort',cancel);cancel();reader.releaseLock();}
+    if(!size)throw Error('Clip download returned no media.');
     const out=new Uint8Array(size);let at=0;for(const part of parts){out.set(part,at);at+=part.length;}return out;
   }
   let muxModule;

@@ -45,7 +45,11 @@ try{
    const wasPaused=await child.locator('video').evaluate(video=>video.paused);
    const fullscreen=child.locator('[data-kr-action="fullscreen"]');
    if(cycle>=3){
-    await child.locator('[data-testid="video-player-fullscreen"]').evaluate(node=>node.style.setProperty('display','inline-flex','important'));
+    await child.locator('[data-testid="video-player-fullscreen"]').evaluate(node=>{
+      // Put the fixture's native control above the unified bar for a trusted click.
+      document.getElementById('injected-channel-player').append(node);
+      node.style.cssText='display:inline-flex!important;position:fixed;top:2px;left:2px;z-index:2147483647';
+    });
     await child.locator('[data-testid="video-player-fullscreen"]').click();
    }else await fullscreen.click();
    await page.waitForFunction(()=>!!document.getElementById('kr-multi-root')?.shadowRoot.fullscreenElement);

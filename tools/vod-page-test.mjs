@@ -25,7 +25,7 @@ try{
   await header.getByRole('button',{name:'Channel details for nickwhite',exact:true}).click();await header.locator('[data-social-platform="X"]').waitFor();
   for(const name of ['Instagram','X','YouTube'])assert.equal(await header.locator(`[data-social-platform="${name}"] svg`).count(),1);
   const instagram=header.locator('[data-social-platform="Instagram"]');
-  assert.equal(await instagram.textContent(),'Instagram');
+  assert.equal(await instagram.textContent(),'@nickwhite');
   const initial=await instagram.evaluate(node=>({color:getComputedStyle(node).color,background:getComputedStyle(node).backgroundColor}));
   assert.equal(initial.color,'rgb(228, 64, 139)');
   await instagram.hover();

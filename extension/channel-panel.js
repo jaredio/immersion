@@ -102,7 +102,20 @@
     const socials=document.createElement('div');socials.className='profile-socials';for(const social of meta.socials||[]){const link=KickRefinedProfile.link(social.href);if(link){link.textContent=social.label;socials.append(link);}}
     const open=KickRefinedProfile.link(`${location.origin}/${slug}${fullProfile?'?tab=overview':''}`);open.textContent=fullProfile?'Open full profile ↗':'Open channel ↗';socials.append(open);profile.append(socials);
     if(meta.goals?.length&&renderGoals)profile.append(renderGoals(slug,meta.goals));
-    const grid=document.createElement('div');grid.className='profile-panels';if(!panels){const message=document.createElement('p');message.className='profile-muted';message.textContent='Loading channel panels…';grid.append(message);}else for(const item of panels){if(!item.title&&!item.description&&!item.image)continue;const panel=document.createElement('article');panel.className='profile-panel';if(item.image){const image=KickRefinedProfile.image(item.image,item.title||'Channel panel');if(image){const link=KickRefinedProfile.link(item.href);if(link){link.append(image);panel.append(link);}else panel.append(image);}}if(item.title){const heading=document.createElement('h4');heading.textContent=item.title;panel.append(heading);}if(item.description){const description=document.createElement('div');description.className='profile-rich-text';KickRefinedProfile.formatted(description,item.description);panel.append(description);}grid.append(panel);}profile.append(grid);KickRefinedProfile.decorateSocials(profile);return profile;
+    const grid=document.createElement('div');grid.className='profile-panels';if(!panels){const message=document.createElement('p');message.className='profile-muted';message.textContent='Loading channel panels…';grid.append(message);}else for(const item of panels){if(!item.title&&!item.description&&!item.image)continue;const panel=document.createElement('article');panel.className='profile-panel';if(item.image){const image=KickRefinedProfile.image(item.image,item.title||'Channel panel');if(image){const link=KickRefinedProfile.link(item.href);if(link){link.append(image);panel.append(link);}else panel.append(image);}}if(item.title){const heading=document.createElement('h4');heading.textContent=item.title;panel.append(heading);}if(item.description){const description=document.createElement('div');description.className='profile-rich-text';KickRefinedProfile.formatted(description,item.description);panel.append(description);}grid.append(panel);}profile.append(grid);KickRefinedProfile.decorateSocials(profile);
+    profile._bioKeys=[followerCount,meta.bio||'',JSON.stringify([slug,fullProfile,meta.socials||[]]),null,JSON.stringify(panels??null)];return profile;
+  }
+  function updateBio(previous,next){
+    if(!previous||previous.id!==next.id)return next;
+    // Viewer/title updates must not disconnect social anchors or their active hover requests.
+    const sections=['.profile-followers','.profile-bio','.profile-socials','.channel-goals','.profile-panels'];
+    for(let index=0;index<sections.length;index++){
+      if(index!==3&&previous._bioKeys?.[index]===next._bioKeys[index])continue;
+      const old=previous.querySelector(`:scope > ${sections[index]}`),replacement=next.querySelector(`:scope > ${sections[index]}`);
+      if(old){if(replacement)old.replaceWith(replacement);else old.remove();}
+      else if(replacement)previous.insertBefore(replacement,sections.slice(index+1).map(selector=>previous.querySelector(`:scope > ${selector}`)).find(Boolean)||null);
+    }
+    previous._bioKeys=next._bioKeys;previous.setAttribute('aria-label',next.getAttribute('aria-label'));return previous;
   }
   function create({support,enabled=true,onChange,integratedProfile=false}={}){
     let source=null,host=null,shadow=null,signature='',version=0,slug='',expanded=false,details=null,nativeData=null,destroyed=false,pendingBio=0,activeAction=null,activePopover=null,verifiedVisual=null,profileHeaders=[],observedHeaders=[];
@@ -245,11 +258,14 @@
       const next=card(slug,details||{},{expanded,onToggle:toggleProfile,onOpenProfile:managed?toggleProfile:null,panels:host._panels});
       let entry=shadow.querySelector('.channel-panel');
       host.style.containerType='inline-size';
-      if(!managed||!entry){entry?.remove();entry=next;shadow.append(entry);}
+      if(!entry){entry=next;shadow.append(entry);}
       else {
         entry.dataset.live=next.dataset.live;
         entry.firstElementChild.replaceWith(next.firstElementChild);
         entry.querySelector(':scope > .channel-goals')?.remove();
+        const previousBio=entry.querySelector(':scope > .multi-expanded-profile'),nextBio=next.querySelector(':scope > .multi-expanded-profile');
+        if(nextBio){const profile=updateBio(previousBio,nextBio);if(profile!==previousBio){previousBio?.remove();entry.append(profile);}}
+        else previousBio?.remove();
       }
       host.toggleAttribute('data-profile-open',managed&&expanded);
       let region=entry.querySelector(':scope > .channel-profile-region');
@@ -258,9 +274,9 @@
           region=document.createElement('section');region.className='channel-profile-region';region.id=`channel-profile-${slug}`;region.setAttribute('aria-label',`${nativeData?.title||slug} profile`);
           const slot=document.createElement('div');slot.className='channel-library-slot';region.append(slot);entry.append(region);
         }
-        const profile=bio(slug,{...details,...nativeData},host._panels,{renderGoals:goalsRow});
+        const previousBio=region.querySelector(':scope > .multi-expanded-profile'),profile=updateBio(previousBio,bio(slug,{...details,...nativeData},host._panels,{renderGoals:goalsRow}));
         profile.hidden=profileView!==null&&profileView!=='about';
-        region.querySelector(':scope > .multi-expanded-profile')?.remove();region.append(profile);
+        if(profile!==previousBio){previousBio?.remove();region.append(profile);}
       }else region?.remove();
       if(focusedControl)shadow.querySelector(`.${focusedControl}`)?.focus({preventScroll:true});else if(kind)shadow.querySelector(`.channel-action[data-kind="${kind}"]`)?.focus({preventScroll:true});
     }
@@ -325,5 +341,5 @@
     }
     return {card,identity,refresh,getProfileMount,get profileSelection(){return expanded?{slug,tab:profileView||'about'}:null;},get version(){return version;},setEnabled(value){enabled=value;if(!enabled){unmount();expanded=false;expansionChoice=null;wasOffline=false;profileLocation='';profileView=null;}else refresh();},destroy(){destroyed=true;unmount();sourceStyle.remove();}};
   }
-  globalThis.KickRefinedChannelPanel=Object.freeze({create,bio,styles,verificationBadge});
+  globalThis.KickRefinedChannelPanel=Object.freeze({create,bio,updateBio,styles,verificationBadge});
 })();

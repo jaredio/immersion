@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT=Path.cwd()
 PHOTO_ONLY='--photo-only' in sys.argv
 X_ONLY='--x-only' in sys.argv
+SOCIAL_ONLY='--social-only' in sys.argv
 WORK=ROOT/'tmp'/('firefox-social-live-'+str(time.time_ns()))
 WORK.mkdir(parents=True)
 with socket.socket() as reserved:
@@ -73,7 +74,8 @@ try:
     links=wait("const r=document.querySelector('#kr-channel-root')?.shadowRoot,a=[...r.querySelectorAll('.profile-socials a[data-social-platform]')];return a.length>=3?a.map(n=>({platform:n.dataset.socialPlatform,href:n.href})):null")
     print(json.dumps({'links':links}),flush=True)
     failed=[]
-    for provider in (['X'] if X_ONLY else [] if PHOTO_ONLY else ['Instagram','TikTok','Discord','YouTube']):
+    providers=['X'] if X_ONLY else [] if PHOTO_ONLY else ['X','Instagram','TikTok','Discord','YouTube']
+    for provider in (providers*2 if SOCIAL_ONLY else providers):
         selector=json.dumps('.profile-socials a[data-social-platform="'+provider+'"]')
         point=script("const a=document.querySelector('#kr-channel-root').shadowRoot.querySelector("+selector+");if(!a)throw Error('Missing social button');a.scrollIntoView({block:'center'});const r=a.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}")
         command('WebDriver:PerformActions',{'actions':[{'type':'pointer','id':'mouse','parameters':{'pointerType':'mouse'},'actions':[{'type':'pointerMove','duration':0,'origin':'viewport','x':int(point['x']),'y':int(point['y'])},{'type':'pause','duration':250}]}]})
@@ -83,15 +85,16 @@ try:
             failed.append(provider)
         if provider in ['Instagram','TikTok']:
             assert result['cover']<=42,'Profile without a banner has excess header spacing'
-        shot=command('WebDriver:TakeScreenshot',{'full':False})
-        if isinstance(shot,dict):
-            shot=shot['value']
-        (ROOT/'artifacts').mkdir(exist_ok=True)
-        (ROOT/'artifacts'/('firefox-gewn-'+provider.lower()+'-hover.png')).write_bytes(base64.b64decode(shot))
+        if '--screenshots' in sys.argv:
+            shot=command('WebDriver:TakeScreenshot',{'full':False})
+            if isinstance(shot,dict):
+                shot=shot['value']
+            (ROOT/'artifacts').mkdir(exist_ok=True)
+            (ROOT/'artifacts'/('firefox-gewn-'+provider.lower()+'-hover.png')).write_bytes(base64.b64decode(shot))
         script("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));return true")
     assert not failed,'Failed social profiles: '+', '.join(failed)
-    if X_ONLY:
-        print('PASS installed Firefox: real GEWN X profile hover with current public profile endpoint',flush=True)
+    if X_ONLY or SOCIAL_ONLY:
+        print('PASS installed Firefox: '+('two rounds of real GEWN social profile hovers' if SOCIAL_ONLY else 'real GEWN X profile hover with current public profile endpoint'),flush=True)
         sys.exit(0)
     # Add a local test row to this isolated browser's chat DOM; never send a chat message.
     script("const list=document.querySelector('#chatroom-messages'),row=document.createElement('div');row.id='test-tiktok-photo';row.dataset.index='9000001';const a=document.createElement('a');a.href='https://www.tiktok.com/@grizzthe1rizz_009/photo/7701411034199805214';a.textContent=a.href;row.append(a);list.append(row);row.scrollIntoView({block:'center'});return true")

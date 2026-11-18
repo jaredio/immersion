@@ -270,8 +270,10 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     let originalTabTitle=await page.title();
     const source=page.locator('[data-testid="sidebar-following-channel-1"]');
     const dragSource=await source.boundingBox(),dragDestination=await page.locator('main').boundingBox();
-    await page.mouse.move(dragSource.x+30,dragSource.y+20);await page.mouse.down();
-    await page.mouse.move(dragSource.x+80,dragSource.y+20,{steps:5});await page.mouse.move(dragDestination.x+180,dragDestination.y+120,{steps:8});
+    await page.waitForFunction(()=>document.querySelector('[data-testid="sidebar-following-channel-1"]')?.draggable);
+    const grabX=dragSource.x+dragSource.width/2,grabY=dragSource.y+dragSource.height/2;
+    await page.mouse.move(grabX,grabY);await page.mouse.down();
+    await page.mouse.move(grabX+30,grabY,{steps:5});await page.mouse.move(dragDestination.x+180,dragDestination.y+120,{steps:8});
     const dragPreview=page.locator('#kr-multi-drop');await dragPreview.waitFor();
     assert.equal(await dragPreview.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','the overlay stays transparent above the playing stream');
     assert.equal(await page.locator('#kr-multi-root').count(),0,'preview does not activate or load multiview');
@@ -338,7 +340,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     assert.equal(await expanded.getByText('1,428 viewers',{exact:true}).count(),0,'viewer count appears only in the summary');
     assert.equal(await detailsButton.locator('svg').count(),1,'expansion uses a chevron');
     assert.equal(await expanded.locator('.profile-socials a').count(),2,'only the validated social and channel link render');
-    assert.equal(await expanded.getByRole('link',{name:'X',exact:true}).getAttribute('href'),'https://x.com/aurora_live');
+    assert.equal(await expanded.locator('[data-social-platform="X"]').getAttribute('href'),'https://x.com/aurora_live');
     assert.equal(await expanded.locator('.profile-bio strong').textContent(),'About aurora');
     assert.equal(await expanded.locator('.profile-panel li').count(),2,'panel markdown lists are formatted');
     assert.equal(await expanded.locator('script,iframe,[onerror]').count(),0,'publisher markup cannot introduce active content');

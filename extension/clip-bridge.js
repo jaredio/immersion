@@ -6,10 +6,16 @@
     const available=window.parent!==window;
     let parentOrigin=location.origin;try{const origin=new URL(document.referrer).origin;if(origins.includes(origin))parentOrigin=origin;}catch{}
     const sendParent=data=>window.parent.postMessage(data,parentOrigin);
-    function register(item){const token=crypto.randomUUID(),timer=setTimeout(()=>{const entry=pending.get(token);if(entry?.state)entry.item.resume(entry.state);pending.delete(token);},30000);pending.set(token,{item,timer});return token;}
+    function release(token,accepted=false){
+      const entry=pending.get(token);if(!entry)return;
+      pending.delete(token);clearTimeout(entry.timer);entry.clearDrag?.();
+      if(accepted)entry.item.accepted();else if(entry.state)entry.item.resume(entry.state);
+    }
+    function register(item){const token=crypto.randomUUID(),timer=setTimeout(()=>release(token),30000);pending.set(token,{item,timer});return token;}
     function request(source,origin,token,mode){
-      source.postMessage({type:'immersion:clip-snapshot-request',token,mode},origin);
+      if(disposed||requests.has(token))return;
       const timer=setTimeout(()=>requests.delete(token),8000);requests.set(token,{source,origin,mode,timer});
+      source.postMessage({type:'immersion:clip-snapshot-request',token,mode},origin);
     }
     async function install(source,origin,token,state,mode){
       let ok=false,item;
@@ -27,22 +33,30 @@
         }else if(data.type==='immersion:clip-drag-end')endDrag?.();
         else if(data.type==='immersion:clip-add')void install(event.source,event.origin,data.token,data.state,'alongside');
         else if(data.type==='immersion:clip-snapshot'){
-          const waiting=requests.get(data.token);if(!waiting||waiting.source!==event.source)return;requests.delete(data.token);clearTimeout(waiting.timer);void install(event.source,event.origin,data.token,data.state,waiting.mode);
+          const waiting=requests.get(data.token);if(!waiting||waiting.source!==event.source||waiting.origin!==event.origin)return;requests.delete(data.token);clearTimeout(waiting.timer);void install(event.source,event.origin,data.token,data.state,waiting.mode);
         }
-      }else if(available&&event.source===window.parent){
+      }else if(available&&event.source===window.parent&&event.origin===parentOrigin){
         const entry=pending.get(data.token);if(!entry)return;
         if(data.type==='immersion:clip-snapshot-request'){
-          entry.state=entry.item.freeze();sendParent({type:'immersion:clip-snapshot',token:data.token,state:entry.state});
+          entry.state??=entry.item.freeze();sendParent({type:'immersion:clip-snapshot',token:data.token,state:entry.state});
         }else if(data.type==='immersion:clip-transfer-result'){
-          clearTimeout(entry.timer);pending.delete(data.token);if(data.ok===true)entry.item.accepted();else if(entry.state)entry.item.resume(entry.state);
+          release(data.token,data.ok===true);
         }
       }
     }
     window.addEventListener('message',onMessage);
     return {available,
-      add(item){if(!available)return;const token=register(item),entry=pending.get(token);entry.state=item.freeze();sendParent({type:'immersion:clip-add',token,state:entry.state});},
-      drag(event,item){if(!available)return;const token=register(item),canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;canvas.style.cssText='position:fixed;width:1px;height:1px;pointer-events:none';document.body.append(canvas);event.dataTransfer.setDragImage(canvas,0,0);sendParent({type:'immersion:clip-drag-start',token,href:item.href,title:item.title,x:event.clientX,y:event.clientY});event.target.addEventListener('dragend',()=>{canvas.remove();sendParent({type:'immersion:clip-drag-end',token});},{once:true});},
-      destroy(){disposed=true;window.removeEventListener('message',onMessage);for(const entry of pending.values()){clearTimeout(entry.timer);if(entry.state)entry.item.resume(entry.state);}for(const entry of requests.values())clearTimeout(entry.timer);pending.clear();requests.clear();},
+      add(item){if(!available||disposed)return;const token=register(item),entry=pending.get(token);entry.state=item.freeze();sendParent({type:'immersion:clip-add',token,state:entry.state});},
+      drag(event,item){
+        if(!available||disposed)return;
+        const token=register(item),entry=pending.get(token),canvas=document.createElement('canvas'),target=event.target;
+        canvas.width=1;canvas.height=1;canvas.style.cssText='position:fixed;width:1px;height:1px;pointer-events:none';document.body.append(canvas);event.dataTransfer.setDragImage(canvas,0,0);
+        const end=()=>{entry.clearDrag?.();sendParent({type:'immersion:clip-drag-end',token});};
+        entry.clearDrag=()=>{canvas.remove();target.removeEventListener('dragend',end);entry.clearDrag=null;};
+        target.addEventListener('dragend',end,{once:true});
+        sendParent({type:'immersion:clip-drag-start',token,href:item.href,title:item.title,x:event.clientX,y:event.clientY});
+      },
+      destroy(){disposed=true;window.removeEventListener('message',onMessage);for(const token of pending.keys())release(token);for(const entry of requests.values())clearTimeout(entry.timer);requests.clear();},
     };
   }
   globalThis.KickRefinedClipBridge=Object.freeze({create});

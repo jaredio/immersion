@@ -70,3 +70,19 @@ test('cancelled downloads stop before fetching any later fragments',async()=>{
 test('an already cancelled download never starts a request',async()=>{
  const abort=new AbortController();abort.abort();let calls=0;const download=await downloader(async()=>{calls++;return new Response('data');});await assert.rejects(download({src:base},clip,{signal:abort.signal}));assert.equal(calls,0);
 });
+
+test('cancelling a pending media read rejects promptly even if source cancellation never settles',async()=>{
+ const abort=new AbortController();let startRead,cancelled=false;
+ const reading=new Promise(resolve=>{startRead=resolve;});
+ const body=new ReadableStream({pull(){startRead();return new Promise(()=>{});},cancel(){cancelled=true;return new Promise(()=>{});}},{highWaterMark:0});
+ const download=await downloader(async()=>new Response(body));
+ const reason=Error('Closed the clip panel');
+ const result=assert.rejects(download({src:new URL('clip.mp4',base).href},clip,{signal:abort.signal}),error=>error===reason);
+ await reading;abort.abort(reason);await result;
+ assert.equal(cancelled,true);assert.equal(body.locked,false);
+});
+
+for(const [name,response]of [['empty',()=>new Response('')],['missing',()=>new Response(null,{status:204})]])test(`${name} media cannot produce a successful download`,async()=>{
+ const download=await downloader(async()=>response());
+ await assert.rejects(download({src:new URL('clip.mp4',base).href},clip,{signal:new AbortController().signal}),/no media/);
+});

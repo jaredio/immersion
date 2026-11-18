@@ -30,6 +30,24 @@ test('late mutation replies cannot replace a newer synchronized session list',as
   changed({multiSessions:{newValue:newer}},'local');reply({ok:true,sessions:[newer[1]]});
   assert.deepEqual(Array.from(await pending,item=>item.id),['b','a']);await store.destroy();
 });
+
+test('a failed initial workspace read preserves session updates already received',async()=>{
+  let changed,rejectRead;
+  const storage={get:()=>new Promise((resolve,reject)=>{rejectRead=reject;}),set:async()=>{}};
+  const browser={storage:{local:storage,onChanged:{addListener:fn=>changed=fn,removeListener(){}}}};
+  const ctx=await setup({browser}),store=ctx.KickRefinedMultiSession.create();
+  const loading=store.load();
+  changed({multiSessions:{newValue:[{id:'b',name:'Beta'}]}},'local');rejectRead(Error('Storage temporarily unavailable'));
+  assert.deepEqual(Array.from((await loading).multiSessions,item=>item.id),['b']);await store.destroy();
+});
+
+test('workspace autosave never reads the saved-session list',async()=>{
+  const ctx=await setup();let written;
+  const storage={get:async()=>({}),set:async patch=>{written=patch;}};
+  const store=ctx.KickRefinedMultiSession.create({storage});
+  store.save({multiVolume:0.5,multiview:{channels:['alpha']},get multiSessions(){assert.fail('sessions belong to the session repository');}});
+  await store.flush();assert.equal(written.multiVolume,0.5);assert.equal(Object.hasOwn(written,'multiSessions'),false);await store.destroy();
+});
 test('legacy sessions have deterministic identities and concurrent same-name saves preserve identity',async()=>{
   const ctx=await setup(),data=ctx.KickRefinedSessionData;
   let stored={multiSessions:[{name:'Old session',state:{channels:['alpha']}}]};

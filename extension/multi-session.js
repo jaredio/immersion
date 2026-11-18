@@ -5,8 +5,7 @@
     return {
       multiVolume: Number.isFinite(input.multiVolume) ? Math.max(0, Math.min(1, input.multiVolume)) : 1,
       multiview: multiState(input.multiview),
-      multiToolbarHidden: input.multiToolbarHidden === true,
-      multiSessions: KickRefinedSessionData.normalize(input.multiSessions)
+      multiToolbarHidden: input.multiToolbarHidden === true
     };
   }
 
@@ -45,11 +44,11 @@
           const version=sessionVersion;
           const raw = await storage.get(['multiview', 'multiSessions', 'multiToolbarHidden', 'multiVolume']);
           return {...snapshot(raw),multiSessions:version===sessionVersion?KickRefinedSessionData.normalize(raw.multiSessions):latestSessions, savedVolume: Number.isFinite(raw.multiVolume) && raw.multiVolume > 0 && raw.multiVolume <= 1};
-        } catch { return {...snapshot({}), savedVolume: false}; }
+        } catch { return {...snapshot({}), multiSessions:latestSessions, savedVolume: false}; }
       },
       save(input) {
         if (disposed) return;
-        pending = snapshot(input);delete pending.multiSessions;
+        pending = snapshot(input);
         clearTimeout(timer);
         timer = setTimeout(flush, delay);
       },

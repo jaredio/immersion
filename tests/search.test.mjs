@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFile} from 'node:fs/promises';
 const source=await readFile(new URL('../extension/search.js',import.meta.url),'utf8');
 const shared=await readFile(new URL('../extension/shared.js',import.meta.url),'utf8');
-function setup(extra={}){const context=vm.createContext({URL,URLSearchParams,AbortController,DOMException,TextDecoder,setTimeout,clearTimeout,location:{origin:'https://kick.com'},...extra});vm.runInContext(shared,context);vm.runInContext(source,context);return context.KickRefinedSearch;}
+function setup(extra={}){const context=vm.createContext({URL,URLSearchParams,AbortController,AbortSignal,DOMException,TextDecoder,setTimeout,clearTimeout,location:{origin:'https://kick.com'},...extra});vm.runInContext(shared,context);vm.runInContext(source,context);return context.KickRefinedSearch;}
 const api=setup(),id='clip_01M5VG3B8WEFY068DP0GCHKSGW';
 const clip={id,title:'Road trip moment',duration:30,views:1200,created_at:'2026-10-20T10:00:00Z',privacy:'public',channel:{slug:'cobbruvs'},creator:{slug:'clipper'},category:{name:'IRL'},thumbnail_url:`https://clips.kick.com/${id}/thumbnail.webp`};
 
@@ -95,5 +95,74 @@ test('cached recordings cannot return after their request has been superseded',a
 test('serialized queries round-trip quotes, backslashes, Unicode and operator-like literal terms',()=>{
  for(const term of ['hello world','title: chapter','a "quoted" phrase','path\\file','\u4e2d\ud83c\udfb5','line\nbreak']){
   const query=api.parse('clips:cobbruvs');query.terms=[term];assert.equal(JSON.stringify(api.parse(api.serialize(query))),JSON.stringify(query));
+ }
+});
+
+test('retry refetches a structurally invalid clip page while keeping successful pages cached',async()=>{
+ const calls=[];
+ const service=setup({fetch:async url=>{
+  const channel=new URL(url).pathname.split('/')[4];calls.push(channel);
+  if(channel==='bad'&&calls.filter(value=>value==='bad').length===1)return Response.json({clips:null});
+  return Response.json({clips:[{...clip,id:channel==='good'?id:id.slice(0,-1)+'X',channel:{slug:channel}}]});
+ }}).create();
+ const query=api.parse('clips:good,bad');
+ assert.deepEqual(Array.from((await service.search(query)).failedChannels),['bad']);
+ assert.equal((await service.search(query,{retryFailed:true})).rows.length,2);
+ assert.deepEqual(calls,['good','bad','bad']);service.destroy();
+});
+
+test('an unrelated channel payload cannot replace a result and is fetched again on retry',async()=>{
+ let calls=0;
+ const service=setup({fetch:async()=>Response.json({slug:++calls===1?'unrelated':'alpha'})}).create();
+ const query=api.parse('channel:alpha');
+ await assert.rejects(service.search(query),/unavailable/);
+ assert.equal((await service.search(query,{retryFailed:true})).rows[0].slug,'alpha');
+ assert.equal(calls,2);service.destroy();
+});
+
+test('empty channel results are cached and invalid response shapes can recover immediately',async()=>{
+ let calls=0;
+ const service=setup({fetch:async()=>Response.json(++calls===1?{channels:null}:{channels:[]})}).create();
+ const query=api.parse('alpha');
+ await assert.rejects(service.search(query),/unavailable/);
+ assert.equal((await service.search(query)).loaded,0);
+ assert.equal((await service.search(query)).loaded,0);
+ assert.equal(calls,2);service.destroy();
+});
+
+test('channel search accepts direct and wrapped results while retaining only the explicit scope',async()=>{
+ const channel={slug:'alpha',user:{username:'Alpha'}};
+ const service=setup({fetch:async url=>Response.json(new URL(url).pathname==='/api/search'?channel:{channels:[{slug:'beta'},channel]})}).create();
+ assert.deepEqual(Array.from((await service.search(api.parse('alpha'))).rows,row=>row.slug),['alpha']);
+ assert.deepEqual(Array.from((await service.search(api.parse('channel:alpha'))).rows,row=>row.slug),['alpha']);
+ service.destroy();
+});
+
+test('malformed recording responses are never reused on retry',async()=>{
+ let calls=0;
+ const service=setup({fetch:async()=>Response.json(++calls===1?{}:[])}).create();
+ await assert.rejects(service.recordings('alpha'),/unavailable/);
+ assert.equal((await service.recordings('alpha')).length,0);
+ assert.equal((await service.recordings('alpha')).length,0);
+ assert.equal(calls,2);service.destroy();
+});
+
+test('equal search ranking scores preserve input order and leave caller rows untouched',()=>{
+ const rows=[{slug:'b',views:1},{slug:'a',views:1},{slug:'c',views:0},{slug:'d',views:null}];
+ for(const query of ['','sort:views'])assert.deepEqual(Array.from(api.rank(rows,api.parse(query))),rows);
+ assert.deepEqual(rows.map(row=>row.slug),['b','a','c','d']);
+});
+
+test('channel relevance matches the reference ranking over mixed 300-row catalogs',()=>{
+ let seed=0x5eed;
+ const next=limit=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed%limit;};
+ for(const prefix of ['alpha','beta','gamma','delta']){
+  const rows=Array.from({length:300},(_,index)=>({slug:next(4)===0?`${prefix}${index}`:`stream${index}`,live:next(3)===0?'live':'offline',views:next(5)===0?null:next(80)}));
+  rows.push({slug:prefix,live:'offline',views:0});
+  const pinned=rows.filter(()=>next(7)===0).slice(0,30).map(row=>row.slug);
+  const score=row=>(row.slug===prefix?1000:row.slug.startsWith(prefix)?500:0)+(pinned.includes(row.slug)?100:0)+(row.live==='live'?10:0);
+  const expected=[...rows].sort((a,b)=>score(b)-score(a));
+  assert.deepEqual(Array.from(api.rank(rows,api.parse(prefix),pinned)),expected);
+  assert.deepEqual(Array.from(api.rank(rows,api.parse('sort:views'),pinned)),[...rows].sort((a,b)=>(b.views??-1)-(a.views??-1)));
  }
 });

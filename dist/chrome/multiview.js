@@ -61,7 +61,7 @@
     lifetime.listen(toolbarToggle,'click',()=>{toolbarHidden=!toolbarHidden;updateToolbar();persist();});
     updateToolbar();
     function persist() {
-      const snapshot = { multiVolume:listeningVolume, multiview:state, multiToolbarHidden:toolbarHidden, multiSessions:sessions };
+      const snapshot = { multiVolume:listeningVolume, multiview:state, multiToolbarHidden:toolbarHidden };
       sessionStore.save(snapshot);
     }
     function canonical(input) {

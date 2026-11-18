@@ -87,9 +87,9 @@
             }});
             profile.controller.refresh();region.append(profile.controller.host);
           }
-          directoryProfile.bio?.remove();
-          directoryProfile.bio=bio;bio.hidden=directoryProfile.tab!=='about';
-          directoryProfile.region.append(bio);
+          const previousBio=directoryProfile.bio,profile=KickRefinedChannelPanel.updateBio(previousBio,bio);
+          directoryProfile.bio=profile;profile.hidden=directoryProfile.tab!=='about';
+          if(profile!==previousBio){previousBio?.remove();directoryProfile.region.append(profile);}else bio.remove();
         }
         if(record){
           for(const child of [...record.entry.children])if(child!==directoryProfile?.region&&child!==channelPicker)child.remove();
