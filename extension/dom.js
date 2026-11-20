@@ -42,11 +42,21 @@
       if (!nearest.has(element)) nearest.set(element, element.closest?.('[data-index]'));
       const row = nearest.get(element); if (row) rows.add(row);
     };
-    add(record.target);
-    for (const node of record.addedNodes || []) {
-      add(node);
+    const addDescendants = node => {
       if (!descendants.has(node)) descendants.set(node, node.querySelectorAll?.('[data-index]') || []);
       for (const row of descendants.get(node)) rows.add(row);
+    };
+    add(record.target);
+    // A recycled row may have lost its index before this batch is delivered.
+    if (record.attributeName === 'data-index') rows.add(record.target);
+    for (const node of record.addedNodes || []) {
+      add(node);
+      if (node.nodeType === 1) addDescendants(node);
+    }
+    for (const node of record.removedNodes || []) {
+      if (node.nodeType !== 1) continue;
+      if (node.matches?.('[data-index]')) rows.add(node);
+      addDescendants(node);
     }
     return rows;
   }
@@ -98,7 +108,8 @@
         let found = indexed.get(record);
         if (!found) {
           found = recordRows(record, nearest, descendants); indexed.set(record, found);
-          const changedLinks = record.type === 'attributes' ? record.attributeName === 'href' : !fastChat()?
+          const changedLinks = record.type === 'attributes' ? record.attributeName === 'href' ||
+            record.attributeName === 'data-index' && record.target.hasAttribute?.('data-index') === false : !fastChat()?
             [...(record.addedNodes || []), ...(record.removedNodes || [])].some(node=>node.nodeType===1):
             [...(record.addedNodes||[])].some(node=>node.nodeType===1&&(node.matches?.('a[href]')||node.querySelector?.('a[href]')))||
             [...(record.removedNodes||[])].some(node=>node.nodeType===1)&&[...found].some(row=>linkIndex.get(row)?.some(anchor=>!row.contains(anchor)||!anchor.hasAttribute('href')));

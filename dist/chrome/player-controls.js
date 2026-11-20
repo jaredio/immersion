@@ -1,7 +1,10 @@
 /* One workspace control strip for retained channel players and player frames.
  * Native controls stay in their React-owned tree; action buttons forward clicks. */
 (() => {
+  if(globalThis.KickRefinedPlayerControls)return;
   const states=new WeakMap(),roots=new WeakMap(),clocks=new Set();let clockTimer=0;
+  const unifiedRow='[data-kr-unified-row]';
+  const nativeControl='button,.z-controls';
   function updateClock(state){
     const time=globalThis.KickRefinedStreamClock?.format(state.options.getState().startedAt)||'';
     if(state.elapsed.textContent!==time){state.elapsed.textContent=time;globalThis.KickRefinedPerf?.count('controls.clockUpdates');}
@@ -57,13 +60,22 @@
   function createOwner(root,options){
     const owner={bar:null,dirty:true,frame:0,options,marked:new Set()};
     owner.observer=new MutationObserver(records=>{
-      const relevant=records.some(record=>{
+      const relevant=owner.bar&&!root.contains(owner.bar)||records.some(record=>{
         const target=record.target.nodeType===1?record.target:record.target.parentElement;
-        if(target?.closest?.('[data-kr-unified-row]'))return false;
-        if(record.type==='attributes')return true;
-        if([...record.removedNodes].some(node=>node.nodeType===1))return true;
-        if([...record.addedNodes].some(node=>node.nodeType===1&&!node.matches('[data-kr-unified-row]')))return true;
-        return !!target?.closest?.('button,input,[role="slider"]');
+        if(target?.closest(unifiedRow))return false;
+        if(target?.closest(nativeControl)){
+          if(record.type==='attributes')return true;
+          if(record.removedNodes.length)return true;
+          // Inserting our row should not trigger another discovery pass.
+          for(const node of record.addedNodes)if(node!==owner.state?.row)return true;
+          return false;
+        }
+        if(record.type==='attributes')return false;
+        for(const nodes of [record.addedNodes,record.removedNodes])for(const node of nodes){
+          if(node.nodeType!==1||node.matches(unifiedRow))continue;
+          if(node.matches(nativeControl)||node.querySelector(nativeControl))return true;
+        }
+        return false;
       });if(!relevant)return;
       owner.dirty=true;
       if(!owner.frame)owner.frame=requestAnimationFrame(()=>{owner.frame=0;if(root.isConnected||root.nodeType===9)sync(root,owner.options);});
@@ -71,7 +83,7 @@
     owner.observer.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-label','title','data-testid']});roots.set(root,owner);
     return owner;
   }
-  function sync(root,options){
+  function sync(root,options,currentVideo){
     if(!root)return false;
     let owner=roots.get(root);
     const bar=owner?.bar?.isConnected&&root.contains(owner.bar)?owner.bar:root.querySelector('.z-controls.bottom-0:has(button)');
@@ -91,7 +103,7 @@
     if(!bar.hasAttribute('data-kr-unified-bar'))bar.setAttribute('data-kr-unified-bar','');let state=states.get(bar);
     if(!state){
       const row=document.createElement('div');row.dataset.krUnifiedRow='';
-      state={row,buttons:{},sources:{},options,video:null};states.set(bar,state);
+      state={row,buttons:{},sources:{},options};states.set(bar,state);
       const button=(key,label,handler)=>{const node=document.createElement('button');node.type='button';node.dataset.krAction=key;node.title=label;node.setAttribute('aria-label',label);node.innerHTML=svg(key);node.addEventListener('click',event=>{event.stopPropagation();handler();});row.append(node);state.buttons[key]=node;return node;};
       button('play','Pause',()=>state.options.onToggle());
       button('sound','Mute',()=>{const current=state.options.getState();state.options.onVolume(!current.muted,current.volume);});
@@ -129,7 +141,7 @@
     }
     owner.dirty=false;
     }
-    const current=options.getState(),video=options.getVideo(),playing=!!video&&!video.paused;
+    const current=options.getState(),video=currentVideo===undefined?options.getVideo():currentVideo,playing=!!video&&!video.paused;
     for(const [key,label,icon]of [['play',playing?'Pause':'Play',playing?'pause':'play'],['sound',current.muted?'Unmute':'Mute',current.muted?'mute':'sound'],['focus',current.focused?'Return to grid':'Focus stream',current.focused?'grid':'focus']]){
       const node=state.buttons[key];if(node.title!==label||!node.dataset.krIcon){node.title=label;node.setAttribute('aria-label',label);node.innerHTML=svg(icon);node.dataset.krIcon=icon;}
     }

@@ -8,7 +8,7 @@
   function logo(provider){return provider==='x'?ui.svg('brand'):`<svg class="filled" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[provider]}"/></svg>`;}
   const person='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3m3-16a3 3 0 0 1 0 6m0 4a5 5 0 0 1 3 5"/></svg>';
   function create({media=true,profiles=true}={}){
-    const api=KickRefined.api,records=new Set(),dirty=new Set(),deferred=new Set();let list=null,timer=0,disposed=false,prune=false;
+    const api=KickRefined.api,records=new Set(),dirty=new Set(),deferred=new Set();let list=null,timer=0,disposed=false;
     const allowed=item=>item.provider==='x'?profiles:media;
     const hidden=document.createElement('style');hidden.textContent='[data-kr-media-link]{display:none!important}';document.head.append(hidden);
     const byRow=new WeakMap();
@@ -63,13 +63,17 @@
       for(const event of ['click','dblclick','keydown','keyup'])shadow.addEventListener(event,event=>event.stopPropagation());
     }
     function flush(){timer=0;if(disposed)return;
-      const candidates=prune?[...records]:[...dirty].flatMap(row=>[...(byRow.get(row)?.values()||[])]);prune=false;
-      for(const record of candidates){
-        globalThis.KickRefinedPerf?.count('chat.mediaRecordsChecked');
-        for(const link of record.links)if(!record.row.contains(link)||data.parse(link.href)?.key!==record.key){link.removeAttribute('data-kr-media-link');record.links.delete(link);}
-        if(!list?.contains(record.row)||!record.row.contains(record.host)||!record.links.size||!allowed(record.item))release(record);
+      for(const row of dirty){
+        const previews=byRow.get(row);
+        if(!previews?.size)continue;
+        const inChat=list?.contains(row)&&row.hasAttribute('data-index');
+        for(const record of previews.values()){
+          globalThis.KickRefinedPerf?.count('chat.mediaRecordsChecked');
+          for(const link of record.links)if(!row.contains(link)||data.parse(link.href)?.key!==record.key){link.removeAttribute('data-kr-media-link');record.links.delete(link);}
+          if(!inChat||!row.contains(record.host)||!record.links.size||!allowed(record.item))release(record);
+        }
       }
-      for(const row of KickRefinedDOM.drainRows(dirty)){if(!list?.contains(row))continue;const seen=new Set(byRow.get(row)?.keys());for(const anchor of KickRefinedDOM.links(row,'media')){
+      for(const row of KickRefinedDOM.drainRows(dirty)){if(!list?.contains(row)||!row.hasAttribute('data-index'))continue;const seen=new Set(byRow.get(row)?.keys());for(const anchor of KickRefinedDOM.links(row,'media')){
         const item=data.parse(anchor.href);if(!item||!allowed(item))continue;
         const existing=byRow.get(row)?.get(item.key);if(existing){existing.links.add(anchor);if(existing.loaded)anchor.setAttribute('data-kr-media-link','');continue;}
         if(seen.size>=2||records.size>=80)continue;seen.add(item.key);add(row,anchor,item);
@@ -77,7 +81,7 @@
     }
     function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);}
     function schedule(delay=60){if(!timer&&!disposed&&(media||profiles))timer=KickRefinedDOM.deferChatWork(flush,delay);}
-    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(changes,{rows})=>{if(changes.some(record=>record.removedNodes?.length))prune=true;for(const row of rows)dirty.add(row);schedule();}});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(_changes,{rows})=>{for(const row of rows)dirty.add(row);if(rows.size)schedule();}});
     function refresh(force=false){const next=media||profiles?KickRefinedDOM.chat:null;if(next===list){if(!force)return;for(const record of [...records])if(!allowed(record.item))release(record);dirty.clear();if(list){queue(list);schedule();}return;}for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(media||profiles);refresh();
     return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;KickRefinedDOM.cancelChatWork(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();KickRefinedDOM.cancelChatWork(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};

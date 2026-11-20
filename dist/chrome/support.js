@@ -57,7 +57,8 @@
     }
     function notify(){
       for(const [button,channel] of buttons){
-        const count=candidates(channel).length;button.title=count?`Donate to ${channel}`:`Find a donation link for ${channel}`;
+        const title=candidates(channel).length?`Donate to ${channel}`:`Find a donation link for ${channel}`;
+        if(button.title!==title)button.title=title;
       }
     }
     async function discover(channel){

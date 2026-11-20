@@ -19,6 +19,18 @@ try{
   await page.waitForTimeout(1100);
   assert.equal(await page.locator('[data-kr-elapsed]').textContent(),'3:12:34','seeking/idle time does not become stream uptime');
   assert.equal(await page.evaluate(()=>KickRefinedPerf.snapshot().counters['controls.discoveries']),discoveries,'state updates and clock ticks do not rediscover controls');
+  await page.evaluate(()=>{
+    const player=document.getElementById('player'),unrelated=document.createElement('div');
+    player.append(unrelated);
+    unrelated.title='Unrelated page content';
+    unrelated.replaceChildren(document.createElement('span'),document.createTextNode('Updated'));
+    return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  });
+  assert.equal(await page.evaluate(()=>KickRefinedPerf.snapshot().counters['controls.discoveries']),discoveries,'unrelated native page updates do not rediscover controls');
+  await page.evaluate(()=>{
+    const share=document.createElement('button');share.setAttribute('aria-label','Share');document.getElementById('player').append(share);
+  });
+  await page.locator('[data-kr-action=share]').waitFor({state:'visible'});
   await page.evaluate(()=>{const old=document.querySelector('.z-controls');window.keptNativeSource=old.querySelector('button:not([data-kr-action])');old.replaceChildren(Object.assign(document.createElement('button'),{textContent:'Clip'}));});
   await page.locator('[data-kr-action=clip]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-kr-unified-row]').count(),1,'native replacement restores one control row');

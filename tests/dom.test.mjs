@@ -47,6 +47,32 @@ test('a burst of mutations resolves each distinct row target once',()=>{
   assert.equal(delivered,1000);assert.equal(r.lookups,1);
 });
 
+test('chat removal batches identify detached and recycled rows for preview cleanup',()=>{
+  const s=setup(),removed=row().value,nested=row().value;
+  const recycled={nodeType:1,closest:()=>null};
+  removed.matches=selector=>selector==='[data-index]';
+  const wrapper={nodeType:1,matches:()=>false,querySelectorAll:()=>[nested]};
+  const list={nodeType:1,closest:()=>null};
+  let affected;
+  s.api.subscribeChat({onMutations(_records,{rows}){affected=Array.from(rows);}}).setEnabled(true);
+  s.chat([{...mutation(list),removedNodes:[removed,wrapper]},mutation(recycled,'data-index')]);
+  assert.deepEqual(affected,[removed,nested,recycled]);
+});
+
+test('a row that loses its index drops cached links before it is reused',()=>{
+  const s=setup(),r=row();
+  s.api.subscribeChat({onMutations(){}}).setEnabled(true);
+  const before=s.api.links(r.value);
+  r.value.hasAttribute=()=>false;
+  s.chat([mutation(r.value,'data-index')]);
+  r.anchors.splice(0,1,{href:'https://example.com/new'});
+  r.value.hasAttribute=()=>true;
+  s.chat([mutation(r.value,'data-index')]);
+  const after=s.api.links(r.value);
+  assert.notEqual(after,before);
+  assert.equal(after[0],r.anchors[0]);
+});
+
 test('subscribers retain independent row sets and requested attribute filters',()=>{
   const s=setup(),r=row(),seen=[];
   s.api.subscribeChat({onMutations(records,{rows}){seen.push([records.length,rows.size]);rows.clear();records.length=0;}}).setEnabled(true);

@@ -7,9 +7,10 @@
   let root = document.documentElement;
   let settings = normalize();
   let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, xPosts, mediaCards, replyPreviews, notices, support, channelPanel, checkouts;
-  let channels = [], shown = [], selected = 0;
+  let channels = [], shown = [], selected = 0, highlightedOption = null;
   const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchFailed=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
   let refreshTimer, routeTimer, routeTimeout, previousFocus;
+  let pageRefreshPending = false;
   let dockPosition = '';
   let channelPage=null,clipPreview=null,libraryPlayers=null;const discovery=globalThis.KickRefinedDiscovery?.create();
   let searchWindow=null,nativeSearch=null,restoringSearchFocus=false;
@@ -18,7 +19,7 @@
   let drag = null, dropTarget = null, lastDrop = null, dragChip = null, dragFrame = 0;
   const draggableRows = new Map();
   const abort = new AbortController();
-  const sidebarObserver = new MutationObserver(() => scheduleRefresh());
+  const sidebarObserver = new MutationObserver(scheduleSidebarRefresh);
   const observedSidebar = new ResizeObserver(() => {
     if (host) placeToolbar();
   });
@@ -292,9 +293,11 @@
     const signature=JSON.stringify([shown.map(({link,...row})=>row),searchQuery,searchBusy,searchError,searchWarning,searchMore,searchFailed,searchLoaded,settings.pinned]);if(signature===searchRenderKey){highlight(false);return;}searchRenderKey=signature;
     const results = shadow.querySelector('#channel-results');
     results.replaceChildren();
+    highlightedOption = null;
     for (const [index, channel] of shown.entries()) {
       const option = document.createElement('div');
       option.className = 'option'; option.id = `kr-option-${index}`; option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', 'false');
       option.dataset.kind=channel.type||'channel';
       option.dataset.live = channel.live;
       const avatar = document.createElement('span'); avatar.className = 'avatar'+(channel.type!=='channel'?' result-thumbnail':'');
@@ -330,11 +333,16 @@
   }
 
   function highlight(scroll = true) {
-    for (const [index, option] of [...shadow.querySelectorAll('.option')].entries()) option.setAttribute('aria-selected', String(index === selected));
+    const option = shown[selected] ? shadow.getElementById(`kr-option-${selected}`) : null;
+    if (option !== highlightedOption) {
+      highlightedOption?.setAttribute('aria-selected', 'false');
+      option?.setAttribute('aria-selected', 'true');
+      highlightedOption = option;
+    }
     const input = shadow.querySelector('#channel-search');
-    if (shown[selected]) input.setAttribute('aria-activedescendant', `kr-option-${selected}`);
-    else input.removeAttribute('aria-activedescendant');
-    if (scroll) shadow.querySelector(`#kr-option-${selected}`)?.scrollIntoView({ block: 'nearest' });
+    if (option && input.getAttribute('aria-activedescendant') !== option.id) input.setAttribute('aria-activedescendant', option.id);
+    else if (!option) input.removeAttribute('aria-activedescendant');
+    if (scroll) option?.scrollIntoView({ block: 'nearest' });
   }
 
   function go(channel) {
@@ -515,7 +523,6 @@
   }
 
   function refresh() {
-    refreshTimer = null;
     globalThis.KickRefinedPerf?.count('page.refreshes');
     if (disposed || !document.body) return;
     clipPreview?.refresh();
@@ -542,7 +549,22 @@
     }
   }
   function scheduleRefresh() {
-    if (!refreshTimer && !disposed) refreshTimer = setTimeout(refresh, 180);
+    pageRefreshPending = true;
+    scheduleSidebarRefresh();
+  }
+  function scheduleSidebarRefresh() {
+    if (refreshTimer || disposed) return;
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      if (pageRefreshPending || currentPath !== location.pathname || sidebar !== document.getElementById('sidebar-wrapper')) {
+        pageRefreshPending = false;
+        refresh();
+        return;
+      }
+      placeToolbar();
+      updateSidebarRows();
+      if (palette.open) { collectChannels(); renderResults(); }
+    }, 180);
   }
   let unsubscribeDOM=()=>{};
 
@@ -575,7 +597,13 @@
       if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerModes:(()=>{try{return JSON.parse(params.get('immersion-players')||'{}');}catch{return {};}})(),playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
     unsubscribeDOM=KickRefinedDOM.subscribePage(records=>{
-      if(records.some(({target})=>target.nodeType!==1||!target.closest('title,[data-kr-unified-row]')))scheduleRefresh();
+      let sidebarChanged = false;
+      for (const {target} of records) {
+        if (target.nodeType === 1 && target.closest('title,[data-kr-unified-row]')) continue;
+        if (!sidebar?.contains(target)) { scheduleRefresh(); return; }
+        sidebarChanged = true;
+      }
+      if (sidebarChanged) scheduleSidebarRefresh();
     });
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragover', trackDrag, { capture:true, signal:abort.signal });
