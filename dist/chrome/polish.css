@@ -143,6 +143,7 @@ html[data-kr-enabled="true"] .z-tooltip .fill-white { fill: #1b1b21 !important; 
 /* Keep the opening preview laid out for Popper while its frame settles. */
 html[data-kr-enabled="true"] :is(.z-tooltip, [data-radix-popper-content-wrapper] > :is([data-state],[data-side]):has([role="tooltip"])):is(
   [data-kr-sidebar-preview],
+  :has(> .w-80 > [class~="pt-0.5"] > .aspect-video.w-full),
   html:has(#sidebar-wrapper a[data-testid*="-channel-"]:hover) :not([data-state="closed"],[data-side="top"],[data-side="bottom"]):is([aria-busy="true"],:empty,:has(:is(img,video,iframe,canvas):not([role="tooltip"] *)))
 ) {
   box-sizing:border-box!important;
@@ -154,6 +155,16 @@ html[data-kr-enabled="true"] :is(.z-tooltip, [data-radix-popper-content-wrapper]
   & :is(img,video,iframe,canvas):not([role="tooltip"] *) {
     display:block!important;width:100%!important;max-width:100%!important;height:auto!important;
     aspect-ratio:16/9;object-fit:cover;border-radius:6px!important;transition:none!important;
+  }
+  & > .w-80:has(> [class~="pt-0.5"] > .aspect-video.w-full) {
+    width:100%!important;min-width:0!important;max-width:100%!important;
+    & > [class~="pt-0.5"] { padding-top:0!important; }
+    & > [class~="pt-0.5"] > .aspect-video.w-full {
+      width:100%!important;aspect-ratio:16/9!important;overflow:hidden!important;
+      border-radius:6px!important;background:var(--kr-raised)!important;
+      & > .ui-skeleton { width:100%!important;height:100%!important;background:var(--kr-raised)!important;animation:none!important; }
+      & > :is(img,video) { height:100%!important; }
+    }
   }
 }
 html[data-kr-enabled="true"] [data-kr-sidebar-preview-title] {

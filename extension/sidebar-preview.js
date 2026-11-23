@@ -3,6 +3,7 @@
   const rowSelector = '#sidebar-wrapper a[data-testid*="-channel-"]';
   const portalSelector = '[data-radix-popper-content-wrapper]';
   const paneSelector = `.z-tooltip, ${portalSelector} > :is([data-state],[data-side]):has([role="tooltip"])`;
+  const nativeFrameSelector = ':scope > .w-80 > [class~="pt-0.5"] > .aspect-video.w-full';
   const mediaSelector = ':is(img,video,iframe,canvas):not([role="tooltip"] *)';
   const viewersFormat = new Intl.NumberFormat('en-US');
 
@@ -27,6 +28,11 @@
   function beside(side, box, anchor) {
     return box.width > 0 && box.height > 0 && box.bottom > anchor.top && box.top < anchor.bottom &&
       (side === 'right' && box.left >= anchor.right - 16 || side === 'left' && box.right <= anchor.left + 16);
+  }
+
+  function previewFrame(pane) {
+    // Kick keeps this frame while the skeleton, thumbnail and video replace one another.
+    return pane.querySelector(nativeFrameSelector) || pane.querySelector(mediaSelector);
   }
 
   function create({signal, enabled, getChannel}) {
@@ -54,13 +60,13 @@
       const linked = (row.getAttribute('aria-describedby') || '').split(/\s+/);
       for (const id of linked) {
         const candidate = document.getElementById(id)?.closest(paneSelector);
-        if (candidate?.matches(':not([data-state="closed"])') && candidate.querySelector(mediaSelector)) return candidate;
+        if (candidate?.matches(':not([data-state="closed"])') && previewFrame(candidate)) return candidate;
       }
       const anchor = row.getBoundingClientRect();
       let pending = null;
       for (const candidate of document.querySelectorAll(paneSelector)) {
         const side = candidate.dataset.side;
-        if (candidate.dataset.state === 'closed' || side && !['right', 'left'].includes(side) || !candidate.querySelector(mediaSelector)) continue;
+        if (candidate.dataset.state === 'closed' || side && !['right', 'left'].includes(side) || !previewFrame(candidate)) continue;
         if (beside(side, candidate.getBoundingClientRect(), anchor)) return candidate;
         pending ||= candidate;
       }
@@ -89,7 +95,8 @@
       if (!enabled() || !hover.row.isConnected) { reset(); return; }
       const active = hover, nextPane = findPane(active.row);
       if (!nextPane) { clearPane(); return; }
-      const preview = nextPane.querySelector(mediaSelector), heading = caption(nextPane, preview);
+      const preview = previewFrame(nextPane);
+      const heading = (preview.tagName === 'DIV' && preview.parentElement.nextElementSibling?.querySelector('div[title]')) || caption(nextPane, preview);
       const inlineTitle = heading?.nodeType === 3;
       const nextTitle = inlineTitle ? heading.parentElement : heading;
       const titleLayout = inlineTitle ? 'inline' : 'element';
