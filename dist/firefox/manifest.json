@@ -129,6 +129,7 @@
         "search.js",
         "search-window.js",
         "native-search.js",
+        "sidebar-preview.js",
         "content.js"
       ],
       "run_at": "document_idle"

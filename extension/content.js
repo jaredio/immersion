@@ -14,6 +14,7 @@
   let dockPosition = '';
   let channelPage=null,clipPreview=null,libraryPlayers=null;const discovery=globalThis.KickRefinedDiscovery?.create();
   let searchWindow=null,nativeSearch=null,restoringSearchFocus=false;
+  let sidebarPreview;
   let currentPath = location.pathname;
   let disposed = false;
   let drag = null, dropTarget = null, lastDrop = null, dragChip = null, dragFrame = 0;
@@ -52,7 +53,7 @@
     checkouts?.setEnabled(settings.enabled);
     if(drag?.kind==='clip'&&!drag.fromLibrary&&!drag.item.fromWindow&&(!settings.chatClips||settings.textOnly))endDrag();
     nativeSearch?.refresh(settings.enabled);
-    if (!settings.enabled) { endDrag(); multi?.close();if(palette?.open)closeSearch(); }
+    if (!settings.enabled) { sidebarPreview?.reset();endDrag(); multi?.close();if(palette?.open)closeSearch(); }
   }
 
   const settingsStore=KickRefinedSettings.create({onUpdate:value=>{settings=value;if(host){apply();if(palette?.open){collectChannels();renderResults();}}},onError:()=>{if(shadow)shadow.querySelector('#save-status').textContent='Could not save settings. Please try again.';},onSaved:()=>{if(shadow)shadow.querySelector('#save-status').textContent='';}});
@@ -503,6 +504,7 @@
     if (currentPath === location.pathname) return;
     const priorProfile=KickRefinedChannelPage.routeSlug(currentPath);
     currentPath = location.pathname;
+    sidebarPreview?.reset();
     endDrag();
     if(!priorProfile||priorProfile!==KickRefinedChannelPage.routeSlug())multi?.close({ restorePlayback: false });
     stopTransition();
@@ -563,6 +565,7 @@
       }
       placeToolbar();
       updateSidebarRows();
+      sidebarPreview?.schedule();
       if (palette.open) { collectChannels(); renderResults(); }
     }, 180);
   }
@@ -571,7 +574,7 @@
   function dispose() {
     clearTimeout(searchTimer);searchService.destroy();
     searchWindow?.destroy();nativeSearch?.destroy();
-    endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
+    sidebarPreview?.reset();endDrag(); for (const row of draggableRows.keys()) restoreDraggable(row);
     disposed = true; api.storage.onChanged.removeListener?.(onSettingsChanged); abort.abort(); unsubscribeDOM(); observedSidebar.disconnect(); sidebarObserver.disconnect(); multi?.destroy();
     clipPreview?.destroy();libraryPlayers?.destroy();clipBridge?.destroy();clips?.destroy();xPosts?.destroy();mediaCards?.destroy();replyPreviews?.destroy();notices?.destroy();checkouts?.destroy();discovery?.destroy();channelPage?.destroy();channelPanel?.destroy();support?.destroy();clearTimeout(refreshTimer); settingsStore.destroy(); stopTransition();
   }
@@ -590,6 +593,7 @@
   async function init() {
     try { settings = normalize((await (globalThis.KickRefinedThemeSettings||api.storage.local.get('settings'))).settings); } catch { /* Extension defaults also work if storage is temporarily unavailable. */ }
     settingsStore.accept(settings);apply(); refresh();
+    sidebarPreview = KickRefinedSidebarPreview.create({signal:abort.signal, enabled:()=>settings.enabled, getChannel:slug=>support.channel(slug)});
     const sharedMulti = new URL(location.href).searchParams.get('refined-multi');
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);
@@ -597,6 +601,7 @@
       if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerModes:(()=>{try{return JSON.parse(params.get('immersion-players')||'{}');}catch{return {};}})(),playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
     unsubscribeDOM=KickRefinedDOM.subscribePage(records=>{
+      sidebarPreview.schedule();
       let sidebarChanged = false;
       for (const {target} of records) {
         if (target.nodeType === 1 && target.closest('title,[data-kr-unified-row]')) continue;
