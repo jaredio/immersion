@@ -1,7 +1,8 @@
 /* Fit Kick's portaled sidebar tooltip around its native preview and title. */
 (() => {
   const rowSelector = '#sidebar-wrapper a[data-testid*="-channel-"]';
-  const paneSelector = '.z-tooltip[data-state][data-side], [data-radix-popper-content-wrapper] > [data-side]:has([role="tooltip"])';
+  const portalSelector = '[data-radix-popper-content-wrapper]';
+  const paneSelector = `.z-tooltip, ${portalSelector} > :is([data-state],[data-side]):has([role="tooltip"])`;
   const mediaSelector = ':is(img,video,iframe,canvas):not([role="tooltip"] *)';
   const viewersFormat = new Intl.NumberFormat('en-US');
 
@@ -23,13 +24,25 @@
     return null;
   }
 
+  function beside(side, box, anchor) {
+    return box.width > 0 && box.height > 0 && box.bottom > anchor.top && box.top < anchor.bottom &&
+      (side === 'right' && box.left >= anchor.right - 16 || side === 'left' && box.right <= anchor.left + 16);
+  }
+
   function create({signal, enabled, getChannel}) {
     let hover = null, pane = null, media = null, title = null, count = null, countLabel = null, frame = 0;
+    let lastLayout = '', stableSince = 0;
+    const placementObserver = new MutationObserver(schedule);
+    const sizeObserver = new ResizeObserver(schedule);
     function clearPane() {
+      placementObserver.disconnect();
+      sizeObserver.disconnect();
       pane?.removeAttribute('data-kr-sidebar-preview');
+      pane?.removeAttribute('data-kr-sidebar-preview-ready');
       title?.removeAttribute('data-kr-sidebar-preview-title');
       count?.remove();
       pane = media = title = count = countLabel = null;
+      lastLayout = '';
     }
     function reset() {
       hover = null;
@@ -44,14 +57,32 @@
         if (candidate?.matches(':not([data-state="closed"])') && candidate.querySelector(mediaSelector)) return candidate;
       }
       const anchor = row.getBoundingClientRect();
+      let pending = null;
       for (const candidate of document.querySelectorAll(paneSelector)) {
         const side = candidate.dataset.side;
-        if (candidate.dataset.state === 'closed' || !['right', 'left'].includes(side) || !candidate.querySelector(mediaSelector)) continue;
-        const box = candidate.getBoundingClientRect();
-        if (box.width && box.height && box.bottom > anchor.top && box.top < anchor.bottom &&
-            (side === 'right' ? box.left >= anchor.right - 16 : box.right <= anchor.left + 16)) return candidate;
+        if (candidate.dataset.state === 'closed' || side && !['right', 'left'].includes(side) || !candidate.querySelector(mediaSelector)) continue;
+        if (beside(side, candidate.getBoundingClientRect(), anchor)) return candidate;
+        pending ||= candidate;
       }
-      return null;
+      return pending;
+    }
+    function revealWhenStable(row) {
+      if (pane.hasAttribute('data-kr-sidebar-preview-ready')) return;
+      if (pane.getAttribute('aria-busy') === 'true' || media.tagName === 'IMG' && !media.complete) { lastLayout = ''; return; }
+      const card = pane.getBoundingClientRect(), preview = media.getBoundingClientRect();
+      if (!beside(pane.dataset.side, card, row.getBoundingClientRect()) || !preview.width || !preview.height ||
+          preview.left < card.left - .5 || preview.right > card.right + .5 || preview.top < card.top - .5 || preview.bottom > card.bottom + .5) {
+        lastLayout = '';
+        return;
+      }
+      // Popper and the caption can update on successive frames while opening.
+      const layout = [card.left, card.top, card.width, card.height, preview.width, preview.height].map(value => Math.round(value * 2)).join(':');
+      const now = performance.now();
+      if (layout !== lastLayout) { lastLayout = layout; stableSince = now; }
+      if (now - stableSince < 32) { schedule(); return; }
+      pane.dataset.krSidebarPreviewReady = '';
+      placementObserver.disconnect();
+      sizeObserver.disconnect();
     }
     function refresh() {
       if (!hover) return;
@@ -71,12 +102,17 @@
         count.dataset.krSidebarPreviewCount = '';
         count.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/></svg><span></span>';
         countLabel = count.lastElementChild;
+        const portal = pane.closest(portalSelector);
+        if (portal) placementObserver.observe(portal, {attributes:true, attributeFilter:['style','class']});
+        placementObserver.observe(pane, {attributes:true, attributeFilter:['aria-busy','data-side','data-state','style','class']});
+        sizeObserver.observe(pane);
+        sizeObserver.observe(media);
       }
       const viewers = viewerCount(active.row) || active.viewers;
       if (viewers) {
         const text = `${viewers} ${viewers === '1' ? 'viewer' : 'viewers'}`;
         if (countLabel.textContent !== text) countLabel.textContent = text;
-        if (count.parentElement !== (title || pane)) (title || pane).append(count);
+        count.removeAttribute('aria-hidden');
       } else if (!active.requested) {
         active.requested = true;
         const slug = KickRefined.channelSlug(active.row.href, location.origin);
@@ -86,23 +122,31 @@
           refresh();
         }).catch(() => {});
       }
+      if (!viewers && !count.hasAttribute('aria-hidden')) {
+        count.setAttribute('aria-hidden', 'true');
+        count.dataset.krSidebarPreviewCountReserved = '';
+      }
+      if (count.parentElement !== (title || pane)) (title || pane).append(count);
+      revealWhenStable(active.row);
     }
     function schedule() {
       if (!hover || frame) return;
       frame = requestAnimationFrame(() => { frame = 0; refresh(); });
     }
-    document.addEventListener('pointerover', event => {
-      const row = event.target.closest?.(rowSelector);
+    function enter(row) {
       if (!row || !enabled() || hover?.row === row) return;
       reset();
       hover = {row, viewers:''};
       schedule();
-    }, {capture:true, signal});
+    }
+    document.addEventListener('pointerover', event => enter(event.target.closest?.(rowSelector)), {capture:true, signal});
     document.addEventListener('pointerout', event => {
       const next = event.relatedTarget;
       if (!hover || hover.row.contains(next) || pane?.contains(next)) return;
       if (hover.row.contains(event.target) || pane?.contains(event.target)) reset();
     }, {capture:true, signal});
+    for (const event of ['load','error']) document.addEventListener(event, ({target}) => { if (target === media) schedule(); }, {capture:true, signal});
+    enter(document.querySelector(`${rowSelector}:hover`));
     return {schedule, reset};
   }
   globalThis.KickRefinedSidebarPreview = Object.freeze({create});

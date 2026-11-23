@@ -217,22 +217,30 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
       row.querySelector('.count span:last-child').title='2417';
       const rect=row.getBoundingClientRect(),portal=document.createElement('div');
       portal.setAttribute('data-radix-popper-content-wrapper','');
-      portal.style.cssText=`position:fixed;left:${rect.right+4}px;top:${rect.top}px`;
-      portal.innerHTML='<div class="z-tooltip" data-state="delayed-open" data-side="right"><div style="width:320px"><video style="width:320px;height:180px"></video><span>Late night music</span></div><span role="tooltip" hidden>Late night music</span></div>';
+      portal.style.cssText=`position:fixed;left:${rect.right+4}px;top:-2000px`;
+      portal.innerHTML='<div class="z-tooltip" data-state="delayed-open" aria-busy="true"><div style="width:320px"><video style="width:320px;height:180px"></video><span>Late night music</span></div><span role="tooltip" hidden>Late night music</span></div>';
       document.body.append(portal);
       const pane=portal.firstElementChild,outer=pane.getBoundingClientRect(),media=pane.querySelector('video').getBoundingClientRect();
-      return row.matches(':hover')&&!pane.hasAttribute('data-kr-sidebar-preview')&&media.left>outer.left&&media.right<outer.right;
-    }),true,'the native preview fits before the viewer count is added');
+      return row.matches(':hover')&&!pane.hasAttribute('data-kr-sidebar-preview')&&getComputedStyle(pane).opacity==='0'&&media.left>outer.left&&media.right<outer.right;
+    }),true,'the native preview is sized and hidden before its placement is ready');
     const sidebarPreview=page.locator('[data-kr-sidebar-preview]');
-    await sidebarPreview.waitFor();
+    await sidebarPreview.waitFor({state:'attached'});
+    assert.equal(await sidebarPreview.evaluate(pane=>getComputedStyle(pane).opacity),'0');
+    await sidebarPreview.evaluate(pane=>{
+      const row=document.querySelector('[data-testid="sidebar-following-channel-1"]');
+      pane.parentElement.style.top=`${row.getBoundingClientRect().top}px`;
+      pane.dataset.side='right';
+      pane.removeAttribute('aria-busy');
+    });
+    await sidebarPreview.and(page.locator('[data-kr-sidebar-preview-ready]')).waitFor();
     assert.deepEqual(await sidebarPreview.evaluate(pane=>{
       const media=pane.querySelector('video').getBoundingClientRect(),outer=pane.getBoundingClientRect();
       const title=pane.querySelector('[data-kr-sidebar-preview-title]'),viewers=title.querySelector('[data-kr-sidebar-preview-count]');
       const colorProbe=document.createElement('span');colorProbe.style.color='var(--kr-accent)';pane.append(colorProbe);
       const icon=viewers.querySelector('svg'),accent=getComputedStyle(colorProbe).color;
-      const result={fits:media.left>outer.left&&media.right<outer.right,caption:title.firstChild.textContent,count:viewers.textContent,accent:getComputedStyle(viewers).color===accent&&getComputedStyle(icon).color===accent,white:getComputedStyle(title).color==='rgb(255, 255, 255)',icon:icon.getBoundingClientRect().width>0&&icon.getAttribute('stroke')==='currentColor'&&icon.getAttribute('aria-hidden')==='true'};
+      const result={fits:media.left>outer.left&&media.right<outer.right,painted:getComputedStyle(pane).opacity==='1',caption:title.firstChild.textContent,count:viewers.textContent,accent:getComputedStyle(viewers).color===accent&&getComputedStyle(icon).color===accent,white:getComputedStyle(title).color==='rgb(255, 255, 255)',icon:icon.getBoundingClientRect().width>0&&icon.getAttribute('stroke')==='currentColor'&&icon.getAttribute('aria-hidden')==='true'};
       pane.parentElement.remove();return result;
-    }),{fits:true,caption:'Late night music',count:'2,417 viewers',accent:true,white:true,icon:true});
+    }),{fits:true,painted:true,caption:'Late night music',count:'2,417 viewers',accent:true,white:true,icon:true});
     await page.evaluate(()=>{
       const sidebar=document.getElementById('sidebar-wrapper');
       sidebar.classList.add('w-(--sidebar-collapsed-width)');sidebar.style.width='68px';
