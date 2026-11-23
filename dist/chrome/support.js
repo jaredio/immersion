@@ -1,7 +1,7 @@
 /* Channel support discovery and a provider-owned form, loaded only on click. */
 (() => {
   const {parse,extract}=KickRefinedSupportData;
-  const dollar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const dollar='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.75v2.1m0 10.3v2.1M14.2 6.4c-1-1.03-2.47-1.55-4.05-1.55-2.13 0-3.65 1.13-3.65 2.57 0 3.47 7.25 1.6 7.25 5.01 0 1.55-1.57 2.72-3.78 2.72-1.75 0-3.36-.62-4.42-1.75"/></svg>';
   const glyph=path=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
   function create({enabled=true}={}){
     const {api,channelSlug,channelDetails}=KickRefined;
