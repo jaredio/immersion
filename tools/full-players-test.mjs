@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -39,7 +40,7 @@ try{
  });
  await context.route('https://player.kick.com/**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><video src="${media}" loop autoplay muted></video>`}));
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>{if(engine==='firefox'&&error.message==='RPMGetBoolPref is not defined'&&error.stack?.includes('chrome://global/content/aboutNetError.mjs'))return;errors.push(error.message);});await page.goto('https://kick.com/nightshift');
- if(engine==='firefox'){for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of manifest.content_scripts.find(script=>script.js?.includes('content.js')).js)await page.addScriptTag({path:`extension/${file}`});}
+ if(engine==='firefox'){for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of kickIdleScripts(manifest))await page.addScriptTag({path:`extension/${file}`});}
  await page.getByRole('button',{name:'Open multiview',exact:true}).click();const workspace=page.locator('#kr-multi-root');
  await workspace.getByRole('button',{name:'Manage',exact:true}).click();
  assert.equal(await workspace.getByRole('combobox',{name:'Player mode',exact:true}).inputValue(),'full','new multistreams default to Full Kick players');

@@ -23,9 +23,9 @@
       });
       tile.scope.listen(card,'pointerenter',()=>card.dataset.hovered='true');tile.scope.listen(card,'pointerleave',()=>card.dataset.hovered='false');tile.scope.listen(header,'dblclick',event=>{if(event.target.closest('a,button,input'))return;event.preventDefault();onAction('focus',tile);});
       const quick=document.createElement('div');quick.className='multi-quick-actions';header.append(quick);
-      const button=(label,action,target=controls)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;decorate(el,({'Listen to':'sound',Play:'play',Focus:'focus',Fullscreen:'fullscreen',Remove:'close','Player settings':'settings','Switch player':'single'})[label],label,true);tile.scope.listen(el,'click',action);target.append(el);return el;};
+      const button=(label,action,target=controls)=>{const el=document.createElement('button');el.setAttribute('aria-label',`${label} ${slug}`);el.title=`${label} ${slug}`;decorate(el,({'Listen to':'sound',Play:'play',Focus:'focus',Fullscreen:'fullscreen',Remove:'close','Player settings':'settings','Switch player':'single'})[label],label);tile.scope.listen(el,'click',action);target.append(el);return el;};
       tile.listen=button('Listen to',()=>onAction('listen',tile));
-      const audioControl=document.createElement('div');audioControl.className='multi-audio-control';tile.audioControl=audioControl;tile.controls=controls;tile.scope.listen(controls,'pointerenter',()=>card.dataset.hovered='true');controls.append(audioControl);audioControl.append(tile.listen);
+      const audioControl=document.createElement('div');audioControl.className='multi-audio-control';tile.audioControl=audioControl;tile.scope.listen(controls,'pointerenter',()=>card.dataset.hovered='true');controls.append(audioControl);audioControl.append(tile.listen);
       const volume=document.createElement('label');volume.className='multi-volume';
       tile.slider=document.createElement('input');tile.slider.type='range';tile.slider.min='0';tile.slider.max='100';tile.slider.step='1';tile.slider.setAttribute('aria-label',`Volume for ${slug}`);
       tile.level=document.createElement('output');tile.level.textContent='100%';volume.append(tile.slider,tile.level);audioControl.append(volume);

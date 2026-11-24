@@ -45,9 +45,9 @@
         if (disposed) return [];
         return support.panels(slug);
       }).then(items => {
-        if (!disposed) put(panels, slug, {items, error: false,until:Date.now()+120000});
+        if (!disposed) put(panels, slug, {items,until:Date.now()+120000});
       }).catch(() => {
-        if (!disposed) put(panels, slug, {items:panels.get(slug)?.items||[],error:true,until:Date.now()+5000});
+        if (!disposed) put(panels, slug, {items:panels.get(slug)?.items||[],until:Date.now()+5000});
       }).finally(() => {
         panelPending.delete(slug);
         if (!disposed) onPanels(slug);

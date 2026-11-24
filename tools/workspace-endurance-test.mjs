@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 /* Active-workspace churn plus post-GC retention checks. Local media, no live accounts. */
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
@@ -9,7 +10,7 @@ const cycles=Number(process.env.KR_ENDURANCE_CYCLES||160),minutes=Number(process
 assert.ok(Number.isInteger(cycles)&&cycles>0&&cycles<=10000&&Number.isFinite(minutes)&&minutes>=0&&minutes<=1440,'Invalid endurance duration');
 const browser=await playwright[engine].launch({headless:true}),context=await browser.newContext({viewport:{width:1600,height:1000}});
 const {fixture,frame}=await workspaceFixtures(),manifest=JSON.parse(await readFile('dist/chrome/manifest.json','utf8'));
-const scripts=manifest.content_scripts.find(group=>group.js?.includes('content.js')).js;
+const scripts=kickIdleScripts(manifest);
 const frameScripts=(await Promise.all(['stream-clock.js','performance.js','player-dom.js','full-player-frame.js','player-controls.js','player-frame.js'].map(file=>readFile(`extension/${file}`,'utf8')))).join('\n');
 const samples=[],started=Date.now(),errors=[];let baseline,initialRenders,loadingGate,releaseLoading,layoutChecks;
 try{

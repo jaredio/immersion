@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import {chromium,firefox} from 'playwright';
 import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -28,7 +29,7 @@ try{
   await page.goto('https://kick.com/native?refined-multi=native,a,b,c,d,e&immersion-player=full&refined-layout=focus');
   if(engine==='firefox'){
     for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});
-    for(const file of manifest.content_scripts.find(script=>script.js?.includes('content.js')).js)await page.addScriptTag({path:`extension/${file}`});
+    for(const file of kickIdleScripts(manifest))await page.addScriptTag({path:`extension/${file}`});
   }
   const workspace=page.locator('#kr-multi-root');
   await workspace.locator('.multi-tile').nth(5).waitFor({timeout:10000});

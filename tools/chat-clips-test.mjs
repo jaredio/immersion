@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -51,7 +52,7 @@ try{
  page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(['error','warning'].includes(message.type()))console.error('Browser:',message.text());});page.setDefaultTimeout(20000);
  await page.goto('https://kick.com/sweatergxd');
  await page.addStyleTag({content:'*{box-sizing:border-box}'});
- if(engine!=='chromium')for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('content.js')).js)await page.addScriptTag({path:path.join(root,'extension',name)});
+ if(engine!=='chromium')for (const name of kickIdleScripts(JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8'))))await page.addScriptTag({path:path.join(root,'extension',name)});
  const card=page.locator('.kr-chat-clip');await card.waitFor();
  assert.equal(await page.locator('.native-preview').isVisible(),false);
  assert.equal(await page.locator('#clip-message > a').isVisible(),false,'raw URL is hidden when its card is available');
@@ -182,7 +183,7 @@ try{
  let selectedFrame;
  for(let attempt=0;attempt<30&&!selectedFrame;attempt++){selectedFrame=page.frames().find(frame=>frame.url().includes('/popout/another/chat'));if(!selectedFrame)await page.waitForTimeout(50);}
  assert.ok(selectedFrame);await selectedFrame.waitForSelector('#clip-message');
- if(engine!=='chromium'){await selectedFrame.addStyleTag({path:path.join(root,'extension/theme.css')});for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await selectedFrame.addScriptTag({path:path.join(root,'extension',name)});}
+ if(engine!=='chromium'){await selectedFrame.addStyleTag({path:path.join(root,'extension/theme.css')});for (const name of kickIdleScripts(JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')),'chat-frame.js'))await selectedFrame.addScriptTag({path:path.join(root,'extension',name)});}
  const framedCard=selectedFrame.locator('.kr-chat-clip');await framedCard.waitFor();
  await selectedFrame.waitForSelector('[data-kr-workspace-chat-header]',{state:'attached'});assert.equal(await selectedFrame.locator('[data-kr-workspace-chat-title]').isVisible(),false,'embedded secondary chat hides only its duplicate title');
  await framedCard.getByRole('button',{name:'Play sweatergxd clip',exact:true}).click();
@@ -235,7 +236,7 @@ try{
  const offlinePage=await context.newPage().catch(error=>{if(engine==='firefox'&&error.message.includes("reading '_page'"))return offlineReady;throw error;});await offlineReady;
  offlinePage.on('pageerror',error=>errors.push(error.message));offlinePage.on('crash',()=>errors.push('Offline workspace page crashed'));
  await offlinePage.goto('https://kick.com/offlineowner');await offlinePage.addStyleTag({content:'*{box-sizing:border-box}'});
- if(engine!=='chromium')for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('content.js')).js)await offlinePage.addScriptTag({path:path.join(root,'extension',name)});
+ if(engine!=='chromium')for (const name of kickIdleScripts(JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8'))))await offlinePage.addScriptTag({path:path.join(root,'extension',name)});
  const offlineCard=offlinePage.locator('.kr-chat-clip');await offlineCard.waitFor();
  await offlineCard.getByRole('button',{name:'Play sweatergxd clip',exact:true}).click();
  await offlinePage.waitForFunction(()=>document.querySelector('.kr-chat-clip').shadowRoot.querySelector('video')?.readyState>=2);
@@ -264,7 +265,7 @@ try{
  const popPage=await context.newPage().catch(error=>{if(engine==='firefox'&&error.message.includes("reading '_page'"))return popReady;throw error;});await popReady;
  popPage.on('pageerror',error=>errors.push(error.message));
  await popPage.goto('https://kick.com/popout/sweatergxd/chat');
- if(engine!=='chromium')for (const name of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await popPage.addScriptTag({path:path.join(root,'extension',name)});
+ if(engine!=='chromium')for (const name of kickIdleScripts(JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')),'chat-frame.js'))await popPage.addScriptTag({path:path.join(root,'extension',name)});
  const popCard=popPage.locator('.kr-chat-clip');await popCard.waitFor();assert.equal(await popPage.locator('[data-kr-workspace-chat-header]').count(),0,'standalone popout chat keeps its heading');
  assert.equal(await popPage.locator('#kr-root').count(),0,'popout chat has clip cards without a second toolbar');
  await popCard.getByRole('button',{name:'Play sweatergxd clip',exact:true}).click();

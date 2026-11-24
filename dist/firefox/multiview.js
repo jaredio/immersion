@@ -3,19 +3,27 @@
   const { channelSlug, multiState, multiURL } = KickRefined;
   const {text,attr,css}=KickRefinedMultiView;
   const pageChannel=()=>globalThis.KickRefinedChannelPage?.routeSlug()||channelSlug(location.pathname,location.origin);
+  function streamDropPreview(duplicate,full){
+    const element=document.createElement('div');element.className='stream-drop-zone';
+    const allowed=!duplicate&&!full;element.dataset.allowed=String(allowed);
+    element.setAttribute('aria-label',duplicate?'Already in this workspace':full?'Workspace is full':'Add stream to workspace');
+    return {element,allowed};
+  }
   function create({ getChannels, onKeydown, support, channelPanel, onWatchProfileVideo, onPreviewProfileClip, onPopoutProfileMedia, onDragProfileMedia }) {
-    const {host,shadow,panel,directory,chatTabs,toolbarToggle,stage,gridElement,divider,sizing,$,decorate} =
+    globalThis.KickRefinedPerf?.count('workspace.creations');
+    const {host,shadow,panel,directory,toolbarToggle,stage,gridElement,divider,sizing,$,decorate} =
       KickRefinedMultiView.create({onKeydown,onPosition:schedulePosition});
     let accentKey=null,accentValue='',appliedVisualKey='';
     function playerAccent(){const key=document.documentElement.dataset.krAccent||'mint';if(key!==accentKey){accentKey=key;accentValue=getComputedStyle(document.documentElement).getPropertyValue('--kr-accent').trim();}return accentValue;}
     const viewKeys={chat:'',sessions:'',suggestions:''};
     let state = multiState(), sessions = [], audio = new Set(), active = false, destroyed = false, context = null, native = null, toolbarHidden = false;
+    let activationRevision=0;
     let railDirty = true, catalog = new Map(),sessionBusy=false,metadataFrame=0,previewMuted=false;
     const lifetime=KickRefinedLifetime.create();let workspaceScope=null,nativeVideoScope=null,wiredVideo=null;
-    const tiles = new Map(), paused = new Set();
+    const tiles = new Map();
     const nativeStyles=KickRefinedMultiLayout.createStyles(),{style,restoreStyles,pruneStyles,originalStyle}=nativeStyles;
     const findContext=KickRefinedMultiLayout.findContext;
-    const chat=KickRefinedMultiChat.create({scope:lifetime,getContext:()=>context,getState:()=>state,getCatalog:()=>catalog,selectedChat,chatChannels,style,originalStyle,panel,chatTabs,$,decorate});
+    const chat=KickRefinedMultiChat.create({scope:lifetime,getContext:()=>context,getState:()=>state,getCatalog:()=>catalog,selectedChat,chatChannels,style,originalStyle,panel,$,decorate});
     const clipTiles=new Map();let clipFocus='',clipReturn=null,retainedChat='';
     const focusKey=()=>clipFocus||state.focus;
     const tileCount=()=>state.channels.length+clipTiles.size;
@@ -56,7 +64,7 @@
       panel.dataset.toolbarHidden=String(toolbarHidden);
       const label=toolbarHidden?'Show settings bar':'Hide settings bar';
       toolbarToggle.setAttribute('aria-label',label);toolbarToggle.setAttribute('aria-expanded',String(!toolbarHidden));
-      decorate(toolbarToggle,'chevron',label,true);schedulePosition();
+      decorate(toolbarToggle,'chevron',label);schedulePosition();
     }
     lifetime.listen(toolbarToggle,'click',()=>{toolbarHidden=!toolbarHidden;updateToolbar();persist();});
     updateToolbar();
@@ -221,7 +229,7 @@
     }
     function updateAudioButton(button,selected,label,volume=1){
       const on=selected&&volume>0;
-      decorate(button,on?(volume<.5?'soundLow':'sound'):'mute',`Audio for ${label}`,true);
+      decorate(button,on?(volume<.5?'soundLow':'sound'):'mute',`Audio for ${label}`);
       if(!button.classList.contains('multi-audio-toggle'))button.classList.add('multi-audio-toggle');attr(button,'aria-label',`Audio for ${label}`);
       attr(button,'aria-pressed',on);attr(button,'data-audio-state',on?'on':'off');attr(button,'title',`${on?'Mute':'Unmute'} ${label}`);
     }
@@ -230,7 +238,7 @@
       attr(tile.card,'data-playing',tile.playing);
       const on=audio.has(tile.slug)&&tile.volume>0;
       updateAudioButton(tile.listen,on,tile.slug,tile.volume);
-      decorate(tile.pause,tile.playing?'pause':'play',tile.playing?'Pause':'Play',true);attr(tile.pause,'aria-label',`${tile.playing?'Pause':'Play'} ${tile.slug}`);attr(tile.pause,'title',tile.pause.getAttribute('aria-label'));
+      decorate(tile.pause,tile.playing?'pause':'play',tile.playing?'Pause':'Play');attr(tile.pause,'aria-label',`${tile.playing?'Pause':'Play'} ${tile.slug}`);attr(tile.pause,'title',tile.pause.getAttribute('aria-label'));
       const percent=Math.round(tile.volume*100);if(tile.slider.value!==String(percent))tile.slider.value=String(percent);text(tile.level,`${percent}%`);
       css(tile.slider,'--volume-percent',`${Math.round(tile.volume*100)}%`);
       attr(tile.slider,'aria-valuetext',`${Math.round(tile.volume*100)}%${on?'':', muted'}`);
@@ -307,7 +315,7 @@
       if(action==='mode'){state.playerModes[slug]=tile.frameMode==='full'?'embed':'full';tile.embedFallback=false;tile.pendingAction=tile.pendingAction||(tile.playing||!tile.everLoaded?'play':'pause');dropPlayerFrame(tile);mountPlayer(tile);syncAudio();updateControls(tile);persist();return;}
       if(action==='fullscreen'){if(isNative(slug))context.player.querySelector('[data-testid="video-player-fullscreen"]')?.click();else void fullscreen.toggle(tile);return;}
       if(action!=='remove')return;
-      state.channels=state.channels.filter(s=>s!==slug);state=multiState(state);paused.delete(slug);audio.delete(slug);
+      state.channels=state.channels.filter(s=>s!==slug);state=multiState(state);audio.delete(slug);
       if(isNative(slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}persist();
       if(clipTiles.size){if(!state.channels.includes(state.chat))state.chat=state.channels[0]||'';render();return;}
       if(state.channels.length===1&&state.channels[0]!==context.slug){const remaining=state.channels[0],link=getChannels().find(c=>c.slug===remaining)?.link;close({restorePlayback:false});if(link?.isConnected)link.click();else location.assign(`/${remaining}`);}
@@ -335,7 +343,7 @@
       if(!state.focus&&!clipFocus&&clipTiles.size)clipFocus=clipTiles.keys().next().value;
       for(const slug of state.channels){const details=metadata.channel(slug);if(details)catalog.set(slug,{...catalog.get(slug),...details,image:details.image||catalog.get(slug)?.image||''});}
       if(native && !state.channels.includes(context.slug)) { const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();} }
-      else if(native?.pausedByUs && native.wasPlaying && !paused.has(context.slug)) { const v=nativeVideo();native.pausedByUs=false;if(v?.paused)v.play().catch(()=>{}); }
+      else if(native?.pausedByUs && native.wasPlaying) { const v=nativeVideo();native.pausedByUs=false;if(v?.paused)v.play().catch(()=>{}); }
       const count=tileCount(),grid=$('#multi-grid');grid.dataset.layout=state.layout;grid.dataset.count=count;
       if(state.layout!=='focus'){
         grid.style.gridTemplateColumns='';grid.style.gridTemplateRows='';grid.style.minHeight='';
@@ -346,20 +354,15 @@
       for(const [slug,tile]of tiles)if(!state.channels.includes(slug)){tile.scope.dispose();tiles.delete(slug);}
       grid.querySelector('.multi-empty')?.remove();
       if(!count){const empty=document.createElement('div');empty.className='multi-empty';empty.textContent='Drag a channel from the sidebar, or add one using Manage.';grid.append(empty);}
-      state.channels.forEach((slug,index)=>{let tile=tiles.get(slug);if(!tile){tile=makeTile(slug);tiles.set(slug,tile);grid.append(tile.card);}tile.card.style.order=state.layout==='focus'&&state.focus===slug?-1:index;tile.card.dataset.featured=String(state.focus===slug);decorate(tile.focus,state.layout==='focus'&&state.focus===slug?'grid':'focus','Focus',true);tile.focus.title=state.layout==='focus'&&state.focus===slug?'Return to grid':'Focus stream';tile.focus.setAttribute('aria-label',state.layout==='focus'&&state.focus===slug?`Return to grid for ${slug}`:`Focus ${slug}`);tile.focus.setAttribute('aria-pressed',String(state.layout==='focus'&&state.focus===slug));mountPlayer(tile);});
+      state.channels.forEach((slug,index)=>{let tile=tiles.get(slug);if(!tile){tile=makeTile(slug);tiles.set(slug,tile);grid.append(tile.card);}tile.card.style.order=state.layout==='focus'&&state.focus===slug?-1:index;tile.card.dataset.featured=String(state.focus===slug);decorate(tile.focus,state.layout==='focus'&&state.focus===slug?'grid':'focus','Focus');tile.focus.title=state.layout==='focus'&&state.focus===slug?'Return to grid':'Focus stream';tile.focus.setAttribute('aria-label',state.layout==='focus'&&state.focus===slug?`Return to grid for ${slug}`:`Focus ${slug}`);tile.focus.setAttribute('aria-pressed',String(state.layout==='focus'&&state.focus===slug));mountPlayer(tile);});
       for(const [slug,tile]of tiles){const meta=catalog.get(slug);if(meta){const image=tile.card.querySelector('.multi-tile-identity img');if(image&&meta.image){if(image.getAttribute('src')!==meta.image)image.src=meta.image;image.hidden=false;}text(tile.card.querySelector('.multi-tile-identity a'),meta.title||slug);text(tile.card.querySelector('.multi-tile-identity span'),meta.category||'Kick stream');const status=tile.card.querySelector('.live-status');status.dataset.live=meta.live||'unknown';status.textContent=isNative(slug)?'Current stream':meta.live==='live'?'Live':meta.live==='offline'?'Offline':'';}}
-      for(const [key,tile]of new Map([...tiles,...clipTiles])){const featured=key===focusKey();tile.card.dataset.featured=String(featured);tile.card.style.order=state.layout==='focus'&&featured?-1:state.channels.indexOf(key)>=0?state.channels.indexOf(key):state.channels.length+[...clipTiles.keys()].indexOf(key);if(tile.focus){decorate(tile.focus,featured&&state.layout==='focus'?'grid':'focus','Focus',true);tile.focus.setAttribute('aria-pressed',String(featured&&state.layout==='focus'));if(!clipTiles.has(key))tile.focus.setAttribute('aria-label',featured&&state.layout==='focus'?`Return to grid for ${key}`:`Focus ${key}`);}if(clipTiles.has(key))tile.card.style.setProperty('--tile-span',count===1?6:count<=4?3:2);}
+      for(const [key,tile]of new Map([...tiles,...clipTiles])){const featured=key===focusKey();tile.card.dataset.featured=String(featured);tile.card.style.order=state.layout==='focus'&&featured?-1:state.channels.indexOf(key)>=0?state.channels.indexOf(key):state.channels.length+[...clipTiles.keys()].indexOf(key);if(tile.focus){decorate(tile.focus,featured&&state.layout==='focus'?'grid':'focus','Focus');tile.focus.setAttribute('aria-pressed',String(featured&&state.layout==='focus'));if(!clipTiles.has(key))tile.focus.setAttribute('aria-label',featured&&state.layout==='focus'?`Return to grid for ${key}`:`Focus ${key}`);}if(clipTiles.has(key))tile.card.style.setProperty('--tile-span',count===1?6:count<=4?3:2);}
       applyTileSizes();$('#multi-layout').value=state.layout;$('#multi-player-mode').value=state.playerMode;
-      const select=$('#multi-chat-channel'),chatKey=JSON.stringify(chatChannels().map(slug=>[slug,catalog.get(slug)?.title,catalog.get(slug)?.image]));
-      if(viewKeys.chat!==chatKey){viewKeys.chat=chatKey;globalThis.KickRefinedPerf?.count('view.chatPickerWrites');select.replaceChildren(...chatChannels().map(s=>new Option(catalog.get(s)?.title||s,s)));select.value=selectedChat();
-      chatTabs.replaceChildren(...chatChannels().map(slug=>{
-        const button=document.createElement('button');button.dataset.channel=slug;button.setAttribute('aria-label',`Show ${slug} chat`);button.title=`Open ${catalog.get(slug)?.title||slug} chat`;
-        const meta=catalog.get(slug);if(meta?.image){const image=document.createElement('img');image.src=meta.image;image.alt='';button.append(image);}
-        const name=document.createElement('span');name.textContent=meta?.title||slug;button.append(name);
-        button.title+='; double-click to focus and listen';
-        button.addEventListener('click',()=>{state.chat=slug;if(clipTiles.size)retainedChat=slug;state.chatVisible=true;select.value=slug;chat.render();schedulePosition();persist();});
-        button.addEventListener('dblclick',event=>{if(!state.channels.includes(slug))return;event.preventDefault();focusStream(slug);});return button;
-      }));}
+      const select=$('#multi-chat-channel'),choices=chatChannels().map(slug=>[slug,catalog.get(slug)?.title||slug]),chatKey=JSON.stringify(choices);
+      if(viewKeys.chat!==chatKey){
+        viewKeys.chat=chatKey;globalThis.KickRefinedPerf?.count('view.chatPickerWrites');
+        select.replaceChildren(...choices.map(([slug,title])=>new Option(title,slug)));
+      }
       if(select.value!==selectedChat())select.value=selectedChat();
       hideChannelInfo();chat.render();syncAudio();updateTabTitle();channelDirectory.render();schedulePosition();
       const saved=$('#multi-sessions'),sessionsKey=JSON.stringify(sessions.map(session=>[session.id,session.name]));
@@ -370,26 +373,29 @@
 
     }
     async function activate(seeds=[],current='',shared=null,fresh=false) {
-      await loaded;if(destroyed)return;
+      const revision=activationRevision,path=location.pathname;
+      await loaded;if(destroyed||revision!==activationRevision||path!==location.pathname)return false;
       const profileSelection=!active?channelPanel?.profileSelection:null;
       if(!active){
-        context=findContext();if(!context)return;
+        context=findContext();if(!context)return false;
         $('.multi-options').hidden=true;$('#multi-manage').setAttribute('aria-expanded','false');$('#multi-add').value='';notice();
         if(shared)state=multiState(shared);else if(fresh)state=multiState({channels:current?[current]:[]});else if(current)state=multiState({...state,channels:[current,...state.channels.filter(s=>s!==current)].slice(0,6)});
         workspaceScope=lifetime.child();workspaceScope.defer(()=>titleObserver.disconnect());workspaceScope.defer(()=>resize.disconnect());active=true;singleTitle=document.title;titleObserver.observe(document.head,{childList:true,subtree:true,characterData:true});
         context.main.prepend(host);
         context.main.scrollTop=0;
         if(context.player)mountNative();else audio.clear();
-      } else if(shared){discardClips();state=multiState(shared);audio.clear();paused.clear();}
+      } else if(shared){discardClips();state=multiState(shared);audio.clear();}
       for(const slug of seeds)if(!state.channels.includes(slug))add(slug,{deferRender:true});
       if(profileSelection&&state.channels.includes(profileSelection.slug))channelDirectory.select(profileSelection.slug,profileSelection.tab,{reveal:false});
       render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();
+      return true;
     }
     function close({restorePlayback=true}={}) {
+      activationRevision++;
       if(!active)return;fullscreen.close();finishResize();sessionStore.flush();channelDirectory.reset();active=false;viewKeys.chat=viewKeys.sessions=viewKeys.suggestions='';layoutScheduler.cancel();resize.disconnect();
       workspaceScope?.dispose();workspaceScope=null;nativeVideoScope=null;wiredVideo=null;nativeStatusFrame=0;titleFrame=metadataFrame=0;chat.reset();
       for(const tile of clipTiles.values()){tile.scope.dispose();}clipTiles.clear();clipFocus='';retainedChat='';if(clipReturn){state.layout=clipReturn.layout;state.focus=clipReturn.focus;clipReturn=null;}
-      for(const tile of tiles.values())tile.scope.dispose();tiles.clear();paused.clear();
+      for(const tile of tiles.values())tile.scope.dispose();tiles.clear();
       const video=context?.player?.querySelector('video');if(document.fullscreenElement===context?.main)document.exitFullscreen().catch(()=>{});
       globalThis.KickRefinedPlayerControls?.clear(context?.player);restoreStyles();restoreChannelInfo();if(context?.player)delete context.player.dataset.krNativePlayer;
       if(video&&native){video.muted=native.muted;if(restorePlayback&&native.wasPlaying&&native.pausedByUs&&video.paused)video.play().catch(()=>{});}
@@ -449,10 +455,10 @@
     lifetime.listen($('#multi-fullscreen'),'click',()=>{const target=context?.main;if(!target)return;const request=document.fullscreenElement===target?document.exitFullscreen():target.requestFullscreen();request.catch(()=>notice('Use the browser fullscreen shortcut if fullscreen is unavailable.'));});
     function setSessionBusy(value){sessionBusy=value;$('#multi-save').disabled=value;$('#multi-delete').disabled=value||!$('#multi-sessions').value;for(const id of ['#multi-save','#multi-delete'])$(id).setAttribute('aria-busy',String(value));}
     lifetime.listen($('#multi-save'),'click',async()=>{if(sessionBusy)return;const name=$('#multi-name').value.trim().slice(0,48);if(!name||!state.channels.length)return notice('Add a stream and name this session before saving.');setSessionBusy(true);notice('Saving session...');const previous=sessions.find(session=>session.name===name),session={id:previous?.id||crypto.randomUUID(),name,state:multiState(state)};try{sessions=await sessionStore.upsertSession(session);if(destroyed)return;persist();if(active)render();notice(`Saved “${name}”.`);}catch{notice('Could not save this session.');}finally{setSessionBusy(false);}});
-    lifetime.listen($('#multi-sessions'),'change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions.find(session=>session.id===e.target.value);if(!session)return;discardClips();state=multiState(session.state);paused.clear();audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();notice(`Loaded “${session.name}”.`);});
+    lifetime.listen($('#multi-sessions'),'change',e=>{if(e.target.value===''){$('#multi-delete').disabled=true;return;}const session=sessions.find(session=>session.id===e.target.value);if(!session)return;discardClips();state=multiState(session.state);audio.clear();$('#multi-name').value=session.name;if(native&&!state.channels.includes(context.slug)){const v=nativeVideo();if(v&&!v.paused){native.pausedByUs=true;v.pause();}}render();if(state.layout==='focus'&&!state.mixAudio&&tiles.has(focusKey()))selectAudio(focusKey(),{enable:true});persist();notice(`Loaded “${session.name}”.`);});
     lifetime.listen($('#multi-delete'),'click',async()=>{if(sessionBusy)return;const choice=$('#multi-sessions').value;if(choice==='')return;setSessionBusy(true);notice('Deleting session...');try{sessions=await sessionStore.deleteSession(choice);if(destroyed)return;if(active)render();notice('Saved session deleted.');}catch{notice('Could not delete this session.');}finally{setSessionBusy(false);}});
     lifetime.listen($('#multi-share'),'click',async()=>{if(!state.channels.length)return notice('Add a stream before sharing.');const url=multiURL(state);try{await navigator.clipboard.writeText(url);notice('Link copied. Recipients need Immersion installed.');}catch{$('#multi-add').value=url;$('#multi-add').select();notice('Copy the selected link.');}});
-    function canAddClip(id){return !clipTiles.has(`clip:${id}`)&&(active?tileCount():(findContext()?.slug?1:0))<6&&!!findContext();}
+    function canAddClip(id,current=findContext()){return !!current&&!clipTiles.has(`clip:${id}`)&&(!active||tileCount()<6);}
     function removeClip(key){
       const tile=clipTiles.get(key);if(!tile)return;
       clipTiles.delete(key);audio.delete(key);tile.scope.dispose();if(clipFocus===key)clipFocus='';
@@ -461,7 +467,7 @@
     }
     async function addClip(item,mode='alongside'){
       if(!item||!(KickRefinedClips.parseClip(item.href)||KickRefinedClips.parseVOD(item.href))||!canAddClip(item.id)){notice('This video is already here, or the workspace has six tiles.');return false;}
-      const wasActive=active;await activate([],pageChannel(),null,!active);if(!active||destroyed||!canAddClip(item.id))return false;
+      const wasActive=active;if(!await activate([],pageChannel(),null,!active)||!active||destroyed||!canAddClip(item.id))return false;
       if(!clipReturn){clipReturn={active:wasActive,layout:state.layout,focus:state.focus,audio:[...audio]};retainedChat=state.chat||context.slug||'';}
       const key=`clip:${item.id}`;
       const tile=KickRefinedMultiClipTile.create({item,scope:workspaceScope.child(),resize,decorate,isAudible:()=>audio.has(key),onPosition:schedulePosition,
@@ -473,22 +479,17 @@
       if(mode==='featured'){clipFocus=key;state.layout='focus';}else if(!wasActive){state.layout='focus';clipFocus='';}
       if(!item.snapshot().paused){if(!state.mixAudio)audio.clear();audio.add(key);}render();return true;
     }
-    function dropPreview(slug){
-      const current=findContext();if(!current)return null;
-      const next=active?multiState(state):multiState({channels:current.slug?[current.slug]:[]});
-      const duplicate=next.channels.includes(slug),full=active?tileCount()>=6:next.channels.length>=6;
-      const workspace=document.createElement('div');workspace.className='stream-drop-zone';workspace.dataset.allowed=String(!duplicate&&!full);
-      workspace.setAttribute('aria-label',duplicate?'Already in this workspace':full?'Workspace is full':'Add stream to workspace');
-      return {element:workspace,allowed:!duplicate&&!full};
+    function dropPreview(slug,current=findContext()){
+      return current?streamDropPreview(active?state.channels.includes(slug):current.slug===slug,active&&tileCount()>=6):null;
     }
     return {
       snapshot:()=>({active,streams:tiles.size,clips:clipTiles.size,startup:startup.snapshot(),transport:playerBus.snapshot(),restoration:{...nativeStyles.snapshot(),info:hiddenInfo.size}}),
       open:(seeds,current,shared)=>activate(seeds,current,shared),drop:(slug,current)=>!active&&slug===current?Promise.resolve():activate([slug],current,null,!active),
-      addClip,canAddClip,isChatSource:chat.isSource,chatFrameRect:chat.frameRect,close,refresh,isActive:()=>active,
+      addClip,canAddClip,isChatSource:chat.isSource,chatFrameRect:chat.frameRect,close,refresh,
       setPreviewMuted(value,restore=true){previewMuted=!!value;if(previewMuted)nativeGestureUntil=0;if(active&&!destroyed&&(previewMuted||restore))syncAudio();},
-      getDropMain:()=>findContext()?.main,dropPreview,
+      dropPreview,
       destroy:()=>{close({restorePlayback:false});destroyed=true;metadata.destroy();startup.destroy();playerBus.destroy();sessionStore.destroy();layoutScheduler.destroy();lifetime.dispose();}
     };
   }
-  globalThis.KickRefinedMulti=Object.freeze({create});
+  globalThis.KickRefinedMulti=Object.freeze({create,dropPreview:(slug,context)=>streamDropPreview(context.slug===slug,false)});
 })();

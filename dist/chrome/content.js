@@ -4,23 +4,35 @@
   if (/^\/popout\/[^/]+\/chat\/?$/.test(location.pathname)) return;
   if (!api?.storage || document.getElementById('kr-root')) return;
   const compactNumber=new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format;
+  const NAVIGATION=1, SIDEBAR=2, MAIN=4, PROFILE=8, PREVIEW=16;
+  const ALL=NAVIGATION|SIDEBAR|MAIN|PROFILE;
+  const sidebarRowSelector='a[data-testid*="-channel-"]';
+  const mainSurface='main,#channel-content,#channel-chatroom,.stream-info,[data-testid="livestream-title"],a[data-card-link],#kr-channel-root,#kr-channel-library,#kr-multi-root';
+  const navigationSurface='nav,header,input[data-testid="search"]';
+  const previewSurface='.z-tooltip,[data-radix-popper-content-wrapper]';
+  const ownedChrome='title,[data-kr-unified-row],[data-kr-sidebar-preview-count],#kr-root,#kr-multi-root,#kr-channel-root,#kr-channel-library';
   let root = document.documentElement;
   let settings = normalize();
   let host, shadow, settingsDialog, palette, updateForm, sidebar, multi, clips, clipBridge, xPosts, mediaCards, replyPreviews, notices, support, channelPanel, checkouts;
   let channels = [], shown = [], selected = 0, highlightedOption = null;
-  const searchService=KickRefinedSearch.create();let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchFailed=false,searchLoaded=0,searchTimer=0,searchRevision=0,searchRenderKey='';
+  const searchService=KickRefinedSearch.create();
+  let searchQuery=KickRefinedSearch.parse(''),searchRows=[],searchBusy=false,searchError='',searchWarning='',searchMore=false,searchFailed=false,searchTimer=0,searchRevision=0;
+  let searchInputs=[],searchOptions=new Map(),searchStatusKey='',emptySearch=null;
   let refreshTimer, routeTimer, routeTimeout, previousFocus;
-  let pageRefreshPending = false;
+  let pendingRefresh = 0;
   let dockPosition = '';
-  let channelPage=null,clipPreview=null,libraryPlayers=null;const discovery=globalThis.KickRefinedDiscovery?.create();
+  let channelPage=null,clipPreview=null,libraryPlayers=null,previewAudioActive=false;const discovery=globalThis.KickRefinedDiscovery?.create();
   let searchWindow=null,nativeSearch=null,restoringSearchFocus=false;
   let sidebarPreview;
   let currentPath = location.pathname;
+  let currentSearch = location.search, currentHash = location.hash;
   let disposed = false;
   let drag = null, dropTarget = null, lastDrop = null, dragChip = null, dragFrame = 0;
   const draggableRows = new Map();
+  const sidebarDetails=new WeakMap(),dirtySidebarRows=new Set();
+  let sidebarRows=[],recommendedSections=new Set(),sidebarListDirty=true;
   const abort = new AbortController();
-  const sidebarObserver = new MutationObserver(scheduleSidebarRefresh);
+  const sidebarObserver = new MutationObserver(records=>{markSidebarChanges(records);sidebarPreview?.schedule();scheduleRefresh(SIDEBAR);});
   const observedSidebar = new ResizeObserver(() => {
     if (host) placeToolbar();
   });
@@ -40,7 +52,7 @@
       shadow.querySelector('.toolbar').classList.toggle('off', !settings.enabled);
       updateForm?.(settings);
     }
-    updateSidebarRows();
+    updateSidebarRows(true);
     clips?.setEnabled(settings.enabled&&settings.chatClips&&!settings.textOnly);
     clipPreview?.setEnabled(settings.enabled);
     libraryPlayers?.setEnabled(settings.enabled);
@@ -101,12 +113,11 @@
     const settingsMulti = document.createElement('button'); settingsMulti.textContent = 'Multiview'; settingsMulti.addEventListener('click', () => openMulti());
     shadow.querySelector('#settings-dialog .footer').append(settingsMulti);
     support = KickRefinedSupport.create({enabled:settings.enabled});
-    channelPage=KickRefinedChannelPage.create({onChange:scheduleRefresh,getProfileMount:tab=>channelPanel?.getProfileMount(tab),onKeydown:handleShortcut,onWatch:row=>watchLibraryVideo(row),onPreview:previewLibraryClip,onPopout:popoutLibraryMedia,onDrag:dragLibraryMedia});
-    channelPanel = KickRefinedChannelPanel.create({support,enabled:settings.enabled,onChange:scheduleRefresh,integratedProfile:true});
-    multi = KickRefinedMulti.create({ getChannels: () => { collectChannels(); return channels; }, onKeydown:handleShortcut, support, channelPanel,onWatchProfileVideo:row=>watchLibraryVideo(row),onPreviewProfileClip:previewLibraryClip,onPopoutProfileMedia:popoutLibraryMedia,onDragProfileMedia:dragLibraryMedia });
-    libraryPlayers=KickRefinedClips.create({enabled:settings.enabled,observeChat:false,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
-    clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:(item,mode)=>multi.addClip(item,mode),onWorkspaceDrag:startClipDrag});
-    clipBridge=KickRefinedClipBridge.create({getClips:()=>clips,multi,startDrag:startClipDrag,endDrag});
+    channelPage=KickRefinedChannelPage.create({onChange:()=>scheduleRefresh(PROFILE),getProfileMount:tab=>channelPanel?.getProfileMount(tab),onKeydown:handleShortcut,onWatch:row=>watchLibraryVideo(row),onPreview:previewLibraryClip,onPopout:popoutLibraryMedia,onDrag:dragLibraryMedia});
+    channelPanel = KickRefinedChannelPanel.create({support,enabled:settings.enabled,onChange:()=>scheduleRefresh(PROFILE),integratedProfile:true});
+    libraryPlayers=KickRefinedClips.create({enabled:settings.enabled,observeChat:false,onWorkspace:addWorkspaceClip,onWorkspaceDrag:startClipDrag});
+    clips = KickRefinedClips.create({enabled:settings.enabled&&settings.chatClips&&!settings.textOnly,onWorkspace:addWorkspaceClip,onWorkspaceDrag:startClipDrag});
+    clipBridge=KickRefinedClipBridge.create({getClips:()=>clips,getWorkspace:()=>multi,startDrag:startClipDrag,endDrag});
     xPosts=KickRefinedX.create({enabled:settings.enabled&&settings.xEmbeds&&!settings.textOnly});
     mediaCards=KickRefinedMedia.create({media:settings.enabled&&settings.mediaEmbeds&&!settings.textOnly,profiles:settings.enabled&&settings.xEmbeds&&!settings.textOnly});
     replyPreviews=KickRefinedReplies.create({enabled:settings.enabled});
@@ -201,23 +212,28 @@
     if(!palette.open){collectChannels();palette.show();}
     searchWindow.dock(input);nativeSearch.expanded(true);placeToolbar();
     if(document.activeElement!==input){restoringSearchFocus=true;input.focus({preventScroll:true});restoringSearchFocus=false;}
-    if(changed||!wasOpen||!searchRenderKey)updateSearch();else renderResults();
+    if(changed||!wasOpen)updateSearch();else renderResults();
   }
 
   function collectChannels() {
+    mountSidebar();
+    updateSidebarRows();
     const found = new Map();
-    for (const link of document.querySelectorAll('#sidebar-wrapper a[data-testid*="-channel-"],a[data-card-link]')) {
-      const slug = channelSlug(link.href, location.origin);
+    for (const link of document.querySelectorAll(`#sidebar-wrapper ${sidebarRowSelector},a[data-card-link]`)) {
+      const cached=sidebar?.contains(link)&&link.matches(sidebarRowSelector)?sidebarDetails.get(link):null;
+      const slug=cached?cached.slug:channelSlug(link.href,location.origin);
       if (!slug || found.has(slug)) continue;
-      const details = describeChannel(link);
-      found.set(slug, { slug, ...details, link });
+      found.set(slug,cached||{slug,...describeChannel(link,slug),link});
     }
     for (const slug of settings.pinned) {
       if (!found.has(slug)) found.set(slug, { slug, title: slug, section: 'Pinned', live: 'unknown', image: '', link: null });
     }
-    channels = [...found.values()].sort((a, b) => Number(settings.pinned.includes(b.slug)) - Number(settings.pinned.includes(a.slug)));
+    const pinned=new Set(settings.pinned);
+    const next=[...found.values()].sort((a,b)=>Number(pinned.has(b.slug))-Number(pinned.has(a.slug)));
+    const fields=['slug','title','image','live','section','category','viewers','link'];
+    if(next.length!==channels.length||next.some((row,index)=>row!==channels[index]&&fields.some(field=>row[field]!==channels[index][field])))channels=next;
   }
-  function describeChannel(link) {
+  function describeChannel(link,slug=channelSlug(link.href,location.origin)) {
     const image = link.querySelector('img');
     const following = link.dataset.testid?.includes('following-channel-');
     const recommended = link.dataset.testid?.includes('recommended-channel-');
@@ -226,17 +242,25 @@
     const live = offline ? 'offline' : liveMark || link.dataset.live === 'true' || link.dataset.status === 'live' || recommended ? 'live' : following && image ? 'offline' : 'unknown';
     const category = link.querySelector('.text-surface-fg-subtle,.sub')?.textContent.trim() || '';
     const viewers = liveMark?.classList.contains('bg-kick-voltGreen-150') ? liveMark.parentElement?.textContent.trim() : '';
-    return { title: image?.alt || channelSlug(link.href, location.origin), image: image?.currentSrc || image?.src || '', live, section: following ? 'Following' : recommended ? 'Recommended' : 'Browse', category, viewers };
+    return { title: image?.alt || slug, image: image?.currentSrc || image?.src || '', live, section: following ? 'Following' : recommended ? 'Recommended' : 'Browse', category, viewers };
   }
+  function workspace(){
+    if(!multi){
+      multi=KickRefinedMulti.create({getChannels:()=>{collectChannels();return channels;},onKeydown:handleShortcut,support,channelPanel,onWatchProfileVideo:watchLibraryVideo,onPreviewProfileClip:previewLibraryClip,onPopoutProfileMedia:popoutLibraryMedia,onDragProfileMedia:dragLibraryMedia});
+      if(previewAudioActive)multi.setPreviewMuted(true);
+    }
+    return multi;
+  }
+  function addWorkspaceClip(item,mode){return settings.enabled&&!disposed?workspace().addClip(item,mode):Promise.resolve(false);}
   function openMulti(channel) {
     if (palette.open) closeSearch();
     if (settingsDialog.open) settingsDialog.close();
-    multi.open(channel ? [channel.slug] : [], KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname, location.origin));
+    workspace().open(channel ? [channel.slug] : [], KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname, location.origin));
   }
 
   function previewLibraryClip(row,opener){
     if(!settings.enabled||disposed)return false;
-    clipPreview ||= KickRefinedClipPreview.create({onActiveChange:(value,restore)=>multi?.setPreviewMuted(value,restore)});return clipPreview.open(row,opener);
+    clipPreview ||= KickRefinedClipPreview.create({onActiveChange:(value,restore)=>{previewAudioActive=value;multi?.setPreviewMuted(value,restore);}});return clipPreview.open(row,opener);
   }
   function popoutLibraryMedia(row){
     if(!settings.enabled||disposed)return false;
@@ -250,11 +274,11 @@
   }
   async function watchLibraryVideo(row,mode='alongside'){
     if(!settings.enabled||disposed)return false;
-    let item;try{item=libraryPlayers.importItem({...KickRefinedClips.mediaDetails(row),href:row.href,title:row.title,time:0,paused:false,volume:1});const added=await multi.addClip(item,mode);if(!added)item.release();return added;}catch{item?.release();return false;}
+    let item;try{item=libraryPlayers.importItem({...KickRefinedClips.mediaDetails(row),href:row.href,title:row.title,time:0,paused:false,volume:1});const added=await addWorkspaceClip(item,mode);if(!added)item.release();return added;}catch{item?.release();return false;}
   }
   async function watchResult(row){
     if(!row)return;if(row.type==='channel'){openMulti(row);return;}
-    let item;try{item=clips.importItem({...KickRefinedClips.mediaDetails(row),href:row.href,title:row.title,time:0,paused:false,volume:1});if(await multi.addClip(item,'alongside'))closeSearch();else item.release();}catch{item?.release();const status=shadow.querySelector('#search-status');status.hidden=false;status.textContent='Could not add this video. Try again.';status.dataset.error='true';}
+    let item;try{item=clips.importItem({...KickRefinedClips.mediaDetails(row),href:row.href,title:row.title,time:0,paused:false,volume:1});if(await addWorkspaceClip(item,'alongside'))closeSearch();else item.release();}catch{item?.release();const status=shadow.querySelector('#search-status');status.hidden=false;status.textContent='Could not add this video. Try again.';status.dataset.error='true';}
   }
 
   function changeSearchFilters(patch){
@@ -273,64 +297,102 @@
   }
   function updateSearch(){
     nativeSearch?.sync(shadow.querySelector('#channel-search').value);
-    shown=[];selected=0;searchRevision++;clearTimeout(searchTimer);searchService.cancel();searchRows=[];searchMore=false;searchLoaded=0;searchError=searchWarning='';searchFailed=false;
+    shown=[];selected=0;searchRevision++;clearTimeout(searchTimer);searchService.cancel();searchRows=[];searchMore=false;searchError=searchWarning='';searchFailed=false;
     try{searchQuery=KickRefinedSearch.parse(shadow.querySelector('#channel-search').value,{allowUnscoped:true});}catch(error){searchQuery=null;searchError=error.message;searchBusy=false;renderResults();return;}
     searchBusy=searchQuery.type==='channels'?!!searchQuery.terms.length||!!searchQuery.channels.length:!!searchQuery.channels.length;renderResults();if(searchBusy){const revision=searchRevision;searchTimer=setTimeout(()=>loadSearch(revision),220);}
   }
   async function loadSearch(revision,append=false,retryFailed=false){
     if(!searchQuery||searchQuery.type!=='channels'&&!searchQuery.channels.length||revision!==searchRevision||!palette.open)return;searchBusy=true;searchError='';renderResults();
-    try{const result=await searchService.search(searchQuery,{append,retryFailed});if(revision!==searchRevision||!palette.open)return;searchRows=result.rows;searchMore=result.more;searchLoaded=result.loaded;searchWarning=result.warning||'';searchFailed=!!result.failedChannels?.length;}
+    try{const result=await searchService.search(searchQuery,{append,retryFailed});if(revision!==searchRevision||!palette.open)return;searchRows=result.rows;searchMore=result.more;searchWarning=result.warning||'';searchFailed=!!result.failedChannels?.length;}
     catch(error){if(revision!==searchRevision||error.name==='AbortError')return;searchError=error.message||'Kick search is unavailable. Try again.';searchFailed=true;}
     finally{if(revision===searchRevision&&palette.open){searchBusy=false;renderResults();}}
   }
   function renderResults() {
     if(disposed||drag?.fromSearch)return;
     syncSearchFilters();
+    const results=shadow.querySelector('#channel-results');
+    const channelSearch=searchQuery?.type==='channels',queryChanged=searchInputs[0]!==searchQuery;
+    const inputs=[searchQuery,searchRows,channelSearch?channels:null,channelSearch?settings.pinned:null];
+    if(inputs.some((value,index)=>value!==searchInputs[index])){
+      searchInputs=inputs;
+      renderSearchOptions(results);
+    }
+    const statusKey=JSON.stringify([shown.length,searchQuery?.type,searchQuery?.channels.length,searchBusy,searchError,searchWarning,searchMore,searchFailed]);
+    if(queryChanged||statusKey!==searchStatusKey){
+      searchStatusKey=statusKey;
+      renderSearchStatus(results);
+    }
+    highlight(false);
+  }
+  function renderSearchOptions(results){
     const rows=new Map();if(searchQuery?.type==='channels')for(const channel of channels){const row={type:'channel',key:'channel:'+channel.slug,views:null,...channel};if(KickRefinedSearch.fits(row,searchQuery))rows.set(row.key,row);}
     for(const row of searchRows){const local=rows.get(row.key);rows.set(row.key,{...local,...row,link:local?.link||null,section:local?.section||row.section,image:row.image||local?.image||''});}
     const selectedKey=shown[selected]?.key;shown=(searchQuery?.type==='channels'?KickRefinedSearch.rank([...rows.values()],searchQuery,settings.pinned):[...rows.values()]).slice(0,200);
     const retained=shown.findIndex(row=>row.key===selectedKey);if(retained>=0)selected=retained;
     selected = Math.max(0, Math.min(selected, shown.length - 1));
-    const signature=JSON.stringify([shown.map(({link,...row})=>row),searchQuery,searchBusy,searchError,searchWarning,searchMore,searchFailed,searchLoaded,settings.pinned]);if(signature===searchRenderKey){highlight(false);return;}searchRenderKey=signature;
-    const results = shadow.querySelector('#channel-results');
-    results.replaceChildren();
-    highlightedOption = null;
+    const nextOptions=new Map(),pinned=new Set(settings.pinned);
     for (const [index, channel] of shown.entries()) {
-      const option = document.createElement('div');
-      option.className = 'option'; option.id = `kr-option-${index}`; option.setAttribute('role', 'option');
-      option.setAttribute('aria-selected', 'false');
-      option.dataset.kind=channel.type||'channel';
-      option.dataset.live = channel.live;
-      const avatar = document.createElement('span'); avatar.className = 'avatar'+(channel.type!=='channel'?' result-thumbnail':'');
-      if (channel.image) {
-        const photo = document.createElement('img'); photo.src = channel.image; photo.alt = `${channel.title} ${channel.type==='channel'?'profile':'preview'}`; photo.decoding = 'async';photo.loading='lazy';photo.referrerPolicy='no-referrer';photo.draggable=false;
-        photo.addEventListener('error', () => { avatar.textContent = channel.title.slice(0, 2); }, { once: true }); avatar.append(photo);
-      } else avatar.textContent = channel.title.slice(0, 2);
-      const info = document.createElement('div'); info.className = 'channel-info';
-      const name = document.createElement('div'); name.className = 'channel-name'; name.textContent = channel.title;
-      const detail = document.createElement('div'); detail.className = 'channel-detail'; detail.textContent = (channel.type==='channel'?[channel.section,channel.category]:[channel.type==='clip'?'Clip':'VOD',channel.slug,channel.creator?`by ${channel.creator}`:null,channel.category,channel.created?new Date(channel.created).toLocaleDateString():null,channel.duration?KickRefinedSearch.duration(channel.duration):null]).filter(Boolean).join(' · ');
-      info.append(name);if(channel.type==='channel'&&channel.streamTitle){const title=document.createElement('div');title.className='result-stream-title';title.textContent=channel.streamTitle;info.append(title);}info.append(detail); option.append(avatar, info);
-      if(channel.type!=='channel'&&channel.duration){const clock=document.createElement('span');clock.className='result-duration';clock.textContent=KickRefinedSearch.duration(channel.duration);avatar.append(clock);}
-      const status = document.createElement('span'); status.className = 'live-status'; status.dataset.live = channel.live;
-      status.textContent = channel.live === 'live' ? Number.isFinite(channel.views)?`Live · ${compactNumber(channel.views)}`:channel.viewers && channel.viewers !== 'LIVE' ? `Live · ${channel.viewers}` : 'Live' : channel.live === 'offline' ? 'Offline' : 'Status unavailable'; option.append(status);
-      if(channel.type!=='channel')status.textContent=channel.views===null?'':compactNumber(channel.views)+' views';
-      if (channel.type==='channel'&&settings.pinned.includes(channel.slug)) { const pin = document.createElement('span'); pin.className = 'pin'; pin.textContent = '★'; option.append(pin); }
-      option.addEventListener('pointermove', () => { if (selected !== index) { selected = index; highlight(false); } });
-      option.addEventListener('click', () => go(channel));
-      if(channel.type==='channel'){option.draggable=true;option.title='Drag into the workspace to watch together';option.addEventListener('dragstart',event=>startChannelDrag(event,channel,option,true));}
-      if(channel.type==='clip'||channel.type==='vod'){option.draggable=true;option.title='Drag into the workspace';option.addEventListener('dragstart',event=>{const parsed=KickRefinedClips.parseClip(channel.href)||KickRefinedClips.parseVOD(channel.href);if(!parsed)return;event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('text/uri-list',parsed.href);startClipDrag(event,{...parsed,title:channel.title,fromSearch:true,commit:async mode=>{let item;try{item=clips.importItem({href:parsed.href,title:channel.title,time:0,paused:false,volume:1});if(!await multi.addClip(item,mode))item.release();}catch{item?.release();}}});});}
-      results.append(option);
+      const isPinned=channel.type==='channel'&&pinned.has(channel.slug);
+      const {type,title,live,image,section,category,slug,creator,created,duration,streamTitle,views,viewers}=channel;
+      const signature=JSON.stringify([type,title,live,image,section,category,slug,creator,created,duration,streamTitle,views,viewers,isPinned]);
+      let entry=searchOptions.get(channel.key);
+      if(entry?.signature!==signature){
+        entry?.option.remove();
+        entry={channel,index,signature,option:null};
+        entry.option=createSearchOption(entry,isPinned);
+      }
+      entry.channel=channel;
+      entry.index=index;
+      const id=`kr-option-${index}`;
+      if(entry.option.id!==id)entry.option.id=id;
+      nextOptions.set(channel.key,entry);
     }
+    for(const [key,entry] of searchOptions)if(!nextOptions.has(key))entry.option.remove();
+    let cursor=results.firstChild;
+    for(const {option} of nextOptions.values()){
+      if(option!==cursor)results.insertBefore(option,cursor);
+      cursor=option.nextSibling;
+    }
+    searchOptions=nextOptions;
+  }
+  function createSearchOption(entry,pinned){
+    const {channel}=entry;
+    const option = document.createElement('div');
+    option.className = 'option'; option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', 'false');
+    option.dataset.kind=channel.type||'channel';
+    option.dataset.live = channel.live;
+    const avatar = document.createElement('span'); avatar.className = 'avatar'+(channel.type!=='channel'?' result-thumbnail':'');
+    const avatarFallback=channel.title.slice(0,2);
+    if (channel.image) {
+      const photo = document.createElement('img'); photo.src = channel.image; photo.alt = `${channel.title} ${channel.type==='channel'?'profile':'preview'}`; photo.decoding = 'async';photo.loading='lazy';photo.referrerPolicy='no-referrer';photo.draggable=false;
+      photo.addEventListener('error', () => { avatar.textContent = avatarFallback; }, { once: true }); avatar.append(photo);
+    } else avatar.textContent = avatarFallback;
+    const info = document.createElement('div'); info.className = 'channel-info';
+    const name = document.createElement('div'); name.className = 'channel-name'; name.textContent = channel.title;
+    const detail = document.createElement('div'); detail.className = 'channel-detail'; detail.textContent = (channel.type==='channel'?[channel.section,channel.category]:[channel.type==='clip'?'Clip':'VOD',channel.slug,channel.creator?`by ${channel.creator}`:null,channel.category,channel.created?new Date(channel.created).toLocaleDateString():null,channel.duration?KickRefinedSearch.duration(channel.duration):null]).filter(Boolean).join(' · ');
+    info.append(name);if(channel.type==='channel'&&channel.streamTitle){const title=document.createElement('div');title.className='result-stream-title';title.textContent=channel.streamTitle;info.append(title);}info.append(detail); option.append(avatar, info);
+    if(channel.type!=='channel'&&channel.duration){const clock=document.createElement('span');clock.className='result-duration';clock.textContent=KickRefinedSearch.duration(channel.duration);avatar.append(clock);}
+    const status = document.createElement('span'); status.className = 'live-status'; status.dataset.live = channel.live;
+    status.textContent = channel.live === 'live' ? Number.isFinite(channel.views)?`Live · ${compactNumber(channel.views)}`:channel.viewers && channel.viewers !== 'LIVE' ? `Live · ${channel.viewers}` : 'Live' : channel.live === 'offline' ? 'Offline' : 'Status unavailable'; option.append(status);
+    if(channel.type!=='channel')status.textContent=channel.views===null?'':compactNumber(channel.views)+' views';
+    if (pinned) { const pin = document.createElement('span'); pin.className = 'pin'; pin.textContent = '★'; option.append(pin); }
+    option.addEventListener('pointermove', () => { if (selected !== entry.index) { selected = entry.index; highlight(false); } });
+    option.addEventListener('click', () => go(entry.channel));
+    if(channel.type==='channel'){option.draggable=true;option.title='Drag into the workspace to watch together';option.addEventListener('dragstart',event=>startChannelDrag(event,entry.channel,option,true));}
+    if(channel.type==='clip'||channel.type==='vod'){option.draggable=true;option.title='Drag into the workspace';option.addEventListener('dragstart',event=>{const {title,href}=entry.channel,parsed=KickRefinedClips.parseClip(href)||KickRefinedClips.parseVOD(href);if(!parsed)return;event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('text/uri-list',parsed.href);startClipDrag(event,{...parsed,title,fromSearch:true,commit:async mode=>{let item;try{item=clips.importItem({href:parsed.href,title,time:0,paused:false,volume:1});if(!await addWorkspaceClip(item,mode))item.release();}catch{item?.release();}}});});}
+    return option;
+  }
+  function renderSearchStatus(results){
     if (!shown.length) {
-      const empty = document.createElement('p'); empty.className = 'empty';
-      empty.textContent = searchBusy?'Searching…':searchError?'':searchQuery?.type==='channels'?'No matching channels.':searchQuery&&!searchQuery.channels.length?`Choose a channel to browse ${searchQuery.type==='vods'?'VODs':'clips'}.`:`No matching ${searchQuery?.type||'results'} loaded.`;
-      results.append(empty);
-    }
+      if(!emptySearch){emptySearch=document.createElement('p');emptySearch.className='empty';}
+      emptySearch.textContent = searchBusy?'Searching…':searchError?'':searchQuery?.type==='channels'?'No matching channels.':searchQuery&&!searchQuery.channels.length?`Choose a channel to browse ${searchQuery.type==='vods'?'VODs':'clips'}.`:`No matching ${searchQuery?.type||'results'} loaded.`;
+      if(emptySearch.parentNode!==results)results.append(emptySearch);
+    }else emptySearch?.remove();
     shadow.querySelector('#result-count').textContent = `${shown.length} ${searchQuery?.type==='vods'?(shown.length===1?'VOD':'VODs'):searchQuery?.type==='clips'?(shown.length===1?'clip':'clips'):(shown.length===1?'channel':'channels')}`;
     const status=shadow.querySelector('#search-status');status.textContent=searchError||searchWarning||(searchBusy?'Searching Kick...':'');status.hidden=!status.textContent;status.dataset.error=String(!!searchError);
     if((searchError||searchFailed)&&searchQuery){const retry=document.createElement('button');retry.type='button';retry.className='search-retry';retry.textContent='Retry';retry.disabled=searchBusy;retry.addEventListener('click',()=>loadSearch(searchRevision,false,true));status.append(retry);}
     const more=shadow.querySelector('#search-more');more.hidden=!searchMore;more.disabled=searchBusy;
-    highlight(false);
   }
 
   function highlight(scroll = true) {
@@ -350,41 +412,85 @@
     channel=shown.find(row=>row.key===channel.key)||channel;
     if(drag||lastDrop&&performance.now()-lastDrop.time<600&&lastDrop.slug===channel.slug)return;
     closeSearch();
-    multi.close();
+    multi?.close();
     if (channel.link?.isConnected) channel.link.click();
     else location.assign(channel.href||`/${encodeURIComponent(channel.slug)}`);
   }
 
-  function updateSidebarRows() {
-    if (!sidebar?.isConnected) return;
-    const rows = sidebar.querySelectorAll('a[data-testid*="-channel-"]');
-    for (const row of draggableRows.keys()) if (!row.isConnected) draggableRows.delete(row);
-    for (const row of rows) {
-      if (settings.enabled) {
-        if (!draggableRows.has(row)) draggableRows.set(row, { original: row.getAttribute('draggable'), images: [...row.querySelectorAll('img')].map(img => [img, img.getAttribute('draggable')]) });
-        if (row.getAttribute('draggable') !== 'true') row.setAttribute('draggable','true');
-        for (const img of row.querySelectorAll('img')) if (img.getAttribute('draggable') !== 'false') img.setAttribute('draggable','false');
-      } else restoreDraggable(row);
-      const slug = channelSlug(row.href, location.origin);
-      const pinned = settings.pinned.includes(slug);
-      const live = describeChannel(row).live;
-      if (row.dataset.krLive !== live) row.dataset.krLive = live;
-      if (row.dataset.krPinned !== String(pinned)) row.dataset.krPinned = String(pinned);
-      if (row.dataset.testid?.startsWith('sidebar-recommended-channel-')) {
-        const section = row.closest('section');
-        // Do not hide a mixed container if Kick changes the sidebar structure.
-        if (section && !section.querySelector('[data-testid^="sidebar-following-channel-"]')) section.dataset.krSection = 'recommended';
+  function markSidebarChanges(records){
+    for(const record of records){
+      const target=record.target.nodeType===1?record.target:record.target.parentElement;
+      if(record.attributeName==='data-testid'&&target?.matches('a'))sidebarListDirty=true;
+      const row=target?.closest(sidebarRowSelector);
+      if(row&&sidebar?.contains(row))dirtySidebarRows.add(row);
+      else if(record.type==='childList'&&!sidebarListDirty){
+        for(const nodes of [record.addedNodes,record.removedNodes])for(const node of nodes){
+          if(node.nodeType===1&&(node.matches(sidebarRowSelector)||node.firstElementChild&&node.querySelector(sidebarRowSelector)))sidebarListDirty=true;
+        }
       }
     }
   }
 
+  function updateSidebarRows(force=false) {
+    if (!sidebar?.isConnected) return;
+    markSidebarChanges(sidebarObserver.takeRecords());
+    if(sidebarListDirty){
+      sidebarListDirty=false;
+      sidebarRows=[...sidebar.querySelectorAll(sidebarRowSelector)];
+      const currentRows=new Set(sidebarRows),sections=new Set();
+      for(const row of draggableRows.keys())if(!currentRows.has(row))restoreDraggable(row);
+      for(const row of sidebarRows){
+        dirtySidebarRows.add(row);
+        if(row.dataset.testid?.startsWith('sidebar-recommended-channel-')){
+          const section=row.closest('section');
+          if(section)sections.add(section);
+        }
+      }
+      for(const section of sections)if(section.querySelector('[data-testid^="sidebar-following-channel-"]'))sections.delete(section);
+      for(const section of recommendedSections)if(!sections.has(section))delete section.dataset.krSection;
+      for(const section of sections)if(section.dataset.krSection!=='recommended')section.dataset.krSection='recommended';
+      recommendedSections=sections;
+    }
+    for(const row of dirtySidebarRows){
+      const images=draggableRows.get(row)?.images;
+      if(images)for(const [img,value] of images)if(!row.contains(img)){restoreImageDrag(img,value);images.delete(img);}
+      if(sidebar.contains(row)&&row.matches(sidebarRowSelector)){
+        const slug=channelSlug(row.href,location.origin);
+        sidebarDetails.set(row,{slug,...describeChannel(row,slug),link:row});
+        globalThis.KickRefinedPerf?.count('sidebar.rowReads');
+      }
+    }
+    const rows=force?sidebarRows:dirtySidebarRows;
+    for (const row of rows) {
+      if(!sidebar.contains(row)||!row.matches(sidebarRowSelector))continue;
+      if (settings.enabled) {
+        let saved=draggableRows.get(row);
+        if(!saved){saved={original:row.getAttribute('draggable'),images:new Map()};draggableRows.set(row,saved);}
+        if (row.getAttribute('draggable') !== 'true') row.setAttribute('draggable','true');
+        for (const img of row.querySelectorAll('img')) {
+          if(!saved.images.has(img))saved.images.set(img,img.getAttribute('draggable'));
+          if(img.getAttribute('draggable')!=='false')img.setAttribute('draggable','false');
+        }
+      } else restoreDraggable(row);
+      const {slug,live}=sidebarDetails.get(row);
+      const pinned = settings.pinned.includes(slug);
+      if (row.dataset.krLive !== live) row.dataset.krLive = live;
+      if (row.dataset.krPinned !== String(pinned)) row.dataset.krPinned = String(pinned);
+    }
+    dirtySidebarRows.clear();
+  }
+
   function mountSidebar() {
     const next = document.getElementById('sidebar-wrapper');
-    if (next === sidebar && sidebar?.isConnected) return;
+    if (next === sidebar) return;
     observedSidebar.disconnect(); sidebarObserver.disconnect(); sidebar = next;
+    for(const row of draggableRows.keys())restoreDraggable(row);
+    for(const section of recommendedSections)delete section.dataset.krSection;
+    recommendedSections.clear();sidebarRows=[];dirtySidebarRows.clear();sidebarListDirty=true;
     if (!sidebar) return;
     observedSidebar.observe(sidebar);
-    sidebarObserver.observe(sidebar, { subtree: true, attributes: true, attributeFilter: ['src', 'class', 'data-live', 'data-status'] });
+    sidebarObserver.observe(sidebar,{subtree:true,childList:true,characterData:true,attributes:true,
+      attributeFilter:['href','src','srcset','sizes','alt','class','data-live','data-status','data-testid','data-ds-icon']});
   }
 
   function stopTransition() {
@@ -392,10 +498,13 @@
     shadow?.querySelector('#kr-switch')?.removeAttribute('aria-busy');
     if (shadow) shadow.querySelector('#kr-switch').dataset.tip = 'Switch channel · Alt+K';
   }
+  function restoreImageDrag(img,value){
+    if(value===null)img.removeAttribute('draggable');else img.setAttribute('draggable',value);
+  }
   function restoreDraggable(row) {
     const saved=draggableRows.get(row); if(!saved)return;
     if(saved.original===null)row.removeAttribute('draggable');else row.setAttribute('draggable',saved.original);
-    for(const [img,value]of saved.images)if(value===null)img.removeAttribute('draggable');else img.setAttribute('draggable',value);
+    for(const [img,value]of saved.images)restoreImageDrag(img,value);
     draggableRows.delete(row);
   }
   function endDrag({committed=false}={}) {
@@ -404,7 +513,7 @@
     drag?.resize?.disconnect();
     cancelAnimationFrame(dragFrame);dragFrame=0;delete root.dataset.krDragging;dragChip?.remove();dragChip=null;drag=null;dropTarget?.remove();dropTarget=null;
     if(palette){delete palette.dataset.dragging;delete palette.dataset.cancelDrop;}
-    if(searchDrag&&palette){lastDrop={slug:shown[selected]?.slug,time:performance.now()};if(committed)closeSearch();else{searchRenderKey='';renderResults();}}
+    if(searchDrag&&palette){lastDrop={slug:shown[selected]?.slug,time:performance.now()};if(committed)closeSearch();else renderResults();}
   }
   function drawDrag(){
     dragFrame=0;if(!drag||!dropTarget)return;
@@ -435,19 +544,22 @@
     return !!box&&event.clientX>=box.left&&event.clientX<box.right&&event.clientY>=box.top&&event.clientY<box.bottom;
   }
   function startDrag(event) {
-    if(!settings.enabled || !event.dataTransfer || !multi)return;
+    if(!settings.enabled||!event.dataTransfer)return;
     const row=event.target.closest?.('#sidebar-wrapper a[data-testid*="-channel-"]');
     if(!row)return;
-    startChannelDrag(event,{slug:channelSlug(row.href,location.origin),...describeChannel(row)},row,false);
+    updateSidebarRows();
+    const details=sidebarDetails.get(row),slug=details?details.slug:channelSlug(row.href,location.origin);
+    startChannelDrag(event,details||{slug,...describeChannel(row,slug)},row,false);
   }
   function startChannelDrag(event,meta,row,fromSearch=false){
-    if(!settings.enabled||!event.dataTransfer||!multi)return;const slug=meta.slug,main=multi.getDropMain();
+    if(!settings.enabled||!event.dataTransfer)return;
+    const slug=meta.slug,context=KickRefinedMultiLayout.findContext(),main=context?.main;
     if(!slug || !main)return;
     endDrag();drag={slug,row,measure:true,fromSearch};row.dataset.krDragging='true';
     if(fromSearch){palette.dataset.dragging='true';}
     event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('application/x-kick-refined-channel',slug);
     const href=`https://kick.com/${slug}`;event.dataTransfer.setData('text/uri-list',href);event.dataTransfer.setData('text/plain',href);
-    const preview=multi.dropPreview(slug);if(!preview){endDrag();return;}drag.main=main;drag.allowed=preview.allowed;drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
+    const preview=multi?multi.dropPreview(slug,context):KickRefinedMulti.dropPreview(slug,context);drag.main=main;drag.allowed=preview.allowed;drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
     dropTarget=document.createElement('div');dropTarget.id='kr-multi-drop';dropTarget.setAttribute('role','region');dropTarget.setAttribute('aria-label',preview.element.getAttribute('aria-label'));
     dropTarget.style.cssText='position:fixed;z-index:500;overflow:hidden;background:transparent !important;';
     const sr=shadowRoot(dropTarget);sr.append(preview.element);drag.preview=preview.element;document.body.append(dropTarget);
@@ -462,13 +574,13 @@
     dropTarget.addEventListener('drop',e=>{
       if(!drag)return;e.preventDefault();e.stopPropagation();const dropped=drag.slug,allowed=drag.allowed;
       lastDrop={slug:dropped,time:performance.now()};endDrag({committed:allowed});
-      if(allowed)multi.drop(dropped,KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname,location.origin));
+      if(allowed)workspace().drop(dropped,KickRefinedChannelPage.routeSlug()||channelSlug(location.pathname,location.origin));
     });
   }
   function startClipDrag(event,item){
     if(!settings.enabled||!item.fromLibrary&&!item.fromWindow&&(!settings.chatClips||settings.textOnly)||!(KickRefinedClips.parseClip(item.href)||KickRefinedClips.parseVOD(item.href)))return;
-    const main=multi.getDropMain();if(!main)return;
-    endDrag();drag={main,kind:'clip',fromSearch:!!item.fromSearch,fromLibrary:!!item.fromLibrary,item,allowed:multi.canAddClip(item.id),measure:true,x:event?.clientX??item.x??0,y:event?.clientY??item.y??0};
+    const context=KickRefinedMultiLayout.findContext(),main=context?.main;if(!main)return;
+    endDrag();drag={main,kind:'clip',fromSearch:!!item.fromSearch,fromLibrary:!!item.fromLibrary,item,allowed:multi?multi.canAddClip(item.id,context):true,measure:true,x:event?.clientX??item.x??0,y:event?.clientY??item.y??0};
     if(item.fromLibrary)drag.library=event?.composedPath().find(node=>node.id==='kr-channel-library');
     if(item.fromSearch){palette.dataset.dragging='true';}
     drag.resize=new ResizeObserver(resizeDrag);drag.resize.observe(main);root.dataset.krDragging='true';
@@ -483,7 +595,7 @@
     const chipRoot=shadowRoot(dragChip),chip=document.createElement('div');chip.className='drag-channel-chip';const words=document.createElement('div'),name=document.createElement('strong');name.textContent=item.title||'Kick clip';words.append(name);chip.append(words);chipRoot.append(chip);
     const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;chipRoot.append(canvas);canvas.style.cssText='position:absolute;width:1px;height:1px;opacity:0';document.body.append(dragChip);if(!item.fromLibrary)event?.dataTransfer?.setDragImage(canvas,0,0);drawDrag();
     dropTarget.addEventListener('dragover',e=>{e.preventDefault();if(drag)e.dataTransfer.dropEffect=drag.allowed?'copy':'none';});
-    dropTarget.addEventListener('drop',e=>{if(!drag||drag.kind!=='clip')return;e.preventDefault();e.stopPropagation();const mode=e.composedPath().find(node=>node.dataset?.placement)?.dataset.placement||'alongside',allowed=drag.allowed;endDrag({committed:allowed});if(allowed){if(item.commit)item.commit(mode);else void multi.addClip(item,mode);}});
+    dropTarget.addEventListener('drop',e=>{if(!drag||drag.kind!=='clip')return;e.preventDefault();e.stopPropagation();const mode=e.composedPath().find(node=>node.dataset?.placement)?.dataset.placement||'alongside',allowed=drag.allowed;endDrag({committed:allowed});if(allowed){if(item.commit)item.commit(mode);else void addWorkspaceClip(item,mode);}});
     if(item.fromWindow||item.pointer){
       const session=drag;
       const ancestors=[];for(let node=main;node;node=node.parentElement)if(node.scrollHeight>node.clientHeight+1&&/(auto|scroll)/.test(getComputedStyle(node).overflowY))ancestors.push(node);
@@ -497,18 +609,26 @@
         if(item.windowHost)item.windowHost.style.pointerEvents=windowEvents;dropTarget.style.display=dropDisplay;
         return !overProfile&&event.clientX>=box.left&&event.clientX<=box.right&&event.clientY>=box.top&&event.clientY<=box.bottom?(event.clientX<box.left+box.width/2?'alongside':'featured'):null;
       };
-      return {move(event){if(drag!==session)return;session.x=event.clientX;session.y=event.clientY;session.edgeScroll=event.clientY<44?-20:event.clientY>innerHeight-44?20:0;const mode=locate(event);session.preview.dataset.over=String(!!mode);for(const zone of session.preview.children)zone.dataset.active=String(zone.dataset.placement===mode);},finish(event){const mode=locate(event),allowed=!!mode&&session.allowed;if(drag===session)endDrag({committed:allowed});if(allowed){if(item.commit)void item.commit(mode);else{const {windowHost,fromWindow,...transfer}=item;void multi.addClip(transfer,mode);}}return allowed;},cancel(){if(drag===session)endDrag();}};
+      return {move(event){if(drag!==session)return;session.x=event.clientX;session.y=event.clientY;session.edgeScroll=event.clientY<44?-20:event.clientY>innerHeight-44?20:0;const mode=locate(event);session.preview.dataset.over=String(!!mode);for(const zone of session.preview.children)zone.dataset.active=String(zone.dataset.placement===mode);},finish(event){const mode=locate(event),allowed=!!mode&&session.allowed;if(drag===session)endDrag({committed:allowed});if(allowed){if(item.commit)void item.commit(mode);else{const {windowHost,fromWindow,...transfer}=item;void addWorkspaceClip(transfer,mode);}}return allowed;},cancel(){if(drag===session)endDrag();}};
     }
   }
-  function checkRoute() {
-    if (currentPath === location.pathname) return;
+  function updateRoute() {
+    if(currentPath===location.pathname&&currentSearch===location.search&&currentHash===location.hash)return 0;
+    const pathChanged=currentPath!==location.pathname,searchChanged=currentSearch!==location.search;
+    currentSearch=location.search;currentHash=location.hash;
+    clipPreview?.refresh();
+    if(!pathChanged)return searchChanged?PROFILE:0;
     const priorProfile=KickRefinedChannelPage.routeSlug(currentPath);
     currentPath = location.pathname;
     sidebarPreview?.reset();
     endDrag();
     if(!priorProfile||priorProfile!==KickRefinedChannelPage.routeSlug())multi?.close({ restorePlayback: false });
     stopTransition();
-    scheduleRefresh();
+    return ALL;
+  }
+  function checkRoute(){
+    const tasks=updateRoute();
+    if(tasks)scheduleRefresh(tasks);
   }
   function trackNavigation(event) {
     if (!settings.enabled || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -524,18 +644,21 @@
     routeTimeout = setTimeout(stopTransition, 10000);
   }
 
-  function refresh() {
-    globalThis.KickRefinedPerf?.count('page.refreshes');
+  function refresh(tasks=ALL) {
     if (disposed || !document.body) return;
-    clipPreview?.refresh();
-    root = document.documentElement;
-    // A late Next/React document hydration can remove extension-owned attributes.
-    if (root.dataset.krEnabled !== String(settings.enabled)) apply();
-    checkRoute(); mount(); placeToolbar(); mountSidebar(); updateSidebarRows(); markSearchFields();searchWindow.refresh();
-    support.refresh();
-    discovery?.refresh(settings.enabled);channelPanel.refresh();channelPage.refresh(settings.enabled);
-    multi.refresh();
-    if (palette.open) { collectChannels(); renderResults(); }
+    tasks|=updateRoute();
+    const rootChanged=root!==document.documentElement;
+    root=document.documentElement;
+    if(rootChanged||root.dataset.krEnabled!==String(settings.enabled)){apply();tasks=ALL;}
+    if(!host){mount();tasks=ALL;}
+    if(tasks===ALL)globalThis.KickRefinedPerf?.count('page.refreshes');
+    if(tasks&SIDEBAR){mountSidebar();updateSidebarRows();placeToolbar();}
+    if(tasks&NAVIGATION){markSearchFields();searchWindow.refresh();}
+    if(tasks&MAIN){globalThis.KickRefinedPerf?.count('page.mainRefreshes');support.refresh();discovery?.refresh(settings.enabled);}
+    else if(tasks&NAVIGATION)discovery?.refreshNavigation();
+    if(tasks&(MAIN|PROFILE)){channelPanel.refresh();channelPage.refresh(settings.enabled);multi?.refresh();}
+    if(tasks&(MAIN|SIDEBAR)&&palette.open){collectChannels();renderResults();}
+    if(tasks&SIDEBAR)sidebarPreview?.schedule();
   }
   function markSearchFields() {
     nativeSearch?.refresh(settings.enabled);
@@ -550,24 +673,38 @@
       }
     }
   }
-  function scheduleRefresh() {
-    pageRefreshPending = true;
-    scheduleSidebarRefresh();
-  }
-  function scheduleSidebarRefresh() {
+  function scheduleRefresh(tasks) {
+    pendingRefresh|=tasks;
     if (refreshTimer || disposed) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = null;
-      if (pageRefreshPending || currentPath !== location.pathname || sidebar !== document.getElementById('sidebar-wrapper')) {
-        pageRefreshPending = false;
-        refresh();
-        return;
-      }
-      placeToolbar();
-      updateSidebarRows();
-      sidebarPreview?.schedule();
-      if (palette.open) { collectChannels(); renderResults(); }
+      const next=pendingRefresh;
+      pendingRefresh=0;
+      refresh(next);
     }, 180);
+  }
+  function pageChanged(records){
+    let tasks=updateRoute();
+    if(root!==document.documentElement||!host?.isConnected||root.dataset.krEnabled!==String(settings.enabled))tasks=ALL;
+    if(sidebar!==document.getElementById('sidebar-wrapper'))tasks|=SIDEBAR;
+    for(const record of records){
+      if(tasks===ALL)break;
+      const target=record.target.nodeType===1?record.target:record.target.parentElement;
+      if(target?.closest(ownedChrome)||sidebar?.contains(target))continue;
+      if(target?.closest(previewSurface)){tasks|=PREVIEW;continue;}
+      if(target?.closest('video,.z-controls'))continue;
+      if(target?.closest(mainSurface))tasks|=MAIN;
+      if(target?.closest(navigationSurface))tasks|=NAVIGATION;
+      for(const nodes of [record.addedNodes,record.removedNodes])for(const node of nodes||[]){
+        if(node.nodeType!==1)continue;
+        if(!(tasks&MAIN)&&(node.matches(mainSurface)||node.firstElementChild&&node.querySelector(mainSurface)))tasks|=MAIN;
+        if(!(tasks&NAVIGATION)&&(node.matches(navigationSurface)||node.firstElementChild&&node.querySelector(navigationSurface)))tasks|=NAVIGATION;
+        if(!(tasks&PREVIEW)&&(node.matches(previewSurface)||node.firstElementChild&&node.querySelector(previewSurface)))tasks|=PREVIEW;
+      }
+    }
+    // The portaled tooltip needs its next animation frame even while page work is batched.
+    if(tasks&PREVIEW)sidebarPreview?.schedule();
+    if(tasks&ALL)scheduleRefresh(tasks&ALL);
   }
   let unsubscribeDOM=()=>{};
 
@@ -598,18 +735,13 @@
     if (sharedMulti) {
       const seeds = sharedMulti.split(',').map(s => channelSlug(`/${s}`)).filter(Boolean).slice(0,6);
       const params = new URL(location.href).searchParams;
-      if (seeds.length) multi.open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerModes:(()=>{try{return JSON.parse(params.get('immersion-players')||'{}');}catch{return {};}})(),playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
+      if (seeds.length) workspace().open([], '', { channels: seeds, layout: params.get('refined-layout'), chat: params.get('refined-chat'), focus: params.get('refined-focus'), chatVisible: params.get('refined-hide-chat') !== '1', focusSize: params.has('immersion-size') ? Number(params.get('immersion-size')) : KickRefined.multiState().focusSize, playerModes:(()=>{try{return JSON.parse(params.get('immersion-players')||'{}');}catch{return {};}})(),playerMode:params.get('immersion-player')==='embed'?'embed':'full',mixAudio: params.get('immersion-mix') === '1', sizes: (()=>{try{return JSON.parse(params.get('immersion-tiles')||'{}');}catch{return {};}})() });
     }
-    unsubscribeDOM=KickRefinedDOM.subscribePage(records=>{
-      sidebarPreview.schedule();
-      let sidebarChanged = false;
-      for (const {target} of records) {
-        if (target.nodeType === 1 && target.closest('title,[data-kr-unified-row]')) continue;
-        if (!sidebar?.contains(target)) { scheduleRefresh(); return; }
-        sidebarChanged = true;
-      }
-      if (sidebarChanged) scheduleSidebarRefresh();
-    });
+    unsubscribeDOM=KickRefinedDOM.subscribePage(pageChanged);
+    document.addEventListener('load',event=>{
+      const row=event.target.closest?.(sidebarRowSelector);
+      if(sidebar?.contains(row)){dirtySidebarRows.add(row);scheduleRefresh(SIDEBAR);}
+    },{capture:true,signal:abort.signal});
     document.addEventListener('dragstart', startDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragover', trackDrag, { capture:true, signal:abort.signal });
     document.addEventListener('dragover',event=>{if(drag?.fromLibrary&&overLibrary(event)){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='none';}},{capture:true,signal:abort.signal});
@@ -627,7 +759,9 @@
     document.addEventListener('click', trackNavigation, { capture:true, signal:abort.signal });
     document.addEventListener('keydown',handleShortcut,{signal:abort.signal});
     window.addEventListener('popstate', checkRoute, { signal: abort.signal });
-    window.addEventListener('resize', scheduleRefresh, { passive: true, signal: abort.signal });
+    window.addEventListener('hashchange',checkRoute,{signal:abort.signal});
+    window.navigation?.addEventListener('currententrychange',checkRoute,{signal:abort.signal});
+    window.addEventListener('resize',()=>scheduleRefresh(NAVIGATION|SIDEBAR|MAIN),{passive:true,signal:abort.signal});
     window.addEventListener('pagehide', e => { if (!e.persisted) dispose(); }, { signal: abort.signal });
     api.storage.onChanged.addListener(onSettingsChanged);
   }

@@ -6,7 +6,7 @@
       const details=document.createElement('div');details.className='multi-clip-details';
       const badge=document.createElement('span');badge.className='multi-clip-badge';const kind=item.kind==='vod'?'VOD':'CLIP';badge.textContent=kind;
       const player=document.createElement('div');player.className='multi-clip-player';const tile={slug:key,card,player,item,scope};scope.defer(()=>{resize.unobserve(player);card.remove();item.release();});
-      const control=(label,symbol,action)=>{const button=document.createElement('button');button.setAttribute('aria-label',label);decorate(button,symbol,label,true);button.title=({sound:'Choose video audio',focus:'Feature video',close:'Remove video',pop:'Pop out video player'})[symbol]||label;scope.listen(button,'click',action);return button;};
+      const control=(label,symbol,action)=>{const button=document.createElement('button');button.setAttribute('aria-label',label);decorate(button,symbol,label);button.title=({sound:'Choose video audio',focus:'Feature video',close:'Remove video',pop:'Pop out video player'})[symbol]||label;scope.listen(button,'click',action);return button;};
       tile.listen=control(`Listen to ${kind.toLowerCase()} ${item.id}`,'sound',()=>onAudio(!isAudible()));
       const toggleFocus=()=>onFocus();
       tile.focus=control(`Focus ${kind.toLowerCase()} ${item.id}`,'focus',toggleFocus);

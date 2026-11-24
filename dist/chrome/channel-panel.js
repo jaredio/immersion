@@ -341,5 +341,5 @@
     }
     return {card,identity,refresh,getProfileMount,get profileSelection(){return expanded?{slug,tab:profileView||'about'}:null;},get version(){return version;},setEnabled(value){enabled=value;if(!enabled){unmount();expanded=false;expansionChoice=null;wasOffline=false;profileLocation='';profileView=null;}else refresh();},destroy(){destroyed=true;unmount();sourceStyle.remove();}};
   }
-  globalThis.KickRefinedChannelPanel=Object.freeze({create,bio,updateBio,styles,verificationBadge});
+  globalThis.KickRefinedChannelPanel=Object.freeze({create,updateBio,styles,verificationBadge});
 })();

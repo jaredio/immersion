@@ -69,6 +69,35 @@ test('new searches abort old requests instead of returning stale results',async(
  const old=service.search(api.parse('slow')).catch(error=>error.name);const current=await service.search(api.parse('fast'));assert.equal(await old,'AbortError');assert.equal(cancelled,true);assert.equal(current.rows[0].slug,'fast');service.destroy();
 });
 
+test('identical clip-page requests share one fetch and cache across independently canceled search controllers',async()=>{
+ const requests=[];
+ const search=setup({fetch:(url,{signal})=>new Promise((resolve,reject)=>{
+   requests.push({url,signal,resolve});
+   signal.addEventListener('abort',()=>reject(signal.reason),{once:true});
+ })});
+ const q=search.parse('clips:cobbruvs sort:views'),palette=search.create(),profile=search.create();
+ const canceled=assert.rejects(palette.search(q),{name:'AbortError'});
+ const loading=profile.search(q);
+ assert.equal(requests.length,1);
+ palette.destroy();await canceled;
+ assert.equal(requests[0].signal.aborted,false);
+ requests[0].resolve(Response.json({clips:[clip],nextCursor:'older'}));
+ assert.equal((await loading).rows[0].key,'clip:'+id);
+ profile.destroy();
+ const next=search.create();
+ assert.equal((await next.search(q)).more,true);
+ assert.equal(requests.length,1,'a later controller reuses the decoded first page');
+ const page=assert.rejects(next.search(q,{append:true}),{name:'AbortError'});
+ next.cancel();await page;
+ assert.equal(requests[1].signal.aborted,true,'the request aborts once its last consumer cancels');
+ const retry=next.search(q,{append:true});
+ assert.equal(requests.length,3,'canceling a request does not cache a failure');
+ assert.equal(requests[1].url,requests[2].url);
+ requests[2].resolve(Response.json({clips:[],nextCursor:''}));
+ assert.equal((await retry).more,false);
+ next.destroy();
+});
+
 for(const filter of ['type','sort','time'])for(const value of ['constructor','__proto__','toString','hasOwnProperty']){
  test(`search rejects inherited object property ${filter}:${value}`,()=>{
   assert.throws(()=>api.parse(`channel:cobbruvs ${filter}:${value}`),/Use /);
@@ -125,8 +154,8 @@ test('empty channel results are cached and invalid response shapes can recover i
  const service=setup({fetch:async()=>Response.json(++calls===1?{channels:null}:{channels:[]})}).create();
  const query=api.parse('alpha');
  await assert.rejects(service.search(query),/unavailable/);
- assert.equal((await service.search(query)).loaded,0);
- assert.equal((await service.search(query)).loaded,0);
+ assert.equal((await service.search(query)).rows.length,0);
+ assert.equal((await service.search(query)).rows.length,0);
  assert.equal(calls,2);service.destroy();
 });
 

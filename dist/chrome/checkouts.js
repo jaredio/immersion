@@ -27,7 +27,7 @@
     const observer=new MutationObserver(records=>{for(const record of records){if(record.target.nodeType===1&&record.target.closest('[role="dialog"]')){schedule();return;}for(const node of record.addedNodes)if(node.nodeType===1&&(node.matches('[role="dialog"]')||node.querySelector('[role="dialog"]'))){schedule();return;}}});
     function clear(){cancelAnimationFrame(frame);frame=0;for(const node of marked)release(node);marked.clear();}
     observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['role','aria-label','data-state']});refresh();
-    return {refresh,setEnabled(value){enabled=!!value;if(enabled)refresh();else clear();},destroy(){disposed=true;observer.disconnect();clear();}};
+    return {setEnabled(value){enabled=!!value;if(enabled)refresh();else clear();},destroy(){disposed=true;observer.disconnect();clear();}};
   }
   globalThis.KickRefinedCheckouts=Object.freeze({create});
 })();

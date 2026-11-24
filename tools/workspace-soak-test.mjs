@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 /* Deterministic lifecycle soak. Real browser media + controller, explicit API shim. */
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
@@ -9,7 +10,7 @@ const browser=await playwright[engine].launch({headless:true});
 const context=await browser.newContext({viewport:{width:1600,height:1000}});
 const {fixture,frame}=await workspaceFixtures();
 const manifest=JSON.parse(await readFile('dist/chrome/manifest.json','utf8'));
-const scripts=manifest.content_scripts.find(item=>item.js?.includes('content.js')).js;
+const scripts=kickIdleScripts(manifest);
 const frameScripts=(await Promise.all(['stream-clock.js','player-dom.js','full-player-frame.js','player-controls.js','player-frame.js'].map(file=>readFile(`extension/${file}`,'utf8')))).join('\n');
 const samples=[];
 try{

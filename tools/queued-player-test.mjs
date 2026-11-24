@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import {chromium,firefox} from 'playwright';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -26,7 +27,7 @@ try{
   if(engine==='firefox'){
     for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:`extension/${file}`});
     const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));
-    for(const file of manifest.content_scripts.find(group=>group.js?.includes('content.js')).js)await page.addScriptTag({path:`extension/${file}`});
+    for(const file of kickIdleScripts(manifest))await page.addScriptTag({path:`extension/${file}`});
   }
   const workspace=page.locator('#kr-multi-root'),waiting=workspace.locator('.multi-tile[data-channel="waiting"]');
   await workspace.locator('iframe[name="kick-refined-full:slowtwo"]').waitFor();

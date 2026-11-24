@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 /* Exercise real fullscreen transitions, including the secondary frame document. */
 import {chromium,firefox} from 'playwright';
 import assert from 'node:assert/strict';
@@ -29,7 +30,7 @@ try{
   await page.goto(`https://kick.com/native?refined-multi=native,secondary&refined-layout=${layout}&refined-focus=native&immersion-player=${mode}`);
   if(engine==='firefox'){
    for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:'extension/'+file});
-   const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of manifest.content_scripts.find(item=>item.js?.includes('content.js')).js)await page.addScriptTag({path:'extension/'+file});
+   const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));for(const file of kickIdleScripts(manifest))await page.addScriptTag({path:'extension/'+file});
   }
   const pane=page.locator('#kr-multi-root .multi-tile[data-channel="secondary"]');await pane.locator('iframe').waitFor();
   const child=page.frames().find(frame=>frame.url().includes('/secondary'))||await page.waitForEvent('framenavigated',{predicate:frame=>frame.url().includes('/secondary')});

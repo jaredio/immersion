@@ -56,8 +56,8 @@ for(const cleanup of ['dragend','timeout','destroy'])test(`child releases the dr
 test('parent imports only the expected clip frame snapshot and releases a failed tile',async()=>{
   let drag,releases=0,installs=0;
   const ctx=setup({asParent:true,options:peer=>({
-    multi:{isChatSource:source=>source===peer,chatFrameRect:()=>({left:100,top:50}),canAddClip:key=>key===id,
-      async addClip(item,mode){installs++;assert.equal(mode,'alongside');return false;}},
+    getWorkspace:()=>({isChatSource:source=>source===peer,chatFrameRect:()=>({left:100,top:50}),canAddClip:key=>key===id,
+      async addClip(item,mode){installs++;assert.equal(mode,'alongside');return false;}}),
     startDrag:(event,value)=>{drag=value;},getClips:()=>({importItem:()=>({release:()=>releases++})})
   })});
   ctx.send('drag-start','token',{href,x:20,y:5});assert.equal(drag.x,120);assert.equal(drag.y,55);

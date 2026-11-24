@@ -41,5 +41,5 @@
         return src?{src,sources:urls,poster:image(item.thumbnail_url),duration:Number.isFinite(item.duration)&&item.duration>0?item.duration:null}:null;
       }).filter(Boolean)};
   }
-  globalThis.KickRefinedXData=Object.freeze({parse,image,video,metadata});
+  globalThis.KickRefinedXData=Object.freeze({parse,video,metadata});
 })();

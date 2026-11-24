@@ -26,7 +26,8 @@ try{
     const result=await page.evaluate(()=>{
       const list=document.getElementById('chatroom-messages'),rows=[...list.children];let delivered=0;
       for(const attributes of [['href','src','data-index'],['href','data-index'],['href','data-index']]){
-        const client=KickRefinedDOM.subscribeChat({attributes,onMutations(records,{rows}){delivered+=records.length;for(const row of rows)KickRefinedDOM.links(row);}});client.setEnabled(true);
+        const onRows=affected=>{delivered+=affected.size;for(const row of affected)KickRefinedDOM.links(row);};
+        const client=KickRefinedDOM.subscribeChat({attributes,onRows,onMutations(_records,{rows}){onRows(rows);}});client.setEnabled(true);
       }
       for(const row of rows)KickRefinedDOM.links(row);
       const scenarios={};

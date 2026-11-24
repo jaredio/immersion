@@ -12,7 +12,7 @@ try{
   for(const file of ['performance','shared','dom','chat-clips','x-post-data','x-posts','media-data','media-embeds'])await page.addScriptTag({path:`extension/${file}.js`});
   await page.evaluate(()=>{KickRefinedPerf.configure(true);window.controllers=[KickRefinedClips.create(),KickRefinedX.create(),KickRefinedMedia.create({media:true,profiles:true})];});
   const result=await page.evaluate(async()=>{
-   const list=document.getElementById('chatroom-messages'),seen=[],frames=[],arrival=[],total=1200;let running=true,last=performance.now(),immediate=true;
+   const list=document.getElementById('chatroom-messages'),seen=[],frames=[],arrival=[];let running=true,last=performance.now(),immediate=true;
    const emote='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="9" fill="#b0ff8c"/></svg>');
    function paint(now){frames.push(now-last);last=now;if(running)requestAnimationFrame(paint);}requestAnimationFrame(paint);
    for(let batch=0;batch<100;batch++){

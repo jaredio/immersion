@@ -106,9 +106,9 @@
       }
       if(dirty.size)schedule(0);
     }
-    function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const row of node.querySelectorAll('[data-index]'))dirty.add(row);}
+    function queue(node){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);for(const row of node.querySelectorAll('[data-index]'))dirty.add(row);}
     function schedule(delay=60){if(!timer&&enabled&&!disposed)timer=KickRefinedDOM.deferChatWork(flush,delay);}
-    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(_changes,{rows})=>{for(const row of rows)dirty.add(row);if(rows.size)schedule();}});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onRows:rows=>{for(const row of rows)dirty.add(row);schedule();}});
     function refresh(){const next=enabled?KickRefinedDOM.chat:null;if(next===list)return;for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(enabled);refresh();
     return {setEnabled(value){if(enabled===value)return;enabled=value;KickRefinedDOM.cancelChatWork(timer);timer=0;subscription.setEnabled(enabled);refresh();},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();KickRefinedDOM.cancelChatWork(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();nativeStyle.remove();}};

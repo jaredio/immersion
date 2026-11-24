@@ -23,7 +23,7 @@ try{
     window.stopPage=KickRefinedDOM.subscribePage(()=>log.pages++);
     window.clients=[0,1,2].map(index=>KickRefinedDOM.subscribeChat({
       onContainer:node=>log.containers[index].push(node?.id||null),
-      onMutations:(records,{rows})=>{log.changes[index]+=records.length;for(const row of rows)KickRefinedDOM.links(row);},
+      onRows:rows=>{log.changes[index]+=rows.size;for(const row of rows)KickRefinedDOM.links(row);},
       attributes:index===0?['href','src','data-index']:['href','data-index']
     }));
     clients.forEach(client=>client.setEnabled(true));

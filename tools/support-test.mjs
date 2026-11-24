@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -36,7 +37,7 @@ try{
  if(engine==='firefox'){
   for(const file of ['theme.css','polish.css'])await page.addStyleTag({path:path.join(root,'extension',file)});
   const manifest=JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8'));
-  for(const file of manifest.content_scripts.find(item=>item.js?.includes('content.js')).js)await page.addScriptTag({path:path.join(root,'extension',file)});
+  for(const file of kickIdleScripts(manifest))await page.addScriptTag({path:path.join(root,'extension',file)});
  }
  const button=page.locator('#kr-channel-root [data-kr-support]');
  await button.waitFor();

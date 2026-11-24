@@ -29,10 +29,10 @@ class Element extends EventTarget {
   replaceWith(node){this.parent?.insertBefore(node,this);this.remove();}
 }
 
-function setup(fetch,{initial=0,duration=120,abort=new AbortController()}={}){
+function setup(fetch,{initial=0,duration=120,abort=new AbortController(),SetClass=Set}={}){
   const container=new Element(),video=Object.assign(new EventTarget(),{currentTime:initial,duration}),calls=[];
   const document={createElement:()=>new Element(),createTextNode:text=>new Element(text)};
-  const context=vm.createContext({document,AbortController,AbortSignal,URL,KickRefined:{readText:response=>response.text()},fetch(url,options){
+  const context=vm.createContext({document,AbortController,AbortSignal,Set:SetClass,URL,KickRefined:{readText:response=>response.text()},fetch(url,options){
     const start=new URL(url).searchParams.get('start_time'),bucket=(Date.parse(start)-startedAt)/5000;
     calls.push({bucket,options});return fetch(bucket,options);
   }});
@@ -67,6 +67,24 @@ test('replay keeps the most recent 200 rows and drops old rows past the 60-secon
   assert.equal(texts(replay.list)[0],'51');assert.equal(texts(replay.list).at(-1),'250');
   replay.seek(119.21);await setImmediate();assert.equal(texts(replay.list)[0],'210');assert.equal(replay.list.children.length,41);
   replay.seek(120);assert.equal(replay.list.children.length,0);replay.controller.destroy();
+});
+
+test('replay skips deduplication across unchanged playback windows and refreshes when a bucket arrives',async()=>{
+  let visits=0,release;
+  class CountingSet extends Set{
+    has(value){if(typeof value==='string')visits++;return super.has(value);}
+  }
+  const messages=Array.from({length:500},(_,i)=>message(`row-${i}`,0));
+  const replay=setup(bucket=>bucket===0?payload(...messages):new Promise(resolve=>{release=resolve;}),{SetClass:CountingSet});
+  await setImmediate();
+  assert.equal(replay.list.children.length,200);
+  const last=replay.list.children.at(-1),before=visits;
+  for(let tick=1;tick<=120;tick++)replay.seek(tick/100,'timeupdate');
+  assert.equal(visits,before,'unchanged playback windows do not revisit message IDs');
+  assert.equal(replay.list.children.at(-1),last);
+  release(payload(message('late',1)));await setImmediate();
+  assert.equal(texts(replay.list).at(-1),'late');
+  replay.controller.destroy();
 });
 
 test('seeking prefers the current replay bucket over previously queued speculative work',async()=>{

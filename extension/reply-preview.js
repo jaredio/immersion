@@ -94,5 +94,5 @@
     setEnabled(enabled);
     return {setEnabled,destroy(){disposed=true;clear();abort.abort();delete document.documentElement.dataset.krReplyPreviews;}};
   }
-  globalThis.KickRefinedReplies=Object.freeze({authorFrom,create});
+  globalThis.KickRefinedReplies=Object.freeze({create});
 })();

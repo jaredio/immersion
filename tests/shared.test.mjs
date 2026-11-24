@@ -61,6 +61,13 @@ test('both packages contain only scoped permissions and local assets', async () 
       if(script.matches.some(match=>match.includes('powerchat.live')||match.includes('kickbot.com')))assert.deepEqual(script.js,['support-data.js','support-frame.js'],'provider pages only receive the gated form stylesheet bridge');
       for (const file of [...(script.js || []), ...(script.css || [])]) await readFile(new URL(`../dist/${browser}/${file}`, import.meta.url));
     }
+    for(const [host,path] of [['kick.com','/aurora'],['kick.com','/popout/aurora/chat'],['www.kick.com','/aurora'],['player.kick.com','/aurora']]){
+      const url=`https://${host}${path}`;
+      const matches=pattern=>new RegExp('^'+pattern.replaceAll('.','\\.').replaceAll('*','.*')+'$').test(url);
+      const scripts=manifest.content_scripts.filter(group=>group.matches.some(matches)&&!group.exclude_matches?.some(matches)).flatMap(group=>group.js||[]);
+      for(const dependency of ['stream-clock.js','performance.js','player-controls.js'])
+        assert.equal(scripts.filter(file=>file===dependency).length,1,`${dependency} loads once on ${url}`);
+    }
     if (browser === 'firefox') {
       assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions.required, ['none']);
       assert.equal(manifest.browser_specific_settings.gecko.id,'kick-refined@local.extension','retain the existing add-on identity and storage');
@@ -118,6 +125,8 @@ test('player audio bridge rejects unrelated frames and untrusted commands', asyn
   assert.equal(video.muted,false,'stale control commands do not override newer intent');
   listeners.message({source:parent,origin:'https://kick.com',data:{...command,revision:2,volume:900}});
   assert.equal(video.volume,.37,'invalid media values are rejected');
+  listeners.keydown({key:'c',code:'KeyC',composedPath:()=>[],preventDefault(){assert.fail('C should reach Kick');},stopImmediatePropagation(){assert.fail('C should keep propagating');}});
+  assert.ok(sent.every(message=>message.type!=='kick-refined:clip'));
   const unowned = { ...window, name: 'ordinary-embed', addEventListener() { throw Error('must not install'); } };
   vm.runInNewContext(source, { window: unowned, document });
 });
@@ -142,18 +151,20 @@ test('tile widths and audio mixing migrate safely into saved and shared layouts'
 
 test('a delayed player obeys the latest pause and avoids repeated media setters', async () => {
   const source=(await readFile('extension/player-dom.js','utf8'))+'\n'+await readFile(new URL('../extension/player-frame.js',import.meta.url),'utf8');
-  let present=false,observer,muted=true,volume=1,mutations=0,plays=0,pauses=0,videoQueries=0;
-  const timers=[],listeners={},parent={postMessage(){}};
-  const video={closest:()=>null,paused:false,addEventListener(){},play(){plays++;this.paused=false;},pause(){pauses++;this.paused=true;},
+  let present=false,hasControls=false,observer,muted=true,volume=1,mutations=0,plays=0,pauses=0,videoQueries=0,leafQueries=0;
+  const timers=[],listeners={},mediaEvents={},sent=[],parent={postMessage:message=>sent.push(message)};
+  const video={nodeType:1,matches:selector=>selector==='video',closest:()=>null,paused:false,addEventListener(type,callback){mediaEvents[type]=callback;},play(){plays++;this.paused=false;},pause(){pauses++;this.paused=true;},
     get muted(){return muted;},set muted(value){mutations++;muted=value;},
     get volume(){return volume;},set volume(value){mutations++;volume=value;}};
   const window={name:'kick-refined:test',parent,top:{},addEventListener:(name,cb)=>{listeners[name]=cb;}};
   const preview={id:'clip-creator-player',nodeType:1,muted:false,volume:.7,paused:false,closest:()=>({}),matches:selector=>selector==='video',querySelectorAll:()=>[],play(){throw Error('workspace must not play the clip preview');},pause(){throw Error('workspace must not pause the clip preview');}};
-  const document={documentElement:{append(){},hasAttribute:()=>false},createElement:()=>({}),querySelector:()=>null,addEventListener(){},querySelectorAll:()=>{videoQueries++;return present?[preview,video]:[];}};
+  const document={documentElement:{append(){},hasAttribute:()=>false},createElement:()=>({}),querySelector:selector=>selector==='.z-controls.bottom-0:has(button)'&&hasControls?{}:null,addEventListener(){},querySelectorAll:()=>{videoQueries++;return present?[preview,video]:[];}};
   class Observer{constructor(callback){observer=callback;}observe(){}}
   vm.runInNewContext(source,{window,document,MutationObserver:Observer,setTimeout:callback=>{timers.push(callback);return timers.length;}});
   const send=(revision,action)=>listeners.message({source:parent,origin:'https://kick.com',data:{type:'kick-refined:control',session:'race-test',revision,muted:true,volume:1,action}});
-  send(1,'play');send(2,'pause');present=true;observer([{target:{},addedNodes:[preview,{nodeType:1,closest:()=>null,matches:selector=>selector==='video',querySelectorAll:()=>[]}]}]);
+  send(1,'play');send(2,'pause');present=true;
+  const subtree={nodeType:1,matches:()=>false,firstElementChild:video,querySelectorAll:()=>[preview,video]};
+  observer([{target:{},addedNodes:[subtree],removedNodes:[]}]);
   while(timers.length)timers.shift()();
   assert.equal(plays,0,'a stale queued play must not run when the video arrives');
   assert.equal(pauses,1);
@@ -163,4 +174,26 @@ test('a delayed player obeys the latest pause and avoids repeated media setters'
   assert.equal(plays,1);assert.equal(pauses,2);
   assert.equal(mutations,0,'unchanged volume and mute values never invoke setters');
   assert.equal(preview.muted,false,'the observer and commands never mute clip previews');assert.equal(preview.volume,.7);
+  while(timers.length)timers.shift()();
+  const beforeEvents=videoQueries;
+  for(const type of ['loadedmetadata','loadeddata','canplay','playing','waiting'])mediaEvents[type]();
+  assert.equal(timers.length,1,'media events coalesce into one status report');
+  while(timers.length)timers.shift()();
+  assert.equal(videoQueries,beforeEvents,'media events and status reuse discovered videos');
+  volume=.25;mediaEvents.volumechange();
+  assert.equal(volume,1,'native volume changes without a gesture restore workspace audio');
+  while(timers.length)timers.shift()();
+  assert.equal(videoQueries,beforeEvents,'volume enforcement uses the changed video directly');
+  const beforeNoise=videoQueries,leaf={nodeType:1,matches:()=>false,querySelectorAll:()=>{leafQueries++;return [];}};
+  for(let batch=0;batch<20;batch++)observer([{target:{},addedNodes:Array.from({length:25},()=>leaf),removedNodes:[]}]);
+  assert.equal(timers.length,0);assert.equal(videoQueries,beforeNoise);assert.equal(leafQueries,0);
+  hasControls=true;
+  const bar={closest:selector=>selector==='.z-controls.bottom-0'?bar:null};
+  observer([{target:bar,addedNodes:[leaf],removedNodes:[]}]);
+  while(timers.length)timers.shift()();
+  assert.equal(videoQueries-beforeNoise,0,'controls hydration schedules a status report without a video scan');
+  assert.equal(sent.at(-1).hasNativeControls,true);
+  present=false;observer([{target:{},addedNodes:[],removedNodes:[subtree]}]);
+  while(timers.length)timers.shift()();
+  assert.equal(sent.at(-1).hasVideo,false,'removing the video reports its absence');
 });

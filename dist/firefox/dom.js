@@ -99,17 +99,18 @@
   function dispatchChat(records) {
     globalThis.KickRefinedPerf?.count('dom.chatBatches');
     const subscribers = [...chats], groups = new Map(), indexed = new Map(), nearest = new Map(), descendants = new Map();
+    const experimental = fastChat();
     // Features with identical filters share discovery, but own their delivered sets.
     for (const subscriber of subscribers) {
       if (groups.has(subscriber.attributeKey)) continue;
-      const relevant = records.filter(record => record.type !== 'attributes' || subscriber.attributes.has(record.attributeName));
       const rows = new Set();
-      for (const record of relevant) {
+      for (const record of records) {
+        if (record.type === 'attributes' && !subscriber.attributes.has(record.attributeName)) continue;
         let found = indexed.get(record);
         if (!found) {
           found = recordRows(record, nearest, descendants); indexed.set(record, found);
           const changedLinks = record.type === 'attributes' ? record.attributeName === 'href' ||
-            record.attributeName === 'data-index' && record.target.hasAttribute?.('data-index') === false : !fastChat()?
+            record.attributeName === 'data-index' && record.target.hasAttribute?.('data-index') === false : !experimental?
             [...(record.addedNodes || []), ...(record.removedNodes || [])].some(node=>node.nodeType===1):
             [...(record.addedNodes||[])].some(node=>node.nodeType===1&&(node.matches?.('a[href]')||node.querySelector?.('a[href]')))||
             [...(record.removedNodes||[])].some(node=>node.nodeType===1)&&[...found].some(row=>linkIndex.get(row)?.some(anchor=>!row.contains(anchor)||!anchor.hasAttribute('href')));
@@ -117,12 +118,12 @@
         }
         for (const row of found) rows.add(row);
       }
-      groups.set(subscriber.attributeKey, {records: relevant, rows});
+      groups.set(subscriber.attributeKey, rows);
     }
     for (const subscriber of subscribers) {
       if (!chats.has(subscriber)) continue;
-      const group = groups.get(subscriber.attributeKey);
-      if (group.records.length) notify(subscriber.onMutations, [...group.records], {rows: new Set(group.rows)});
+      const rows = groups.get(subscriber.attributeKey);
+      if (rows.size && subscriber.onRows) notify(subscriber.onRows, new Set(rows));
     }
   }
   const chatObserver = new MutationObserver(dispatchChat);
@@ -207,8 +208,9 @@
     return () => { pages.delete(subscriber); observePage(); };
   }
 
-  function subscribeChat({onContainer, onMutations, attributes = ['href', 'data-index']}) {
-    const subscriber = {onContainer, onMutations, attributes: new Set(attributes), attributeKey: JSON.stringify([...new Set(attributes)].sort())};
+  function subscribeChat({onContainer, onRows, attributes = ['href', 'data-index']}) {
+    const filter = new Set(attributes);
+    const subscriber = {onContainer, onRows, attributes: filter, attributeKey: JSON.stringify([...filter].sort())};
     let disposed = false;
     return {
       setEnabled(enabled) {

@@ -1,6 +1,6 @@
 /* Native chat stays in its React tree; owned overlays have one lifetime. */
 (() => {
-  function create({scope,getContext,getState,getCatalog,selectedChat,chatChannels,style,originalStyle,panel,chatTabs,$,decorate}) {
+  function create({scope,getContext,getState,getCatalog,selectedChat,chatChannels,style,originalStyle,panel,$,decorate}) {
     let chatFrame=null,chatOverlay=null,chatPicker=null,chatPickerRoot=null,chatHeader=null,pickerScope=null,nativePanelOpen=false;
     scope.listen(window,'message',event=>{
       const data=event.data;
@@ -79,8 +79,7 @@
       const url=chat?`${location.origin}/popout/${encodeURIComponent(chat)}/chat`:location.origin;$('#multi-chat-external').href=url;
       if(needsFrame){if(!chatFrame){chatFrame=document.createElement('iframe');chatFrame.name='kick-refined-chat';chatFrame.title='Selected stream chat';chatFrame.style.cssText='width:100%;height:100%;border:0;display:block';chatMount().append(chatFrame);}if(chatFrame.getAttribute('src')!==url){nativePanelOpen=false;if(chatPicker)chatPicker.hidden=false;chatFrame.src=url;}if(chatOverlay)chatOverlay.hidden=false;}
       else {chatFrame?.remove();chatFrame=null;nativePanelOpen=false;if(chatPicker)chatPicker.hidden=false;if(chatOverlay)chatOverlay.hidden=true;}
-      $('#multi-chat-toggle').setAttribute('aria-pressed',String(state.chatVisible));$('#multi-chat-toggle').setAttribute('aria-label',state.chatVisible?'Hide chat':'Show chat');decorate($('#multi-chat-toggle'),'chat',state.chatVisible?'Hide chat':'Show chat',true);
-      for(const button of chatTabs.children)button.setAttribute('aria-pressed',String(chat===button.dataset.channel));
+      $('#multi-chat-toggle').setAttribute('aria-pressed',String(state.chatVisible));$('#multi-chat-toggle').setAttribute('aria-label',state.chatVisible?'Hide chat':'Show chat');decorate($('#multi-chat-toggle'),'chat',state.chatVisible?'Hide chat':'Show chat');
     }
 
     function reset(){nativePanelOpen=false;pickerScope?.dispose();pickerScope=null;chatPicker?.remove();chatFrame?.remove();chatOverlay?.remove();chatFrame=chatOverlay=chatPicker=chatPickerRoot=chatHeader=null;delete panel.dataset.chatPicker;}

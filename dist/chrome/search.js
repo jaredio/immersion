@@ -70,7 +70,7 @@
     for(const item of list.slice(0,300)){if(!item||typeof item!=='object')continue;
       if(type==='channels'){
         const name=slug(item.slug);if(!name||item.is_banned)continue;const live=item.isLive??item.livestream?.is_live;
-        rows.push({key:'channel:'+name,type:'channel',slug:name,title:text(item.user?.username)||name,image:image(item.user?.profilePic||item.user?.profile_pic),href:`https://kick.com/${name}`,category:text(item.livestream?.categories?.[0]?.name||item.recentCategories?.[0]?.name||item.recent_categories?.[0]?.name,100),streamTitle:text(item.livestream?.session_title),live:live===true?'live':live===false||item.livestream===null?'offline':'unknown',views:count(item.livestream?.viewer_count),followers:count(item.followersCount??item.followers_count),section:'Kick search'});
+        rows.push({key:'channel:'+name,type:'channel',slug:name,title:text(item.user?.username)||name,image:image(item.user?.profilePic||item.user?.profile_pic),href:`https://kick.com/${name}`,category:text(item.livestream?.categories?.[0]?.name||item.recentCategories?.[0]?.name||item.recent_categories?.[0]?.name,100),streamTitle:text(item.livestream?.session_title),live:live===true?'live':live===false||item.livestream===null?'offline':'unknown',views:count(item.livestream?.viewer_count),section:'Kick search'});
       }else if(type==='clips'){
         if(!/^clip_[a-z0-9]{26}$/i.test(item.id)||item.is_private||item.privacy&&item.privacy!=='public'||slug(item.channel?.slug)&&slug(item.channel.slug)!==channel)continue;
         rows.push({key:'clip:'+item.id,type:'clip',slug:channel,title:text(item.title)||'Untitled clip',image:image(item.thumbnail_url),href:`https://kick.com/${channel}/clips/${item.id}`,category:text(item.category?.name,100),creator:slug(item.creator?.slug||item.creator?.username),views:count(item.views??item.view_count),duration:count(Math.floor(item.duration)),created:Date.parse(item.created_at)||0});
@@ -87,32 +87,58 @@
     if(q.time!=='all'&&(!row.created||row.created<Date.now()-{day:86400000,week:604800000,month:2592000000}[q.time]))return false;
     for(const key of ['views','duration'])if(q[key]){const value=row[key],limit=q[key];if(value===null||value===undefined)return false;if(!({'>':value>limit.value,'>=':value>=limit.value,'<':value<limit.value,'<=':value<=limit.value,'=':value===limit.value}[limit.op]))return false;}return true;
   }
-  function create(){
-    const cache=new Map();let active=null,state=null,disposed=false;
-    function cancel(){active?.abort();active=null;}
-    async function read(path,signal,decode){
-      signal.throwIfAborted();
-      const hit=cache.get(path);if(hit?.until>Date.now())return hit.data;
-      const requestSignal=AbortSignal.any([signal,AbortSignal.timeout(8000)]);
-      globalThis.KickRefinedPerf?.count('network.searchRequests');
-      const response=await fetch(location.origin+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:requestSignal});
-      if(!response.ok)throw Error('Kick search is unavailable. Try again.');
-      const body=await KickRefined.readText(response,{signal:requestSignal});
-      requestSignal.throwIfAborted();
-      const data=decode(body);
-      cache.delete(path);cache.set(path,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);
-      return data;
+  const cache=new Map(),pending=new Map();
+  async function read(path,signal,decode){
+    signal.throwIfAborted();
+    const url=location.origin+path,hit=cache.get(url);
+    if(hit?.until>Date.now())return hit.data;
+    let request=pending.get(url);
+    if(!request){
+      const controller=new AbortController(),requestSignal=AbortSignal.any([controller.signal,AbortSignal.timeout(8000)]);
+      request={controller,waiters:0,promise:null};
+      const entry=request;
+      pending.set(url,entry);
+      entry.promise=(async()=>{
+        globalThis.KickRefinedPerf?.count('network.searchRequests');
+        const response=await fetch(url,{credentials:'omit',referrerPolicy:'no-referrer',signal:requestSignal});
+        if(!response.ok)throw Error('Kick search is unavailable. Try again.');
+        const body=await KickRefined.readText(response,{signal:requestSignal});
+        requestSignal.throwIfAborted();
+        const data=decode(body);
+        cache.delete(url);cache.set(url,{until:Date.now()+45000,data});while(cache.size>20)cache.delete(cache.keys().next().value);
+        return data;
+      })().finally(()=>{if(pending.get(url)===entry)pending.delete(url);});
     }
+    request.waiters++;
+    let abort;
+    try{
+      return await new Promise((resolve,reject)=>{
+        abort=()=>reject(signal.reason);
+        signal.addEventListener('abort',abort,{once:true});
+        request.promise.then(resolve,reject);
+        if(signal.aborted)abort();
+      });
+    }finally{
+      signal.removeEventListener('abort',abort);
+      if(--request.waiters===0&&pending.get(url)===request){
+        pending.delete(url);
+        request.controller.abort();
+      }
+    }
+  }
+  function create(){
+    let active=null,state=null,disposed=false;
+    function cancel(){active?.abort();active=null;}
     function json(body){try{return JSON.parse(body);}catch{throw Error('Kick search is unavailable. Try again.');}}
     async function search(q,{append=false,retryFailed=false}={}){
       if(disposed)throw Error('Search closed.');cancel();const controller=new AbortController();active=controller;const key=JSON.stringify(q);
       if((!append&&!retryFailed)||state?.key!==key)state={key,rows:new Map(),progress:q.channels.map(channel=>({channel,cursor:'',cursors:new Set(),pages:0,loaded:0,done:false}))};const current=state;
       if(q.type==='channels'){
-        if(!q.channels.length&&!q.terms.length)return {rows:[],loaded:0,more:false};
+        if(!q.channels.length&&!q.terms.length)return {rows:[],more:false};
         if(!q.channels.length){const results=await read('/api/search?'+new URLSearchParams({searched_word:q.terms.join(' ')}),controller.signal,body=>{
           const data=json(body);if(!Array.isArray(data?.channels)&&!slug(data?.slug))throw Error('Kick search is unavailable. Try again.');
           return normalize(data,'channels');
-        });controller.signal.throwIfAborted();const rows=results.filter(row=>fits(row,q));return {rows,loaded:rows.length,more:false,failedChannels:[]};}
+        });controller.signal.throwIfAborted();const rows=results.filter(row=>fits(row,q));return {rows,more:false,failedChannels:[]};}
         const tasks=current.progress.filter(item=>retryFailed?item.failed:!item.done);let index=0;
         await Promise.all([0,1].map(async()=>{while(index<tasks.length){const item=tasks[index++];try{
           const rows=await read(`/api/v2/channels/${item.channel}`,controller.signal,body=>{
@@ -126,7 +152,7 @@
         if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
         const rows=[...current.rows.values()].filter(row=>fits(row,q)),failedChannels=current.progress.filter(item=>item.failed).map(item=>item.channel);
         if(failedChannels.length===current.progress.length&&!current.rows.size)throw Error('Kick search is unavailable. Try again.');
-        return {rows,loaded:current.rows.size,more:false,failedChannels,warning:failedChannels.length?'Some channels could not be loaded.':''};
+        return {rows,more:false,failedChannels,warning:failedChannels.length?'Some channels could not be loaded.':''};
       }
       const tasks=current.progress.filter(item=>(retryFailed?item.failed:!item.done&&!item.failed)&&item.pages<10&&item.loaded<200);let index=0,failures=0;
       await Promise.all([0,1].map(async()=>{while(index<tasks.length){const item=tasks[index++];try{
@@ -144,7 +170,7 @@
       }catch{if(controller.signal.aborted)return;failures++;item.failed=true;}}}));
       if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');if(failures===tasks.length&&tasks.length&&!current.rows.size)throw Error('Kick search is unavailable. Try again.');
       const rows=[...current.rows.values()].filter(row=>fits(row,q)).sort((a,b)=>q.sort==='views'?(b.views??-1)-(a.views??-1):b.created-a.created);
-      return {rows,loaded:current.rows.size,more:current.progress.some(item=>!item.done&&!item.failed&&item.pages<10&&item.loaded<200),failedChannels:current.progress.filter(item=>item.failed).map(item=>item.channel),warning:current.progress.some(item=>item.failed)?'Some channels could not be loaded.':''};
+      return {rows,more:current.progress.some(item=>!item.done&&!item.failed&&item.pages<10&&item.loaded<200),failedChannels:current.progress.filter(item=>item.failed).map(item=>item.channel),warning:current.progress.some(item=>item.failed)?'Some channels could not be loaded.':''};
     }
     async function recordings(channel){
       if(disposed||!slug(channel))throw Error('Recordings unavailable.');
@@ -160,7 +186,7 @@
         return [{type:'vod',href:`https://kick.com/${channel}/videos/${id}`,title:text(item.session_title)||'Untitled recording',image:image(item.thumbnail?.src),category:text(item.categories?.[0]?.name,100),views:count(item.views??video.views),duration:milliseconds===null?null:Math.floor(milliseconds/1000),created:Date.parse(video.created_at)||0}];
       });
     }
-    return {search,recordings,cancel,destroy(){disposed=true;cancel();cache.clear();state=null;}};
+    return {search,recordings,cancel,destroy(){disposed=true;cancel();state=null;}};
   }
-  globalThis.KickRefinedSearch=Object.freeze({parse,serialize,rank,normalize,fits,image,catalog,duration,create});
+  globalThis.KickRefinedSearch=Object.freeze({parse,serialize,rank,normalize,fits,image,duration,create});
 })();

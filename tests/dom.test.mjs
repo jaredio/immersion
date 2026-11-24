@@ -24,7 +24,7 @@ const mutation=(target,attributeName)=>({type:attributeName?'attributes':'childL
 
 test('non-link attributes and text-only edits keep the shared anchor index warm',()=>{
   const s=setup(),r=row(),seen=[];
-  s.api.subscribeChat({attributes:['href','src','data-index'],onMutations(records,{rows}){for(const node of rows)seen.push(s.api.links(node));}}).setEnabled(true);
+  s.api.subscribeChat({attributes:['href','src','data-index'],onRows(rows){for(const node of rows)seen.push(s.api.links(node));}}).setEnabled(true);
   const initial=s.api.links(r.value);
   for(const attribute of ['src','data-index'])s.chat([mutation(r.value,attribute)]);
   s.chat([{...mutation(r.value),addedNodes:[{nodeType:3,parentElement:r.value}],removedNodes:[{nodeType:3}]}]);
@@ -33,7 +33,7 @@ test('non-link attributes and text-only edits keep the shared anchor index warm'
 
 test('href changes and element insertion/removal invalidate links exactly once per batch',()=>{
   const s=setup(),r=row();
-  for(let i=0;i<3;i++)s.api.subscribeChat({onMutations(records,{rows}){for(const node of rows)s.api.links(node);}}).setEnabled(true);
+  for(let i=0;i<3;i++)s.api.subscribeChat({onRows(rows){for(const node of rows)s.api.links(node);}}).setEnabled(true);
   s.api.links(r.value);r.anchors.push({});
   s.chat([mutation(r.value,'href'),mutation(r.value,'href')]);assert.equal(r.scans,2);assert.equal(s.api.links(r.value).length,2);
   r.anchors.pop();s.chat([{...mutation(r.value),removedNodes:[{nodeType:1}]}]);assert.equal(r.scans,3);assert.equal(s.api.links(r.value).length,1);
@@ -42,9 +42,9 @@ test('href changes and element insertion/removal invalidate links exactly once p
 
 test('a burst of mutations resolves each distinct row target once',()=>{
   const s=setup(),r=row();let delivered=0;
-  s.api.subscribeChat({onMutations(records,{rows}){delivered=records.length;assert.equal(rows.size,1);}}).setEnabled(true);
+  s.api.subscribeChat({onRows(rows){delivered+=rows.size;assert.equal(rows.has(r.value),true);}}).setEnabled(true);
   s.chat(Array.from({length:1000},()=>mutation(r.value,'data-index')));
-  assert.equal(delivered,1000);assert.equal(r.lookups,1);
+  assert.equal(delivered,1);assert.equal(r.lookups,1);
 });
 
 test('chat removal batches identify detached and recycled rows for preview cleanup',()=>{
@@ -54,14 +54,14 @@ test('chat removal batches identify detached and recycled rows for preview clean
   const wrapper={nodeType:1,matches:()=>false,querySelectorAll:()=>[nested]};
   const list={nodeType:1,closest:()=>null};
   let affected;
-  s.api.subscribeChat({onMutations(_records,{rows}){affected=Array.from(rows);}}).setEnabled(true);
+  s.api.subscribeChat({onRows(rows){affected=Array.from(rows);}}).setEnabled(true);
   s.chat([{...mutation(list),removedNodes:[removed,wrapper]},mutation(recycled,'data-index')]);
   assert.deepEqual(affected,[removed,nested,recycled]);
 });
 
 test('a row that loses its index drops cached links before it is reused',()=>{
   const s=setup(),r=row();
-  s.api.subscribeChat({onMutations(){}}).setEnabled(true);
+  s.api.subscribeChat({onRows(){}}).setEnabled(true);
   const before=s.api.links(r.value);
   r.value.hasAttribute=()=>false;
   s.chat([mutation(r.value,'data-index')]);
@@ -74,24 +74,24 @@ test('a row that loses its index drops cached links before it is reused',()=>{
 });
 
 test('subscribers retain independent row sets and requested attribute filters',()=>{
-  const s=setup(),r=row(),seen=[];
-  s.api.subscribeChat({onMutations(records,{rows}){seen.push([records.length,rows.size]);rows.clear();records.length=0;}}).setEnabled(true);
-  s.api.subscribeChat({onMutations(records,{rows}){seen.push([records.length,rows.size]);}}).setEnabled(true);
-  s.api.subscribeChat({attributes:['src'],onMutations(records,{rows}){seen.push([records.length,rows.size]);}}).setEnabled(true);
-  s.chat([mutation(r.value,'href'),mutation(r.value,'src')]);
-  assert.deepEqual(seen,[[1,1],[1,1],[1,1]]);
+  const s=setup(),link=row().value,image=row().value,seen=[];
+  s.api.subscribeChat({onRows(rows){seen.push([...rows]);rows.clear();}}).setEnabled(true);
+  s.api.subscribeChat({onRows(rows){seen.push([...rows]);}}).setEnabled(true);
+  s.api.subscribeChat({attributes:['src'],onRows(rows){seen.push([...rows]);}}).setEnabled(true);
+  s.chat([mutation(link,'href'),mutation(image,'src')]);
+  assert.deepEqual(seen,[[link],[link],[image]]);
 });
 
 test('a subscriber disposed during dispatch is skipped and callback errors do not stop peers',()=>{
   const s=setup(),r=row();let calls=0,second;
-  s.api.subscribeChat({onMutations(){second.destroy();throw Error('subscriber failed');}}).setEnabled(true);
-  second=s.api.subscribeChat({onMutations(){assert.fail('disposed subscriber ran');}});second.setEnabled(true);
-  const third=s.api.subscribeChat({onMutations(){calls++;}});third.setEnabled(true);
+  s.api.subscribeChat({onRows(){second.destroy();throw Error('subscriber failed');}}).setEnabled(true);
+  second=s.api.subscribeChat({onRows(){assert.fail('disposed subscriber ran');}});second.setEnabled(true);
+  const third=s.api.subscribeChat({onRows(){calls++;}});third.setEnabled(true);
   s.chat([mutation(r.value,'href')]);assert.equal(calls,1);assert.equal(s.errors.length,1);
 });
 
 test('unobserved attributes perform no row discovery or delivery',()=>{
-  const s=setup(),r=row();s.api.subscribeChat({attributes:['href'],onMutations(){assert.fail('irrelevant record delivered');}}).setEnabled(true);
+  const s=setup(),r=row();s.api.subscribeChat({attributes:['href'],onRows(){assert.fail('irrelevant record delivered');}}).setEnabled(true);
   s.chat([mutation(r.value,'src')]);assert.equal(r.lookups,0);
 });
 

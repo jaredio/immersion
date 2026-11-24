@@ -2,7 +2,7 @@
 (() => {
   function create({container,video,data,signal,onClose}){
     const abort=new AbortController(),cache=new Map(),pending=new Set(),failed=new Map(),rows=new Map();
-    let disposed=false,lastItems=[],lastTime=-1,active=0,queue=[],timeline=null;
+    let disposed=false,lastItems=[],lastTime=-1,active=0,queue=[],timeline=null,lastStart=-1,lastEnd=-1;
     const pane=document.createElement('section');pane.className='replay';pane.setAttribute('aria-label','Clip chat replay');
     const header=document.createElement('div');header.className='replay-header';const heading=document.createElement('strong');heading.textContent='Chat replay';
     const close=document.createElement('button');close.type='button';close.className='replay-collapse';close.setAttribute('aria-label','Collapse chat replay');close.title='Collapse chat replay';close.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';close.addEventListener('click',onClose);
@@ -29,24 +29,28 @@
       if(disposed)return;
       const time=video.currentTime||0,bucket=Math.floor(time/5);
       timeline??=[...cache.values()].flat().sort((a,b)=>a.time-b.time);
-      const start=boundary(Math.max(0,time-60),false),end=boundary(time,true),seen=new Set(),visible=[];
-      for(let index=start;index<end;index++){
-        const row=timeline[index];
-        if(!seen.has(row.id)){seen.add(row.id);visible.push(row);}
-      }
-      const items=visible.slice(-200);
-      if(lastItems.length!==items.length||items.some((row,index)=>row.id!==lastItems[index].id)){
-        const follow=list.scrollHeight-list.scrollTop-list.clientHeight<50,wanted=new Set(items.map(row=>row.id));
-        for(const [id,node]of rows)if(!wanted.has(id)){node.remove();rows.delete(id);}
-        let cursor=list.firstChild;
-        for(const row of items){
-          let line=rows.get(row.id);
-          if(!line){line=document.createElement('p');const stamp=document.createElement('time'),name=document.createElement('strong');stamp.textContent=`${Math.floor(row.time/60)}:${String(Math.floor(row.time%60)).padStart(2,'0')}`;name.style.color=row.color;name.textContent=row.name;line.append(stamp,name,document.createTextNode(' '));content(line,row.content);rows.set(row.id,line);}
-          if(line!==cursor)list.insertBefore(line,cursor);cursor=line.nextSibling;
+      const start=boundary(Math.max(0,time-60),false),end=boundary(time,true);
+      if(start!==lastStart||end!==lastEnd){
+        lastStart=start;lastEnd=end;
+        const seen=new Set(),visible=[];
+        for(let index=start;index<end;index++){
+          const row=timeline[index];
+          if(!seen.has(row.id)){seen.add(row.id);visible.push(row);}
         }
-        lastItems=items;if(follow||time<lastTime)list.scrollTop=list.scrollHeight;
+        const items=visible.slice(-200);
+        if(lastItems.length!==items.length||items.some((row,index)=>row.id!==lastItems[index].id)){
+          const follow=list.scrollHeight-list.scrollTop-list.clientHeight<50,wanted=new Set(items.map(row=>row.id));
+          for(const [id,node]of rows)if(!wanted.has(id)){node.remove();rows.delete(id);}
+          let cursor=list.firstChild;
+          for(const row of items){
+            let line=rows.get(row.id);
+            if(!line){line=document.createElement('p');const stamp=document.createElement('time'),name=document.createElement('strong');stamp.textContent=`${Math.floor(row.time/60)}:${String(Math.floor(row.time%60)).padStart(2,'0')}`;name.style.color=row.color;name.textContent=row.name;line.append(stamp,name,document.createTextNode(' '));content(line,row.content);rows.set(row.id,line);}
+            if(line!==cursor)list.insertBefore(line,cursor);cursor=line.nextSibling;
+          }
+          lastItems=items;if(follow||time<lastTime)list.scrollTop=list.scrollHeight;
+        }
       }
-      lastTime=time;const failure=failed.get(bucket),message=failure?.message||(pending.has(bucket)?'Loading chat replay…':items.length?'':'No messages at this point in the clip.');
+      lastTime=time;const failure=failed.get(bucket),message=failure?.message||(pending.has(bucket)?'Loading chat replay…':lastItems.length?'':'No messages at this point in the clip.');
       if(status.textContent!==message)status.textContent=message;
       retry.hidden=!failure?.retryable;note.hidden=!!failure||!cache.has(bucket);
     }
@@ -57,7 +61,7 @@
         const response=await fetch(url,{signal,credentials:'omit',referrerPolicy:'no-referrer'});if(!response.ok)throw Object.assign(Error('Chat replay unavailable'),{status:response.status});
         const body=JSON.parse(await KickRefined.readText(response,{maxBytes:2097152,signal}));if(disposed)return;
         cache.set(bucket,KickRefinedClipTools.messages(body,data.replay,duration()));failed.delete(bucket);while(cache.size>30)cache.delete(cache.keys().next().value);
-        timeline=null;
+        timeline=null;lastStart=lastEnd=-1;
       }catch(error){if(!disposed&&!abort.signal.aborted)failed.set(bucket,KickRefinedClipTools.replayFailure(error));}
       finally{pending.delete(bucket);active--;if(!disposed){render();drain();}}
     }

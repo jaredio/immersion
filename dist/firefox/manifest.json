@@ -82,8 +82,6 @@
         "https://www.kick.com/popout/*/chat"
       ],
       "js": [
-        "stream-clock.js",
-        "performance.js",
         "shared.js",
         "settings-store.js",
         "session-data.js",
@@ -97,7 +95,6 @@
         "discovery.js",
         "channel-offline.js",
         "channel-panel.js",
-        "player-controls.js",
         "multi-layout.js",
         "multi-view.js",
         "multi-metadata.js",
@@ -159,8 +156,6 @@
         "https://www.kick.com/popout/*/chat"
       ],
       "js": [
-        "stream-clock.js",
-        "performance.js",
         "shared.js",
         "dom.js",
         "chat-clips.js",
@@ -183,9 +178,19 @@
       "js": [
         "stream-clock.js",
         "performance.js",
+        "player-controls.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://kick.com/*",
+        "https://www.kick.com/*"
+      ],
+      "js": [
         "player-dom.js",
         "full-player-frame.js",
-        "player-controls.js",
         "player-frame.js"
       ],
       "run_at": "document_start",

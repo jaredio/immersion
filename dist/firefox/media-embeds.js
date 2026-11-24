@@ -79,9 +79,9 @@
         if(seen.size>=2||records.size>=80)continue;seen.add(item.key);add(row,anchor,item);
       }}if(dirty.size)schedule(0);
     }
-    function queue(node,descendants=true){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);if(descendants)for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);}
+    function queue(node){if(node.nodeType!==1)return;const row=node.closest('[data-index]');if(row)dirty.add(row);for(const child of node.querySelectorAll('[data-index]'))dirty.add(child);}
     function schedule(delay=60){if(!timer&&!disposed&&(media||profiles))timer=KickRefinedDOM.deferChatWork(flush,delay);}
-    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onMutations:(_changes,{rows})=>{for(const row of rows)dirty.add(row);if(rows.size)schedule();}});
+    const subscription=KickRefinedDOM.subscribeChat({onContainer:()=>refresh(),onRows:rows=>{for(const row of rows)dirty.add(row);schedule();}});
     function refresh(force=false){const next=media||profiles?KickRefinedDOM.chat:null;if(next===list){if(!force)return;for(const record of [...records])if(!allowed(record.item))release(record);dirty.clear();if(list){queue(list);schedule();}return;}for(const record of [...records])release(record);dirty.clear();list=next;if(list){queue(list);schedule();}}
     subscription.setEnabled(media||profiles);refresh();
     return {setOptions(next){if(media===next.media&&profiles===next.profiles)return;media=!!next.media;profiles=!!next.profiles;KickRefinedDOM.cancelChatWork(timer);timer=0;subscription.setEnabled(media||profiles);refresh(true);},destroy(){disposed=true;document.removeEventListener('visibilitychange',resumePreviews);deferred.clear();KickRefinedDOM.cancelChatWork(timer);subscription.destroy();visibility.disconnect();for(const record of [...records])release(record);dirty.clear();hidden.remove();}};

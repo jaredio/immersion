@@ -58,6 +58,7 @@
     const ui=document.createElement('section');ui.className='browser';ui.setAttribute('aria-label','Channel library');let lastDrag=-Infinity;
     ui.innerHTML='<nav class="nav" aria-label="Channel sections"></nav><h2 class="watch-heading" hidden></h2><div class="tools" hidden><label class="find"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><input type="search" aria-label="Find a video" placeholder="Find a recording…"></label><select aria-label="Video length"><option value="all">Any length</option><option value="short">Under 10 minutes</option><option value="medium">10–60 minutes</option><option value="long">Over an hour</option></select><select aria-label="Library sort"><option value="recent">Newest</option><option value="views">Most viewed</option><option value="title">Title A–Z</option></select><div class="views" role="group" aria-label="Library view"><button data-view="grid" aria-pressed="true">Grid</button><button data-view="list" aria-pressed="false">List</button></div></div><p class="status catalog-status" role="status" hidden></p><div class="content"></div><button class="more" hidden>Load more</button><p class="notice" role="status" hidden></p>';
     shadow.append(style,ui);const $=selector=>ui.querySelector(selector);let rows=new Map(),context=null,signature='',drawKey='',navKey='',query='',length='all',sort='recent',view='grid',destroyed=false,schedule=null,gesture=null,deferredRender=false;
+    let mediaList=null,emptyList=null,availableCount=0,visibleCount=0;
     const nodes=new Map(),setText=(node,value)=>{if(node.textContent!==value)node.textContent=value;},setHidden=(node,value)=>{if(node.hidden!==value)node.hidden=value;};
     function navigate(tab){onNavigate?.(tab);}
     async function open(row,event){
@@ -72,7 +73,7 @@
       if(context.newTab)return;event.preventDefault();if(row.source?.isConnected)row.source.click();else location.assign(row.href);
     }
     function card(row){
-      let record=nodes.get(row.key);const key=JSON.stringify([row.title,row.image,row.clock,row.views,row.date,row.category]);if(record?.key===key)return record.node;
+      let record=nodes.get(row.key);const key=JSON.stringify([row.href,row.title,row.image,row.clock,row.views,row.date,row.category,context.newTab]);if(record?.key===key)return record.node;
       const node=document.createElement('article');node.className='card';node.dataset.key=row.key;
       if(onPopout){const pop=document.createElement('button');pop.type='button';pop.className='library-popout';pop.dataset.action='popout';pop.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3h13v13H8zM3 8v13h13v-5"/></svg>';pop.setAttribute('aria-label',`Open floating player: ${row.title}`);pop.title='Open movable, resizable player';node.append(pop);}
       const thumb=document.createElement('a');thumb.className='thumb';thumb.href=row.href;thumb.dataset.action='open';thumb.setAttribute('aria-label',`Watch ${row.title}`);if(row.image){const image=document.createElement('img');image.src=row.image;image.alt='';image.loading='lazy';image.decoding='async';thumb.append(image);}if(row.clock){const clock=document.createElement('span');clock.className='clock';clock.textContent=row.clock;thumb.append(clock);}
@@ -83,10 +84,9 @@
       node.append(thumb,body);if(onDrag){node.dataset.draggable='true';node.title='Drag into the workspace';for(const child of node.querySelectorAll('a,img,button'))child.draggable=false;}record={node,key};nodes.set(row.key,record);return node;
     }
     function empty(message,tab){const node=document.createElement('div');node.className='empty';node.append(document.createTextNode(message));if(tab){node.append(document.createElement('br'));const link=document.createElement('a');link.href=`/${context.slug}/${tab}`;link.dataset.tab=tab;link.textContent=tab==='clips'?'Browse clips':'Browse videos';node.append(link);}return node;}
-    function overviewEmpty(type){
+    function overviewMessage(type){
       const clips=type==='clip',name=clips?'clips':'recordings',status=context.previewStatus?.[type];
-      const message=status==='loading'?`Loading ${name}…`:status==='unavailable'?`Could not load ${name}.`:status==='ready'?`No public ${name} found.`:clips?'Explore moments from this channel.':'Find a broadcast to watch.';
-      return empty(message,clips?'clips':'videos');
+      return status==='loading'?`Loading ${name}…`:status==='unavailable'?`Could not load ${name}.`:status==='ready'?`No public ${name} found.`:clips?'Explore moments from this channel.':'Find a broadcast to watch.';
     }
     function renderSchedule(){
       const visible=context.tab==='schedule'&&context.inlineSchedule;
@@ -116,9 +116,38 @@
     function overview(){
       const all=[...rows.values()],recordings=all.filter(row=>row.type==='vod'),clips=all.filter(row=>row.type==='clip');
       const layout=document.createElement('div');layout.className='overview';const feature=document.createElement('div');feature.className='feature';
-      if(recordings.length){const eyebrow=document.createElement('div');eyebrow.className='eyebrow';eyebrow.textContent='Start watching';feature.append(eyebrow,card(recordings[0]));const actions=document.createElement('div');actions.className='feature-actions';const watch=document.createElement('a');watch.className='primary';watch.href=recordings[0].href;if(context.newTab){watch.target='_blank';watch.rel='noopener noreferrer';}watch.dataset.action='open';watch.dataset.key=recordings[0].key;watch.textContent='Watch recording';actions.append(watch);const browse=document.createElement('a');browse.className='secondary-button';browse.href=`/${context.slug}/videos`;browse.dataset.tab='videos';browse.textContent='Browse videos';actions.append(browse);feature.append(actions);}else feature.append(overviewEmpty('vod'));
-      const rail=document.createElement('div');rail.className='rail';const heading=document.createElement('div');heading.className='rail-head';heading.innerHTML='<h3>Highlights</h3>';const more=document.createElement('a');more.href=`/${context.slug}/clips`;more.dataset.tab='clips';more.textContent='Browse clips →';heading.append(more);const list=document.createElement('div');list.className='rail-list';if(clips.length)for(const row of clips.slice(0,3))list.append(card(row));else list.append(overviewEmpty('clip'));rail.append(heading,list);layout.append(feature,rail);
+      if(recordings.length){const eyebrow=document.createElement('div');eyebrow.className='eyebrow';eyebrow.textContent='Start watching';feature.append(eyebrow,card(recordings[0]));const actions=document.createElement('div');actions.className='feature-actions';const watch=document.createElement('a');watch.className='primary';watch.href=recordings[0].href;if(context.newTab){watch.target='_blank';watch.rel='noopener noreferrer';}watch.dataset.action='open';watch.dataset.key=recordings[0].key;watch.textContent='Watch recording';actions.append(watch);const browse=document.createElement('a');browse.className='secondary-button';browse.href=`/${context.slug}/videos`;browse.dataset.tab='videos';browse.textContent='Browse videos';actions.append(browse);feature.append(actions);}else feature.append(empty(overviewMessage('vod'),'videos'));
+      const rail=document.createElement('div');rail.className='rail';const heading=document.createElement('div');heading.className='rail-head';heading.innerHTML='<h3>Highlights</h3>';const more=document.createElement('a');more.href=`/${context.slug}/clips`;more.dataset.tab='clips';more.textContent='Browse clips →';heading.append(more);const list=document.createElement('div');list.className='rail-list';if(clips.length)for(const row of clips.slice(0,3))list.append(card(row));else list.append(empty(overviewMessage('clip'),'clips'));rail.append(heading,list);layout.append(feature,rail);
       const footer=document.createElement('div');footer.className='overview-footer';for(const [tab,label]of [['videos','Videos'],['clips','Clips']]){const link=document.createElement('a');link.className='browse-link';link.href=`/${context.slug}/${tab}`;link.dataset.tab=tab;link.append(document.createTextNode(label));const hint=document.createElement('span');hint.textContent='?';hint.setAttribute('aria-hidden','true');link.setAttribute('aria-label',`Browse all ${tab}`);link.append(hint);footer.append(link);}return [layout,footer];
+    }
+    function renderMedia(tab,loading){
+      const draw=JSON.stringify([context.slug,tab,signature,query,length,sort,context.newTab]);
+      if(!mediaList){
+        mediaList=document.createElement('div');mediaList.className='items';
+        $('.content').replaceChildren(mediaList);
+      }
+      if(mediaList.dataset.view!==view)mediaList.dataset.view=view;
+      if(draw!==drawKey){
+        drawKey=draw;
+        const all=[...rows.values()].filter(row=>row.type===(tab==='clips'?'clip':'vod'));
+        const [short,medium]=tab==='clips'?[30,60]:[600,3600];
+        const filtered=all.filter(row=>(!query||`${row.title} ${row.category}`.toLowerCase().includes(query))&&(length==='all'||row.duration!==null&&({short:row.duration<short,medium:row.duration>=short&&row.duration<=medium,long:row.duration>medium}[length])));
+        filtered.sort((a,b)=>(sort==='views'?(b.views??-1)-(a.views??-1):sort==='title'?titleOrder.compare(a.title,b.title):b.created-a.created)||a.order-b.order);
+        availableCount=all.length;visibleCount=filtered.length;
+        const cards=filtered.map(card),wanted=new Set(cards);
+        for(const child of [...mediaList.children])if(!wanted.has(child))child.remove();
+        let cursor=mediaList.firstChild;
+        for(const node of cards){
+          if(node!==cursor)mediaList.insertBefore(node,cursor);
+          cursor=node.nextSibling;
+        }
+      }
+      if(!visibleCount){
+        emptyList ||= empty('');
+        const message=loading?`Loading ${tab}…`:query||length!=='all'?'No videos match these filters.':context.catalogStatus==='unavailable'?`Could not load ${tab}.`:'No videos loaded in this view.';
+        setText(emptyList,message);
+        if(emptyList.parentNode!==mediaList)mediaList.append(emptyList);
+      }
     }
     function render(){
       // Feed and player updates can arrive mid-drag. Reparenting the source card
@@ -126,14 +155,20 @@
       if(gesture?.drag){deferredRender=true;return;}
       if(!context||destroyed)return;const tab=context.tab,media=tab==='videos'||tab==='clips';setHidden($('.tools'),!media);setHidden($('.watch-heading'),!context.watchPage);setHidden($('.content'),!media&&tab!=='home');
       renderSchedule();
-      setHidden($('.nav'),!!context.watchPage);if(context.watchPage)setText($('.watch-heading'),`More ${tab==='clips'?'clips':'videos'} from ${context.slug}`);const all=[...rows.values()].filter(row=>row.type===(tab==='clips'?'clip':'vod'));
-      const [short,medium]=tab==='clips'?[30,60]:[600,3600];
-      const filtered=all.filter(row=>(!query||`${row.title} ${row.category}`.toLowerCase().includes(query))&&(length==='all'||row.duration!==null&&({short:row.duration<short,medium:row.duration>=short&&row.duration<=medium,long:row.duration>medium}[length])));
-      filtered.sort((a,b)=>(sort==='views'?(b.views??-1)-(a.views??-1):sort==='title'?titleOrder.compare(a.title,b.title):b.created-a.created)||a.order-b.order);
+      setHidden($('.nav'),!!context.watchPage);if(context.watchPage)setText($('.watch-heading'),`More ${tab==='clips'?'clips':'videos'} from ${context.slug}`);
       const loading=context.catalogStatus==='loading';
-      const catalogStatus=$('.catalog-status'),partial=media&&context.catalogStatus==='unavailable'&&all.length>0;
+      if(media)renderMedia(tab,loading);
+      else{
+        mediaList=null;emptyList=null;
+        const draw=JSON.stringify([context.slug,tab,signature,context.newTab]);
+        if(draw!==drawKey){drawKey=draw;$('.content').replaceChildren(...(tab==='home'?overview():[]));}
+        if(tab==='home')for(const [selector,type] of [['.feature > .empty','vod'],['.rail-list > .empty','clip']]){
+          const text=$(selector)?.firstChild;
+          if(text){const message=overviewMessage(type);if(text.data!==message)text.data=message;}
+        }
+      }
+      const catalogStatus=$('.catalog-status'),partial=media&&context.catalogStatus==='unavailable'&&availableCount>0;
       setHidden(catalogStatus,!partial);if(partial)setText(catalogStatus,'Kick feed unavailable. Showing available results.');
-      const draw=JSON.stringify([signature,tab,query,length,sort,view,context.previewStatus,context.catalogStatus]);if(draw!==drawKey){drawKey=draw;const content=$('.content');if(tab==='home')content.replaceChildren(...overview());else if(media){const list=document.createElement('div');list.className='items';list.dataset.view=view;for(const row of filtered)list.append(card(row));if(!filtered.length)list.append(empty(loading?`Loading ${tab}…`:query||length!=='all'?'No videos match these filters.':context.catalogStatus==='unavailable'?`Could not load ${tab}.`:'No videos loaded in this view.'));content.replaceChildren(list);}else content.replaceChildren();}
       const more=$('.more');if(more.disabled!==loading)more.disabled=loading;
       const options=$('[aria-label="Video length"]').options;
       const labels=tab==='clips'?['Under 30 seconds','30–60 seconds','Over 60 seconds']:['Under 10 minutes','10–60 minutes','Over an hour'];

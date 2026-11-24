@@ -44,12 +44,12 @@ test('shared link candidates preserve every supported provider route, including 
 });
 test('experimental emote-only changes keep the link cache warm while added links invalidate it',()=>{
  const s=setup();let scans=0;const anchors=[{href:'https://x.com/viewer/status/123'}],row={nodeType:1,closest:()=>row,querySelectorAll:selector=>selector==='a[href]'?(scans++,[...anchors]):[]};
- s.api.subscribeChat({onMutations:(records,{rows})=>{for(const row of rows)s.api.links(row,'x');}}).setEnabled(true);const before=s.api.links(row,'x');
+ s.api.subscribeChat({onRows:rows=>{for(const row of rows)s.api.links(row,'x');}}).setEnabled(true);const before=s.api.links(row,'x');
  const image={nodeType:1,closest:()=>row,querySelectorAll:()=>[],matches:()=>false,querySelector:()=>null};s.observers[0].callback([{type:'childList',target:row,addedNodes:[image],removedNodes:[]}]);assert.equal(scans,1);assert.equal(s.api.links(row,'x'),before);
  const link={...image,href:'https://x.com/viewer/status/124',matches:()=>true};anchors.push(link);s.observers[0].callback([{type:'childList',target:row,addedNodes:[link],removedNodes:[]}]);assert.equal(scans,2);assert.equal(s.api.links(row,'x').length,2);
 });
 test('removed links invalidate candidates even when href was cleared before the observer runs',()=>{
  const s=setup();let present=true,hasHref=true;const anchor={href:'https://x.com/viewer/status/123',hasAttribute:()=>hasHref},row={nodeType:1,closest:()=>row,querySelectorAll:selector=>selector==='a[href]'&&present&&hasHref?[anchor]:[],contains:node=>node===anchor&&present};
- s.api.subscribeChat({onMutations:(records,{rows})=>{for(const row of rows)s.api.links(row,'x');}}).setEnabled(true);assert.equal(s.api.links(row,'x').length,1);present=false;hasHref=false;
+ s.api.subscribeChat({onRows:rows=>{for(const row of rows)s.api.links(row,'x');}}).setEnabled(true);assert.equal(s.api.links(row,'x').length,1);present=false;hasHref=false;
  s.observers[0].callback([{type:'childList',target:row,addedNodes:[],removedNodes:[{nodeType:1}]}]);assert.equal(s.api.links(row,'x').length,0);
 });

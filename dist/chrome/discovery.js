@@ -72,7 +72,7 @@
       }
       if(mode==='category'){const title=main.querySelector('[data-testid="category-name"]');let identity=title?.parentElement;while(identity&&identity.parentElement!==layout&&!identity.querySelector('img'))identity=identity.parentElement;if(identity&&identity!==layout&&identity.querySelector('img'))mark(identity,'data-kr-discovery-identity');}
     }
-    return {refresh,destroy(){document.removeEventListener('pointerdown',outside,true);clear();}};
+    return {refresh,refreshNavigation(){if(host)place();},destroy(){document.removeEventListener('pointerdown',outside,true);clear();}};
   }
   globalThis.KickRefinedDiscovery=Object.freeze({route,create});
 })();

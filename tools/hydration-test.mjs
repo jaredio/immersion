@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -32,7 +33,7 @@ try{
   await page.goto('https://kick.com/aurora');
   if(engine==='firefox'){
     const manifest=JSON.parse(await readFile('dist/firefox/manifest.json','utf8'));
-    for(const file of manifest.content_scripts.find(item=>item.js?.includes('content.js')).js)await page.addScriptTag({path:'extension/'+file});
+    for(const file of kickIdleScripts(manifest))await page.addScriptTag({path:'extension/'+file});
   }
   await page.waitForTimeout(450);
   assert.equal(await page.locator('#kr-root').count(),0,'startup waits while Kick has not hydrated the native page');

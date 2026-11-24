@@ -1,3 +1,4 @@
+import {kickIdleScripts} from './kick-content-scripts.mjs';
 import playwright from 'playwright';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -88,7 +89,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if (engine === 'firefox') {
       await page.addStyleTag({ path: path.join(root, 'extension/theme.css') });
       await page.addStyleTag({ path: path.join(root, 'extension/polish.css') });
-      for (const file of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('content.js')).js) await page.addScriptTag({ path: path.join(root, 'extension', file) });
+      for (const file of kickIdleScripts(JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')))) await page.addScriptTag({ path: path.join(root, 'extension', file) });
     }
     await page.locator('#kr-root').waitFor();
     await page.waitForFunction(() => document.documentElement.dataset.krEnabled === 'true');
@@ -578,7 +579,7 @@ for (const engine of (process.env.KR_ENGINE ? [process.env.KR_ENGINE] : ['chromi
     if(engine==='firefox'){
       const frame=page.frames().find(frame=>frame.url().startsWith('https://kick.com/popout/aurora/chat'));
       for(const file of ['theme.css','polish.css'])await frame.addStyleTag({path:path.join(root,'extension',file)});
-      for (const file of JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')).content_scripts.find(item=>item.js?.includes('chat-frame.js')).js)await frame.addScriptTag({path:path.join(root,'extension',file)});
+      for (const file of kickIdleScripts(JSON.parse(await readFile(path.join(root,'dist/firefox/manifest.json'),'utf8')),'chat-frame.js'))await frame.addScriptTag({path:path.join(root,'extension',file)});
     }
     assert.equal(await page.locator('#channel-chatroom > header > button[aria-label="Show active chatters"]').isVisible(),false,'main-stream controls are hidden behind secondary chat');
     await switchedChat.getByRole('button',{name:'Show active chatters',exact:true}).click();await switchedChat.locator('#active-chatters').waitFor({state:'visible'});assert.equal(await page.evaluate(()=>window.mainChatterOpens||0),0,'secondary controls do not open main chat state');await page.locator('#kr-multi-chat-picker').waitFor({state:'hidden'});assert.equal(await switchedChat.getByText('(123)',{exact:true}).isVisible(),true,'the parent picker cannot cover the secondary active-chatter count');await switchedChat.getByRole('button',{name:'Close chatters',exact:true}).click();await switchedChat.locator('#active-chatters').waitFor({state:'hidden'});await page.locator('#kr-multi-chat-picker').waitFor({state:'visible'});
